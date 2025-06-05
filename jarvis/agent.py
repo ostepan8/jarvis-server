@@ -132,10 +132,15 @@ class AICalendarAgent:
 
         self.logger.log("INFO", "User request", user_input)
 
-        message, tool_calls = await self.ai_client.chat(messages, self.tools)
-        self.logger.log("INFO", "AI response", getattr(message, "content", str(message)))
+        iterations = 0
+        MAX_ITERATIONS = 5
+        while iterations < MAX_ITERATIONS:
+            message, tool_calls = await self.ai_client.chat(messages, self.tools)
+            self.logger.log("INFO", "AI response", getattr(message, "content", str(message)))
 
-        if tool_calls:
+            if not tool_calls:
+                break
+
             messages.append(message.model_dump())
             for call in tool_calls:
                 function_name = call.function.name
@@ -144,6 +149,14 @@ class AICalendarAgent:
                 result = await self._execute_function(function_name, arguments)
                 actions_taken.append({"function": function_name, "arguments": arguments, "result": result})
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
+
+            iterations += 1
+
+        if iterations >= MAX_ITERATIONS:
+            self.logger.log("ERROR", "Max iterations reached", str(iterations))
+
+        if tool_calls:
+            # If we exited due to reaching max iterations, get a final response without further tool calls
             message, _ = await self.ai_client.chat(messages, [])
 
         self.logger.log("INFO", "Final response", getattr(message, "content", str(message)))
