@@ -29,6 +29,10 @@ python -m asyncio run main.py
 - `OPENAI_API_KEY` – key for OpenAI based clients.
 - `ANTHROPIC_API_KEY` – key for Anthropic based clients.
 
+## JarvisSystem options
+- `response_timeout` – number of seconds the `UIAgent` waits for capability
+  responses when processing a user request. Defaults to 10 seconds.
+
 ## Logs
 Logs are stored in `jarvis_logs.db`. Use the log viewer:
 ```bash
