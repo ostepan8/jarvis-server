@@ -11,17 +11,25 @@ from .base import BaseAIClient
 class OpenAIClient(BaseAIClient):
     """AI client that delegates requests to OpenAI's API."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4-turbo-preview") -> None:
+    def __init__(
+        self, api_key: str | None = None, model: str = "gpt-4-turbo-preview"
+    ) -> None:
         self.client = AsyncOpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
         self.model = model
 
-    async def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Tuple[Any, Any]:
+    async def chat(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]] = None
+    ) -> Tuple[Any, Any]:
         params: Dict[str, Any] = {"model": self.model, "messages": messages}
+
+        # Only add tools and tool_choice if tools are actually provided
         if tools:
             params["tools"] = tools
             params["tool_choice"] = "auto"
-        else:
-            params["tool_choice"] = "none"
+        # Don't set tool_choice at all when there are no tools
+
         response = await self.client.chat.completions.create(**params)
         message = response.choices[0].message
-        return message, message.tool_calls
+
+        # Return the message and any tool calls (will be None if no tools were used)
+        return message, getattr(message, "tool_calls", None)
