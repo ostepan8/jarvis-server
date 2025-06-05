@@ -5,7 +5,7 @@ import asyncio
 import uuid
 from typing import Any, Dict, List, Optional, Set, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from ..logger import JarvisLogger
 
@@ -20,7 +20,7 @@ class Message:
     message_type: str = ""
     content: Any = None
     request_id: str = ""
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     reply_to: Optional[str] = None  # For response tracking
 
 

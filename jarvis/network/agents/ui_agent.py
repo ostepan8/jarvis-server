@@ -2,7 +2,7 @@
 import asyncio
 import json
 from typing import Any, Dict, Set, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from ..core import NetworkAgent, Message
@@ -80,7 +80,7 @@ class UIAgent(NetworkAgent):
         # Store request
         self.pending_requests[request_id] = {
             "user_input": user_input,
-            "start_time": datetime.now(),
+            "start_time": datetime.now(timezone.utc),
             "capability_requests": {},
             "responses": {},
             "status": "processing",
@@ -91,7 +91,7 @@ class UIAgent(NetworkAgent):
             {
                 "role": "user",
                 "content": user_input,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -139,9 +139,14 @@ class UIAgent(NetworkAgent):
         # Create a system prompt that knows about available capabilities
         available_capabilities = []
         for cap, agents in self.network.capability_registry.items():
-            available_capabilities.append(f"- {cap}: provided by {', '.join(agents)}")
+            available_capabilities.append(
+                f"- {cap}: provided by {', '.join(agents)}"
+            )
 
+        current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
+
+Current date (UTC): {current_date}
 
 Available capabilities:
 {chr(10).join(available_capabilities)}
@@ -227,7 +232,7 @@ Be thorough - include all capabilities that might be needed."""
         context = {
             "user_request": request_data["user_input"],
             "agent_responses": responses,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         system_prompt = """You are JARVIS, Tony Stark's AI assistant. 
