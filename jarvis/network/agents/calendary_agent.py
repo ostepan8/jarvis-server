@@ -1,7 +1,7 @@
 # jarvis/network/agents/calendar_agent.py
 from typing import Any, Dict, Set, List
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from ..core import NetworkAgent, Message
@@ -24,7 +24,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
     async def _handle_availability_check(self, message: Message) -> None:
         """Respond with simple availability information for a given date."""
-        date_str = message.content.get("date", datetime.now().strftime("%Y-%m-%d"))
+        date_str = message.content.get(
+            "date", self.calendar_service.current_date_utc()
+        )
         events = await self.calendar_service.get_events_by_date(date_str)
         available = len(events.get("events", [])) == 0
         result = {"available": available, "date": date_str, "events": events.get("events", [])}
@@ -69,7 +71,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             result = None
 
             if capability == "view_schedule":
-                date = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+                date = data.get("date", self.calendar_service.current_date_utc())
                 result = await self.calendar_service.get_events_by_date(date)
 
             elif capability == "add_event":
@@ -96,7 +98,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
             elif capability == "find_free_time":
                 duration = data.get("duration_minutes", 60)
-                date_str = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+                date_str = data.get(
+                    "date", self.calendar_service.current_date_utc()
+                )
                 preferences = data.get("preferences", {})
 
                 # Get schedule
@@ -207,7 +211,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             {
                 "type": f"event_{change_type}",
                 "event": event_data,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             str(uuid.uuid4()),
         )
@@ -255,13 +259,13 @@ class CollaborativeCalendarAgent(NetworkAgent):
         """Retrieve events for a given date range."""
         events: List[Dict] = []
         if date_range == "week":
-            start = datetime.now()
+            start = datetime.now(timezone.utc)
             for i in range(7):
                 day = (start + timedelta(days=i)).strftime("%Y-%m-%d")
                 day_events = await self.calendar_service.get_events_by_date(day)
                 events.extend(day_events.get("events", []))
         else:
-            today = datetime.now().strftime("%Y-%m-%d")
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             day_events = await self.calendar_service.get_events_by_date(today)
             events.extend(day_events.get("events", []))
         return events

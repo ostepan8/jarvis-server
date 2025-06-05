@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import aiohttp
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .logger import JarvisLogger
@@ -13,6 +13,10 @@ class CalendarService:
     def __init__(self, base_url: str = "http://localhost:8080", logger: JarvisLogger | None = None) -> None:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
+
+    def current_date_utc(self) -> str:
+        """Return the current date in UTC as YYYY-MM-DD."""
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     async def _request(
         self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None
@@ -78,7 +82,7 @@ class CalendarService:
 
     async def get_today_events(self) -> Dict[str, Any]:
         """Get today's events - returns dict instead of list"""
-        today = date.today().strftime("%Y-%m-%d")
+        today = self.current_date_utc()
         return await self.get_events_by_date(today)
 
     async def add_event(

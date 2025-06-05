@@ -101,7 +101,8 @@ class AICalendarAgent:
             "2. Breaking down complex tasks into calendar API calls\n"
             "3. Executing the necessary operations in the correct order\n"
             "4. Explaining the results plainly\n\n"
-            "Current date: {current_date}"
+            "Current date (UTC): {current_date}. Always interpret dates "
+            "relative to this value."
         )
 
         self._function_map = {
@@ -127,7 +128,7 @@ class AICalendarAgent:
             return error
 
     async def process_request(self, user_input: str) -> Tuple[str, List[Dict[str, Any]]]:
-        current_date = date.today().strftime("%Y-%m-%d")
+        current_date = self.calendar_service.current_date_utc()
         messages = [
             {"role": "system", "content": self.system_prompt.format(current_date=current_date)},
             {"role": "user", "content": user_input},
