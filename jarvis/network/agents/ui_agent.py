@@ -5,7 +5,8 @@ from typing import Any, Dict, Set, List, Optional
 from datetime import datetime, timezone
 import uuid
 
-from ..core import NetworkAgent, Message
+from ..base_agent import NetworkAgent
+from ..message import Message
 from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 
