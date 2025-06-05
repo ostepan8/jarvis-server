@@ -3,7 +3,7 @@ import asyncio
 from typing import Dict, Any
 
 from .network.core import AgentNetwork
-from .network.agents.calendar_agent import CollaborativeCalendarAgent
+from .network.agents.calendary_agent import CollaborativeCalendarAgent
 from .network.agents.ui_agent import UIAgent
 from .calendar_service import CalendarService
 from .ai_clients import AIClientFactory

@@ -13,7 +13,7 @@ from .ai_clients import (
     AnthropicClient,
 )
 from .network.core import AgentNetwork
-from .network.agents.calendar_agent import CollaborativeCalendarAgent
+from .network.agents.calendary_agent import CollaborativeCalendarAgent
 from .network.agents.ui_agent import UIAgent
 
 __all__ = [
