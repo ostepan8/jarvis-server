@@ -30,7 +30,8 @@ class JarvisSystem:
         )
 
         # Create UI Agent (main interface)
-        self.ui_agent = UIAgent(ai_client, self.logger)
+        ui_timeout = self.config.get("response_timeout", 10.0)
+        self.ui_agent = UIAgent(ai_client, self.logger, response_timeout=ui_timeout)
         self.network.register_agent(self.ui_agent)
 
         # Create Calendar Agent with integrated natural language logic

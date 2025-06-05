@@ -14,9 +14,15 @@ from ...logger import JarvisLogger
 class UIAgent(NetworkAgent):
     """Agent that handles user interaction and coordinates complex requests"""
 
-    def __init__(self, ai_client: BaseAIClient, logger: Optional[JarvisLogger] = None):
+    def __init__(
+        self,
+        ai_client: BaseAIClient,
+        logger: Optional[JarvisLogger] = None,
+        response_timeout: float = 10.0,
+    ):
         super().__init__("UIAgent", logger)
         self.ai_client = ai_client
+        self.response_timeout = response_timeout
         self.pending_requests: Dict[str, Dict[str, Any]] = {}
         self.conversation_history: List[Dict[str, Any]] = []
 
@@ -104,7 +110,9 @@ class UIAgent(NetworkAgent):
             await self._execute_capability_requests(request_id, analysis)
 
             # Wait for responses (with timeout)
-            response = await self._wait_for_responses(request_id, timeout=10.0)
+            response = await self._wait_for_responses(
+                request_id, timeout=self.response_timeout
+            )
 
             # Format final response
             final_response = await self._format_response(request_id, response)
