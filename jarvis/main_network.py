@@ -33,11 +33,11 @@ class JarvisSystem:
         self.ui_agent = UIAgent(ai_client, self.logger)
         self.network.register_agent(self.ui_agent)
 
-        # Create Calendar Agent
+        # Create Calendar Agent with integrated natural language logic
         calendar_service = CalendarService(
             self.config.get("calendar_api_url", "http://localhost:8080")
         )
-        calendar_agent = CollaborativeCalendarAgent(calendar_service, self.logger)
+        calendar_agent = CollaborativeCalendarAgent(ai_client, calendar_service, self.logger)
         self.network.register_agent(calendar_agent)
 
         # Add more agents as you build them:
