@@ -12,6 +12,9 @@ from .ai_clients import (
     OpenAIClient,
     AnthropicClient,
 )
+from .network.core import AgentNetwork
+from .network.agents.calendar_agent import CollaborativeCalendarAgent
+from .network.agents.ui_agent import UIAgent
 
 __all__ = [
     "AICalendarAgent",
@@ -24,4 +27,7 @@ __all__ = [
     "LogViewer",
     "AgentFactory",
     "AIMainAgent",
+    "AgentNetwork",
+    "CollaborativeCalendarAgent",
+    "UIAgent",
 ]
