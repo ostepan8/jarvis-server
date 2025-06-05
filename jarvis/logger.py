@@ -1,7 +1,8 @@
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
+import json
 
 
 class JarvisLogger:
@@ -34,13 +35,23 @@ class JarvisLogger:
                 """
             )
 
-    def log(self, level: str, action: str, details: Optional[str] = None) -> None:
+    def log(self, level: str, action: str, details: Optional[Any] = None) -> None:
+        """Log a message to stdout and the SQLite database."""
         level_name = level.upper()
-        message = f"{action}: {details}" if details else action
+        if details is not None and not isinstance(details, str):
+            try:
+                details_str = json.dumps(details)
+            except Exception:
+                details_str = str(details)
+        else:
+            details_str = details or ""
+
+        message = f"{action}: {details_str}" if details_str else action
         self.logger.log(getattr(logging, level_name, logging.INFO), message)
+
         timestamp = datetime.utcnow().isoformat()
         with self.conn:
             self.conn.execute(
                 "INSERT INTO logs (timestamp, level, action, details) VALUES (?, ?, ?, ?)",
-                (timestamp, level_name, action, details or ""),
+                (timestamp, level_name, action, details_str),
             )
