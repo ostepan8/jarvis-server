@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timedelta, timezone
 import uuid
 
-from ..core import NetworkAgent, Message
+from ..base_agent import NetworkAgent
+from ..message import Message
 from ...calendar_service import CalendarService
 from ...logger import JarvisLogger
 

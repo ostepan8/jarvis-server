@@ -12,7 +12,7 @@ from .ai_clients import (
     OpenAIClient,
     AnthropicClient,
 )
-from .network.core import AgentNetwork
+from .network import AgentNetwork
 from .network.agents.calendary_agent import CollaborativeCalendarAgent
 from .network.agents.ui_agent import UIAgent
 

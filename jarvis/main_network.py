@@ -4,7 +4,7 @@ import os
 from typing import Dict, Any
 from dotenv import load_dotenv
 
-from .network.core import AgentNetwork
+from .network import AgentNetwork
 from .network.agents.calendary_agent import CollaborativeCalendarAgent
 from .network.agents.ui_agent import UIAgent
 from .calendar_service import CalendarService

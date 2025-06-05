@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import uuid
+from typing import Any, Callable, Dict, Optional, Set
+
+from .message import Message
+from .agent_network import AgentNetwork
+from ..logger import JarvisLogger
+
+
+class NetworkAgent:
+    """Base class for collaborative network agents."""
+
+    def __init__(self, name: str, logger: Optional[JarvisLogger] = None) -> None:
+        self._name = name
+        self.network: Optional[AgentNetwork] = None
+        self.logger = logger or JarvisLogger()
+        self.active_tasks: Dict[str, Any] = {}
+        self.message_handlers: Dict[str, Callable] = {}
+        self._setup_base_handlers()
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return "Base network agent"
+
+    @property
+    def capabilities(self) -> Set[str]:
+        """Override in subclass."""
+        return set()
+
+    @property
+    def dependencies(self) -> Set[str]:
+        """Override in subclass."""
+        return set()
+
+    def set_network(self, network: AgentNetwork) -> None:
+        """Set the network this agent belongs to."""
+        self.network = network
+
+    def _setup_base_handlers(self) -> None:
+        """Setup base message handlers."""
+        self.message_handlers["capability_request"] = self._handle_capability_request
+        self.message_handlers["capability_response"] = self._handle_capability_response
+        self.message_handlers["error"] = self._handle_error
+
+    async def receive_message(self, message: Message) -> None:
+        """Handle an incoming message."""
+        handler = self.message_handlers.get(message.message_type, self._handle_unknown)
+        try:
+            await handler(message)
+        except Exception as exc:
+            self.logger.log("ERROR", f"{self.name} message handling error", str(exc))
+            await self.send_error(message.from_agent, str(exc), message.request_id)
+
+    async def _handle_unknown(self, message: Message) -> None:
+        self.logger.log("DEBUG", f"{self.name} unknown message", message.message_type)
+
+    async def _handle_capability_request(self, message: Message) -> None:
+        pass
+
+    async def _handle_capability_response(self, message: Message) -> None:
+        pass
+
+    async def _handle_error(self, message: Message) -> None:
+        self.logger.log("ERROR", f"Error from {message.from_agent}", message.content)
+
+    async def send_message(
+        self,
+        to_agent: Optional[str],
+        message_type: str,
+        content: Any,
+        request_id: str,
+        reply_to: Optional[str] = None,
+    ) -> None:
+        message = Message(
+            from_agent=self.name,
+            to_agent=to_agent,
+            message_type=message_type,
+            content=content,
+            request_id=request_id,
+            reply_to=reply_to,
+        )
+        await self.network.send_message(message)
+
+    async def request_capability(
+        self, capability: str, data: Any, request_id: Optional[str] = None
+    ) -> str:
+        if not request_id:
+            request_id = str(uuid.uuid4())
+        providers = await self.network.request_capability(self.name, capability, data, request_id)
+        if providers:
+            self.active_tasks[request_id] = {
+                "capability": capability,
+                "providers": providers,
+                "responses": [],
+                "data": data,
+            }
+        return request_id
+
+    async def send_capability_response(
+        self, to_agent: str, result: Any, request_id: str, original_message_id: str
+    ) -> None:
+        await self.send_message(
+            to_agent,
+            "capability_response",
+            result,
+            request_id,
+            reply_to=original_message_id,
+        )
+
+    async def send_error(self, to_agent: str, error: str, request_id: str) -> None:
+        await self.send_message(to_agent, "error", {"error": error}, request_id)
