@@ -1,6 +1,8 @@
 # jarvis/main_network.py
 import asyncio
+import os
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 from .network.core import AgentNetwork
 from .network.agents.calendary_agent import CollaborativeCalendarAgent
@@ -72,9 +74,10 @@ async def demo():
     """Demo of the collaborative Jarvis system"""
 
     # Configuration
+    load_dotenv()
     config = {
         "ai_provider": "openai",
-        "api_key": "your-api-key",  # Or use environment variable
+        "api_key": os.getenv("OPENAI_API_KEY"),
         "calendar_api_url": "http://localhost:8080",
     }
 
@@ -116,6 +119,9 @@ async def demo():
 # Simple interface for your existing code
 async def create_collaborative_jarvis(api_key: str = None):
     """Create a collaborative Jarvis instance"""
+    if api_key is None:
+        load_dotenv()
+        api_key = os.getenv("OPENAI_API_KEY")
     config = {
         "ai_provider": "openai",
         "api_key": api_key,
