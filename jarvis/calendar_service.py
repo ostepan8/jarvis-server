@@ -33,8 +33,9 @@ class CalendarService:
         today = date.today().strftime("%Y-%m-%d")
         return await self.get_events_by_date(today)
 
-    async def add_event(self, title: str, date_str: str, time: str, duration_minutes: int = 60, description: str = "") -> Dict[str, Any]:
-        datetime_str = f"{date_str} {time}"
+    async def add_event(self, title: str, date: str, time: str, duration_minutes: int = 60, description: str = "") -> Dict[str, Any]:
+        """Add an event on a given date and time."""
+        datetime_str = f"{date} {time}"
         data = {
             "title": title,
             "time": datetime_str,

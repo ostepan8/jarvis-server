@@ -16,11 +16,12 @@ class OpenAIClient(BaseAIClient):
         self.model = model
 
     async def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Tuple[Any, Any]:
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-        )
+        params: Dict[str, Any] = {"model": self.model, "messages": messages}
+        if tools:
+            params["tools"] = tools
+            params["tool_choice"] = "auto"
+        else:
+            params["tool_choice"] = "none"
+        response = await self.client.chat.completions.create(**params)
         message = response.choices[0].message
         return message, message.tool_calls
