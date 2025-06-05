@@ -3,6 +3,7 @@
 from .agent import AICalendarAgent
 from .calendar_service import CalendarService
 from .logger import JarvisLogger
+from .log_viewer import LogViewer
 from .ai_clients import (
     AIClientFactory,
     BaseAIClient,
@@ -18,4 +19,5 @@ __all__ = [
     "OpenAIClient",
     "AnthropicClient",
     "JarvisLogger",
+    "LogViewer",
 ]
