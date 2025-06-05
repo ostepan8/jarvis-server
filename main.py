@@ -17,17 +17,22 @@ async def demo() -> None:
     calendar_service = CalendarService()
     agent = AICalendarAgent(ai_client, calendar_service)
 
-    result = await agent.process_request_with_reasoning(
-        "Create a full schedule for June 5th with the following activities: "
-        "7-8:30 AM: Morning workout and basketball drills, "
-        "9-10:30 AM: LeetCode practice focusing on algorithms, "
-        "11 AM-12 PM: Quant finance study (stochastic calculus), "
-        "1-2:30 PM: Software engineering work on system design, "
-        "3-4 PM: Technical interview prep, "
-        "4:30-6 PM: Basketball pickup game, "
-        "7-8 PM: Coding project work, "
-        "8:30-9:30 PM: Review quantitative trading strategies"
-    )
+    # First create events
+    # result = await agent.process_request_with_reasoning(
+    #     "Create a full schedule for June 5th with the following activities: "
+    #     "7-8:30 AM: Morning workout and basketball drills, "
+    #     "9-10:30 AM: LeetCode practice focusing on algorithms, "
+    #     "11 AM-12 PM: Quant finance study (stochastic calculus), "
+    #     "1-2:30 PM: Software engineering work on system design, "
+    #     "3-4 PM: Technical interview prep, "
+    #     "4:30-6 PM: Basketball pickup game, "
+    #     "7-8 PM: Coding project work, "
+    #     "8:30-9:30 PM: Review quantitative trading strategies"
+    # )
+    # print(result)
+
+    # Then remove all events on June 5th
+    result = await agent.process_request_with_reasoning("Remove all events on June 5th")
     print(result)
 
 
