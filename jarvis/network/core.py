@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Set, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
-
 from ..logger import JarvisLogger
 
 
