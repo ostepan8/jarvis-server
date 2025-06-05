@@ -34,7 +34,10 @@ async def demo() -> None:
     # print(result)
 
     # Then remove all events on June 5th
-    result = await agent.process_request_with_reasoning("Remove all events on June 5th")
+    result = await agent.process_request_with_reasoning(
+        # "Whats on my calendar for June 5th?"
+        "Remove everything from my schedule for June 5th."
+    )
     print(result)
 
 
