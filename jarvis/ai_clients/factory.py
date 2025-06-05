@@ -5,6 +5,7 @@ from typing import Optional
 from .base import BaseAIClient
 from .openai_client import OpenAIClient
 from .anthropic_client import AnthropicClient
+from .dummy_client import DummyAIClient
 
 
 class AIClientFactory:
@@ -17,4 +18,6 @@ class AIClientFactory:
             return OpenAIClient(api_key=api_key)
         if provider == "anthropic":
             return AnthropicClient(api_key=api_key)
+        if provider in {"dummy", "mock"}:
+            return DummyAIClient()
         raise ValueError(f"Unsupported AI provider: {provider}")
