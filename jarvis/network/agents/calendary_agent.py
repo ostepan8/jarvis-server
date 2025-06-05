@@ -75,6 +75,16 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 result = await self.calendar_service.get_events_by_date(date)
 
             elif capability == "add_event":
+                # Validate required fields
+                required = ["title", "date", "time"]
+                missing = [f for f in required if not data.get(f)]
+                if missing:
+                    await self.send_error(
+                        message.from_agent,
+                        f"Missing required fields for add_event: {', '.join(missing)}",
+                        message.request_id,
+                    )
+                    return
                 # Check for conflicts first
                 conflicts = await self._check_conflicts(data)
                 if conflicts:
@@ -247,6 +257,10 @@ class CollaborativeCalendarAgent(NetworkAgent):
         date = event_data.get("date")
         time = event_data.get("time")
         duration = event_data.get("duration_minutes", 60)
+
+        if not date or not time:
+            # Cannot check conflicts without a specific date and time
+            return []
 
         existing = await self.calendar_service.get_events_by_date(date)
         conflicts = []
