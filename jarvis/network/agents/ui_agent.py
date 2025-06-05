@@ -283,14 +283,8 @@ Be concise but complete. Don't mention the internal agent names."""
             word in lower_input
             for word in ["schedule", "calendar", "meeting", "appointment"]
         ):
-            if "add" in lower_input or "schedule" in lower_input:
-                capabilities_needed.append("add_event")
-            elif (
-                "check" in lower_input or "show" in lower_input or "what" in lower_input
-            ):
-                capabilities_needed.append("view_schedule")
-            elif "cancel" in lower_input or "remove" in lower_input:
-                capabilities_needed.append("remove_event")
+            capabilities_needed.append("calendar_command")
+            parameters["calendar_command"] = {"command": user_input}
 
         # Email-related
         if any(word in lower_input for word in ["email", "mail", "send"]):
