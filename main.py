@@ -6,6 +6,7 @@ from dotenv import load_dotenv  # Add this import
 from jarvis.ai_clients import AIClientFactory
 from jarvis.agent import AICalendarAgent
 from jarvis.calendar_service import CalendarService
+from jarvis.logger import JarvisLogger
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,8 +15,9 @@ load_dotenv()
 async def demo() -> None:
     api_key = os.getenv("OPENAI_API_KEY")  # Get the API key from environment
     ai_client = AIClientFactory.create("openai", api_key=api_key)
-    calendar_service = CalendarService()
-    agent = AICalendarAgent(ai_client, calendar_service)
+    logger = JarvisLogger()
+    calendar_service = CalendarService(logger=logger)
+    agent = AICalendarAgent(ai_client, calendar_service, logger=logger)
 
     # First create events
     # result = await agent.process_request_with_reasoning(
@@ -40,8 +42,9 @@ async def calendar_ai(command: str, api_key: Optional[str] = None) -> str:
     if api_key is None:
         api_key = os.getenv("OPENAI_API_KEY")  # Fallback to env if not provided
     ai_client = AIClientFactory.create("openai", api_key=api_key)
-    service = CalendarService()
-    agent = AICalendarAgent(ai_client, service)
+    logger = JarvisLogger()
+    service = CalendarService(logger=logger)
+    agent = AICalendarAgent(ai_client, service, logger=logger)
     response, _ = await agent.process_request(command)
     return response
 

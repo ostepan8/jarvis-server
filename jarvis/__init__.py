@@ -2,6 +2,7 @@
 
 from .agent import AICalendarAgent
 from .calendar_service import CalendarService
+from .logger import JarvisLogger
 from .ai_clients import (
     AIClientFactory,
     BaseAIClient,
@@ -16,4 +17,5 @@ __all__ = [
     "BaseAIClient",
     "OpenAIClient",
     "AnthropicClient",
+    "JarvisLogger",
 ]
