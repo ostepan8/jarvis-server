@@ -127,12 +127,12 @@ class AICalendarAgent:
         message, tool_calls = await self.ai_client.chat(messages, self.tools)
 
         if tool_calls:
+            messages.append(message)
             for call in tool_calls:
                 function_name = call.function.name
                 arguments = json.loads(call.function.arguments)
                 result = await self._execute_function(function_name, arguments)
                 actions_taken.append({"function": function_name, "arguments": arguments, "result": result})
-                messages.append(message)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
             message, _ = await self.ai_client.chat(messages, [])
 
