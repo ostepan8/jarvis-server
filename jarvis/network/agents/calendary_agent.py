@@ -1,9 +1,10 @@
 # jarvis/network/agents/calendar_agent.py
-from typing import Any, Dict, Set
+from typing import Any, Dict, Set, List
 import json
 from datetime import datetime, timedelta
+import uuid
 
-from ..core import NetworkAgent
+from ..core import NetworkAgent, Message
 from ...calendar_service import CalendarService
 from ...logger import JarvisLogger
 
@@ -20,6 +21,14 @@ class CollaborativeCalendarAgent(NetworkAgent):
         # Register additional handlers
         self.message_handlers["schedule_update"] = self._handle_schedule_update
         self.message_handlers["availability_check"] = self._handle_availability_check
+
+    async def _handle_availability_check(self, message: Message) -> None:
+        """Respond with simple availability information for a given date."""
+        date_str = message.content.get("date", datetime.now().strftime("%Y-%m-%d"))
+        events = await self.calendar_service.get_events_by_date(date_str)
+        available = len(events.get("events", [])) == 0
+        result = {"available": available, "date": date_str, "events": events.get("events", [])}
+        await self.send_capability_response(message.from_agent, result, message.request_id, message.id)
 
     @property
     def description(self) -> str:
@@ -241,3 +250,31 @@ class CollaborativeCalendarAgent(NetworkAgent):
         # ... conflict checking logic ...
 
         return conflicts
+
+    async def _get_events_for_range(self, date_range: str) -> List[Dict]:
+        """Retrieve events for a given date range."""
+        events: List[Dict] = []
+        if date_range == "week":
+            start = datetime.now()
+            for i in range(7):
+                day = (start + timedelta(days=i)).strftime("%Y-%m-%d")
+                day_events = await self.calendar_service.get_events_by_date(day)
+                events.extend(day_events.get("events", []))
+        else:
+            today = datetime.now().strftime("%Y-%m-%d")
+            day_events = await self.calendar_service.get_events_by_date(today)
+            events.extend(day_events.get("events", []))
+        return events
+
+    def _optimize_schedule(self, events: List[Dict], goals: List[str]) -> Dict[str, Any]:
+        """Return a naive optimized schedule."""
+        sorted_events = sorted(events, key=lambda e: e.get("time", ""))
+        return {"optimized_events": sorted_events, "goals": goals}
+
+    async def _adjust_event_for_travel(self, event_id: str, new_travel_time: int) -> None:
+        """Placeholder for adjusting events based on travel time."""
+        self.logger.log(
+            "INFO",
+            "Adjust travel time",
+            f"{event_id} -> {new_travel_time}",
+        )

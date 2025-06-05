@@ -22,6 +22,28 @@ class UIAgent(NetworkAgent):
         # Register additional handlers
         self.message_handlers["user_input"] = self._handle_user_input
 
+    async def _handle_user_input(self, message: Message) -> None:
+        """Process a user input message from the network."""
+        # Message content may be a raw string or a dict with an "input" key
+        user_input = message.content
+        if isinstance(user_input, dict):
+            user_input = user_input.get("input", "")
+
+        if not isinstance(user_input, str):
+            self.logger.log("ERROR", "Invalid user input", str(user_input))
+            return
+
+        result = await self.process_user_request(user_input)
+
+        # Send the formatted response back to the sender
+        await self.send_message(
+            message.from_agent,
+            "user_response",
+            result,
+            message.request_id,
+            reply_to=message.id,
+        )
+
     @property
     def description(self) -> str:
         return "Handles user interaction, request parsing, and response coordination"
