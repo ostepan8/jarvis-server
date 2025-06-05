@@ -6,14 +6,16 @@ from typing import Any, Dict, List, Tuple
 
 from .ai_clients import BaseAIClient
 from .calendar_service import CalendarService
+from .logger import JarvisLogger
 
 
 class AICalendarAgent:
     """AI agent that interprets natural language and executes calendar operations."""
 
-    def __init__(self, ai_client: BaseAIClient, calendar_service: CalendarService) -> None:
+    def __init__(self, ai_client: BaseAIClient, calendar_service: CalendarService, logger: JarvisLogger | None = None) -> None:
         self.ai_client = ai_client
         self.calendar_service = calendar_service
+        self.logger = logger or JarvisLogger()
         self.tools = [
             {
                 "type": "function",
@@ -111,10 +113,14 @@ class AICalendarAgent:
         if not func:
             return {"error": f"Unknown function: {function_name}"}
         try:
+            self.logger.log("INFO", f"Calling {function_name}", json.dumps(arguments))
             result = await func(**arguments)
+            self.logger.log("INFO", f"Result {function_name}", json.dumps(result))
             return result
         except Exception as exc:
-            return {"error": str(exc)}
+            error = {"error": str(exc)}
+            self.logger.log("ERROR", f"Error {function_name}", json.dumps(error))
+            return error
 
     async def process_request(self, user_input: str) -> Tuple[str, List[Dict[str, Any]]]:
         current_date = date.today().strftime("%Y-%m-%d")
@@ -124,17 +130,23 @@ class AICalendarAgent:
         ]
         actions_taken: List[Dict[str, Any]] = []
 
+        self.logger.log("INFO", "User request", user_input)
+
         message, tool_calls = await self.ai_client.chat(messages, self.tools)
+        self.logger.log("INFO", "AI response", getattr(message, "content", str(message)))
 
         if tool_calls:
             messages.append(message.model_dump())
             for call in tool_calls:
                 function_name = call.function.name
                 arguments = json.loads(call.function.arguments)
+                self.logger.log("INFO", "Tool call", function_name)
                 result = await self._execute_function(function_name, arguments)
                 actions_taken.append({"function": function_name, "arguments": arguments, "result": result})
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
             message, _ = await self.ai_client.chat(messages, [])
+
+        self.logger.log("INFO", "Final response", getattr(message, "content", str(message)))
 
         return message.content if hasattr(message, "content") else str(message), actions_taken
 

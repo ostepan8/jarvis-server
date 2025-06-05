@@ -4,17 +4,21 @@ import aiohttp
 from datetime import date
 from typing import Any, Dict, List, Optional
 
+from .logger import JarvisLogger
+
 
 class CalendarService:
     """Service responsible for communicating with the calendar API."""
 
-    def __init__(self, base_url: str = "http://localhost:8080") -> None:
+    def __init__(self, base_url: str = "http://localhost:8080", logger: JarvisLogger | None = None) -> None:
         self.base_url = base_url
+        self.logger = logger or JarvisLogger()
 
     async def _request(
         self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{endpoint}"
+        self.logger.log("INFO", "API request", f"{method} {url} {data}")
         async with aiohttp.ClientSession() as session:
             if method == "GET":
                 async with session.get(url) as response:
@@ -24,6 +28,7 @@ class CalendarService:
                         raise Exception(
                             f"API Error: {result.get('message', 'Unknown error')}"
                         )
+                    self.logger.log("INFO", "API response", str(result))
                     return result
             if method == "POST":
                 async with session.post(url, json=data) as response:
@@ -32,6 +37,7 @@ class CalendarService:
                         raise Exception(
                             f"API Error: {result.get('message', 'Unknown error')}"
                         )
+                    self.logger.log("INFO", "API response", str(result))
                     return result
             if method == "DELETE":
                 async with session.delete(url) as response:
@@ -40,12 +46,15 @@ class CalendarService:
                         raise Exception(
                             f"API Error: {result.get('message', 'Unknown error')}"
                         )
+                    self.logger.log("INFO", "API response", str(result))
                     return result
+        self.logger.log("ERROR", "API request", "Unsupported method")
         return {"status": "error", "message": "Unsupported method"}
 
     async def get_events_by_date(self, date: str) -> Dict[str, Any]:
         """Get events for a specific date - now returns a dict matching AI expectations"""
         result = await self._request("GET", f"/events/day/{date}")
+        self.logger.log("INFO", "Fetched events", str(result))
         events = result.get("data", [])
 
         # Format for better readability
@@ -90,6 +99,7 @@ class CalendarService:
         }
         result = await self._request("POST", "/events", data)
         event = result.get("data", {})
+        self.logger.log("INFO", "Added event", str(event))
 
         return {
             "success": True,
@@ -106,6 +116,7 @@ class CalendarService:
         """Delete an event and return success status"""
         try:
             await self._request("DELETE", f"/events/{event_id}")
+            self.logger.log("INFO", "Deleted event", event_id)
             return {
                 "success": True,
                 "message": f"Event {event_id} deleted successfully",
@@ -120,10 +131,12 @@ class CalendarService:
             events = today_data.get("events", [])
             total_time = sum(e.get("duration_minutes", 0) for e in events)
 
-            return {
+            result = {
                 "date_range": date_range,
                 "total_events": len(events),
                 "total_scheduled_minutes": total_time,
                 "analysis": f"You have {len(events)} events today totaling {total_time} minutes",
             }
+            self.logger.log("INFO", "Schedule analysis", str(result))
+            return result
         return {"status": "error", "message": "Unsupported range"}
