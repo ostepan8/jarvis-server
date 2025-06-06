@@ -2,6 +2,10 @@
 
 This file gives high level guidance for working with the code base. It is intended for agents (including Codex) that need context when working on tasks in this repository.
 
+## Dependencies
+Additional Python packages used by the project:
+- `tzlocal`
+
 ## Overview
 - **Language**: Python 3.11+
 - **App**: FastAPI server exposing AI agents for calendar management.
