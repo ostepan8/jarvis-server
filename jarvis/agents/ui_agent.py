@@ -89,7 +89,7 @@ class UIAgent(NetworkAgent):
         """Main entry point for processing user requests"""
         request_id = f"req_{uuid.uuid4()}"
 
-        self.logger.log("INFO", f"Processing user request", user_input)
+        self.logger.log("INFO", "Processing user request", user_input)
 
         # Store request
         self.pending_requests[request_id] = {
@@ -113,6 +113,7 @@ class UIAgent(NetworkAgent):
         try:
             # Parse request with AI
             analysis = await self._analyze_request(user_input, tz_name)
+            self.logger.log("INFO", "Analysis", json.dumps(analysis))
 
             # Execute capability requests in parallel
             await self._execute_capability_requests(request_id, analysis)
@@ -127,6 +128,8 @@ class UIAgent(NetworkAgent):
 
             self.pending_requests[request_id]["status"] = "completed"
 
+            self.logger.log("INFO", "Request completed", request_id)
+
             return {
                 "success": True,
                 "response": final_response,
@@ -137,6 +140,7 @@ class UIAgent(NetworkAgent):
             }
 
         except asyncio.TimeoutError:
+            self.logger.log("WARNING", "Request timeout", request_id)
             return {
                 "success": False,
                 "response": "I'm sorry, the request timed out. Some agents may still be working on it.",
@@ -152,6 +156,8 @@ class UIAgent(NetworkAgent):
 
     async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Use AI to analyze user request and determine needed capabilities"""
+
+        self.logger.log("DEBUG", "Analyzing request", user_input)
 
         # Create a system prompt that knows about available capabilities
         available_capabilities = []
@@ -189,6 +195,8 @@ Be thorough - include all capabilities that might be needed."""
             # Fallback to simple keyword matching
             analysis = self._simple_request_analysis(user_input)
 
+        self.logger.log("DEBUG", "Analysis result", json.dumps(analysis))
+
         return analysis
 
     async def _execute_capability_requests(
@@ -202,6 +210,12 @@ Be thorough - include all capabilities that might be needed."""
         for capability in capabilities_needed:
             # Get parameters for this capability
             cap_params = parameters.get(capability, {})
+
+            self.logger.log(
+                "INFO",
+                f"Requesting capability {capability}",
+                json.dumps(cap_params),
+            )
 
             # Request the capability
             cap_request_id = await self.request_capability(
@@ -220,6 +234,7 @@ Be thorough - include all capabilities that might be needed."""
     ) -> Dict[str, Any]:
         """Wait for all capability responses"""
         start_time = asyncio.get_event_loop().time()
+        self.logger.log("DEBUG", "Waiting for responses", request_id)
 
         while True:
             # Check if all responses received
@@ -236,6 +251,11 @@ Be thorough - include all capabilities that might be needed."""
 
             await asyncio.sleep(0.1)
 
+        self.logger.log(
+            "INFO",
+            "All responses received",
+            f"{total_received}/{total_requested} for {request_id}",
+        )
         return pending["responses"]
 
     async def _format_response(
@@ -266,7 +286,9 @@ Be concise but complete. Don't mention the internal agent names."""
         ]
 
         response = await self.ai_client.chat(messages, [])
-        return response[0].content
+        final_text = response[0].content
+        self.logger.log("INFO", "Formatted response", final_text)
+        return final_text
 
     async def _handle_capability_response(self, message: Message) -> None:
         """Handle responses from other agents"""
@@ -274,6 +296,12 @@ Be concise but complete. Don't mention the internal agent names."""
 
         if request_id not in self.pending_requests:
             return
+
+        self.logger.log(
+            "INFO",
+            f"Response from {message.from_agent}",
+            json.dumps(message.content),
+        )
 
         # Store the response
         self.pending_requests[request_id]["responses"][
@@ -308,8 +336,10 @@ Be concise but complete. Don't mention the internal agent names."""
 
         # Add more patterns as needed
 
-        return {
+        result = {
             "intent": "Process user request",
             "capabilities_needed": capabilities_needed,
             "parameters": parameters,
         }
+        self.logger.log("DEBUG", "Simple analysis", json.dumps(result))
+        return result

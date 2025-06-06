@@ -24,6 +24,12 @@ class CollaborativeCalendarAgent(NetworkAgent):
         self.calendar_service = calendar_service
         self.ai_client = ai_client
 
+        self.logger.log(
+            "INFO",
+            "Calendar agent initialized",
+            f"capabilities={self.capabilities}",
+        )
+
         # Tools and prompt for natural language commands
         self.tools = [
             {
@@ -246,6 +252,11 @@ class CollaborativeCalendarAgent(NetworkAgent):
         data = message.content.get("data", {})
 
         if capability not in self.capabilities:
+            self.logger.log(
+                "WARNING",
+                "Unknown capability",
+                f"{capability} for {self.name}",
+            )
             return
 
         self.logger.log("INFO", f"Handling {capability}", json.dumps(data))
