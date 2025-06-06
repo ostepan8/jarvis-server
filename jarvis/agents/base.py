@@ -49,6 +49,11 @@ class NetworkAgent:
 
     async def receive_message(self, message: Message) -> None:
         """Handle an incoming message."""
+        self.logger.log(
+            "DEBUG",
+            f"{self.name} received",
+            f"{message.message_type} from {message.from_agent}",
+        )
         handler = self.message_handlers.get(message.message_type, self._handle_unknown)
         try:
             await handler(message)
@@ -84,6 +89,11 @@ class NetworkAgent:
             request_id=request_id,
             reply_to=reply_to,
         )
+        self.logger.log(
+            "DEBUG",
+            "Send message",
+            f"{self.name} -> {to_agent or 'ALL'}: {message_type}",
+        )
         await self.network.send_message(message)
 
     async def request_capability(
@@ -91,7 +101,14 @@ class NetworkAgent:
     ) -> str:
         if not request_id:
             request_id = str(uuid.uuid4())
-        providers = await self.network.request_capability(self.name, capability, data, request_id)
+        providers = await self.network.request_capability(
+            self.name, capability, data, request_id
+        )
+        self.logger.log(
+            "INFO",
+            f"Request capability {capability}",
+            f"providers={providers} data={data}",
+        )
         if providers:
             self.active_tasks[request_id] = {
                 "capability": capability,
@@ -104,6 +121,11 @@ class NetworkAgent:
     async def send_capability_response(
         self, to_agent: str, result: Any, request_id: str, original_message_id: str
     ) -> None:
+        self.logger.log(
+            "DEBUG",
+            "Send capability response",
+            f"to {to_agent} req={request_id}",
+        )
         await self.send_message(
             to_agent,
             "capability_response",
@@ -113,4 +135,9 @@ class NetworkAgent:
         )
 
     async def send_error(self, to_agent: str, error: str, request_id: str) -> None:
+        self.logger.log(
+            "ERROR",
+            f"Sending error to {to_agent}",
+            error,
+        )
         await self.send_message(to_agent, "error", {"error": error}, request_id)
