@@ -30,7 +30,7 @@ class JarvisSystem:
         )
 
         # Create UI Agent (main interface)
-        ui_timeout = self.config.get("response_timeout", 10.0)
+        ui_timeout = self.config.get("response_timeout", 15.0)
         self.ui_agent = UIAgent(ai_client, self.logger, response_timeout=ui_timeout)
         self.network.register_agent(self.ui_agent)
 
@@ -38,7 +38,9 @@ class JarvisSystem:
         calendar_service = CalendarService(
             self.config.get("calendar_api_url", "http://localhost:8080")
         )
-        calendar_agent = CollaborativeCalendarAgent(ai_client, calendar_service, self.logger)
+        calendar_agent = CollaborativeCalendarAgent(
+            ai_client, calendar_service, self.logger
+        )
         self.network.register_agent(calendar_agent)
 
         # Add more agents as you build them:
@@ -109,6 +111,7 @@ async def demo():
     print("-" * 80)
 
     from tzlocal import get_localzone_name
+
     result = await jarvis.process_request(user_input, get_localzone_name())
 
     print(f"Jarvis: {result['response']}")

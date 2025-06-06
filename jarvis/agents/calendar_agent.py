@@ -7,8 +7,8 @@ import uuid
 from .base import NetworkAgent
 from .message import Message
 from ..services.calendar_service import CalendarService
-from ...ai_clients import BaseAIClient
-from ...logger import JarvisLogger
+from ..ai_clients import BaseAIClient
+from ..logger import JarvisLogger
 
 
 class CollaborativeCalendarAgent(NetworkAgent):
@@ -94,7 +94,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
                     "description": "Analyze schedule patterns and provide insights",
                     "parameters": {
                         "type": "object",
-                        "properties": {"date_range": {"type": "string", "default": "today"}},
+                        "properties": {
+                            "date_range": {"type": "string", "default": "today"}
+                        },
                         "required": [],
                     },
                 },
@@ -127,13 +129,17 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
     async def _handle_availability_check(self, message: Message) -> None:
         """Respond with simple availability information for a given date."""
-        date_str = message.content.get(
-            "date", self.calendar_service.current_date()
-        )
+        date_str = message.content.get("date", self.calendar_service.current_date())
         events = await self.calendar_service.get_events_by_date(date_str)
         available = len(events.get("events", [])) == 0
-        result = {"available": available, "date": date_str, "events": events.get("events", [])}
-        await self.send_capability_response(message.from_agent, result, message.request_id, message.id)
+        result = {
+            "available": available,
+            "date": date_str,
+            "events": events.get("events", []),
+        }
+        await self.send_capability_response(
+            message.from_agent, result, message.request_id, message.id
+        )
 
     @property
     def description(self) -> str:
@@ -161,7 +167,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "get_traffic",  # From maps agent for travel time
         }
 
-    async def _execute_function(self, function_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_function(
+        self, function_name: str, arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
         func = self._function_map.get(function_name)
         if not func:
             return {"error": f"Unknown function: {function_name}"}
@@ -179,7 +187,10 @@ class CollaborativeCalendarAgent(NetworkAgent):
         """Process a natural language calendar command using AI."""
         current_date = self.calendar_service.current_date()
         messages = [
-            {"role": "system", "content": self.system_prompt.format(current_date=current_date)},
+            {
+                "role": "system",
+                "content": self.system_prompt.format(current_date=current_date),
+            },
             {"role": "user", "content": command},
         ]
         actions_taken: List[Dict[str, Any]] = []
@@ -189,7 +200,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
         tool_calls = None
         while iterations < MAX_ITERATIONS:
             message, tool_calls = await self.ai_client.chat(messages, self.tools)
-            self.logger.log("INFO", "AI response", getattr(message, "content", str(message)))
+            self.logger.log(
+                "INFO", "AI response", getattr(message, "content", str(message))
+            )
 
             if not tool_calls:
                 break
@@ -200,8 +213,20 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 arguments = json.loads(call.function.arguments)
                 self.logger.log("INFO", "Tool call", function_name)
                 result = await self._execute_function(function_name, arguments)
-                actions_taken.append({"function": function_name, "arguments": arguments, "result": result})
-                messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
+                actions_taken.append(
+                    {
+                        "function": function_name,
+                        "arguments": arguments,
+                        "result": result,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": json.dumps(result),
+                    }
+                )
 
             iterations += 1
 
@@ -277,9 +302,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
             elif capability == "find_free_time":
                 duration = data.get("duration_minutes", 60)
-                date_str = data.get(
-                    "date", self.calendar_service.current_date()
-                )
+                date_str = data.get("date", self.calendar_service.current_date())
                 preferences = data.get("preferences", {})
 
                 # Get schedule
@@ -328,7 +351,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
             elif capability == "calendar_command":
                 command = data.get("command")
                 if not isinstance(command, str):
-                    await self.send_error(message.from_agent, "Invalid command", message.request_id)
+                    await self.send_error(
+                        message.from_agent, "Invalid command", message.request_id
+                    )
                     return
                 result = await self._process_calendar_command(command)
 
@@ -460,12 +485,16 @@ class CollaborativeCalendarAgent(NetworkAgent):
             events.extend(day_events.get("events", []))
         return events
 
-    def _optimize_schedule(self, events: List[Dict], goals: List[str]) -> Dict[str, Any]:
+    def _optimize_schedule(
+        self, events: List[Dict], goals: List[str]
+    ) -> Dict[str, Any]:
         """Return a naive optimized schedule."""
         sorted_events = sorted(events, key=lambda e: e.get("time", ""))
         return {"optimized_events": sorted_events, "goals": goals}
 
-    async def _adjust_event_for_travel(self, event_id: str, new_travel_time: int) -> None:
+    async def _adjust_event_for_travel(
+        self, event_id: str, new_travel_time: int
+    ) -> None:
         """Placeholder for adjusting events based on travel time."""
         self.logger.log(
             "INFO",

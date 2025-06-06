@@ -4,13 +4,17 @@ import aiohttp
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from .logger import JarvisLogger
+from ..logger import JarvisLogger
 
 
 class CalendarService:
     """Service responsible for communicating with the calendar API."""
 
-    def __init__(self, base_url: str = "http://localhost:8080", logger: JarvisLogger | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8080",
+        logger: JarvisLogger | None = None,
+    ) -> None:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
 

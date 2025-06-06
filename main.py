@@ -12,8 +12,12 @@ load_dotenv()
 
 async def demo() -> None:
     jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
+
+    # Get user input for the calendar command
+    user_command = input("Enter your calendar command: ")
+
     result = await jarvis.process_request(
-        "Remove everything from my schedule for June 5th.",
+        user_command,
         get_localzone_name(),
     )
     print(result)

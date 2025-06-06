@@ -9,8 +9,8 @@ import uuid
 
 from .base import NetworkAgent
 from .message import Message
-from ...ai_clients import BaseAIClient
-from ...logger import JarvisLogger
+from ..ai_clients import BaseAIClient
+from ..logger import JarvisLogger
 
 
 class UIAgent(NetworkAgent):
@@ -83,7 +83,9 @@ class UIAgent(NetworkAgent):
             "get_device_status",  # Smart home
         }
 
-    async def process_user_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
+    async def process_user_request(
+        self, user_input: str, tz_name: str
+    ) -> Dict[str, Any]:
         """Main entry point for processing user requests"""
         request_id = f"req_{uuid.uuid4()}"
 
@@ -154,9 +156,7 @@ class UIAgent(NetworkAgent):
         # Create a system prompt that knows about available capabilities
         available_capabilities = []
         for cap, agents in self.network.capability_registry.items():
-            available_capabilities.append(
-                f"- {cap}: provided by {', '.join(agents)}"
-            )
+            available_capabilities.append(f"- {cap}: provided by {', '.join(agents)}")
 
         current_date = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
         system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
@@ -238,7 +238,9 @@ Be thorough - include all capabilities that might be needed."""
 
         return pending["responses"]
 
-    async def _format_response(self, request_id: str, responses: Dict[str, Any], tz_name: str) -> str:
+    async def _format_response(
+        self, request_id: str, responses: Dict[str, Any], tz_name: str
+    ) -> str:
         """Use AI to format a natural response from all agent responses"""
 
         request_data = self.pending_requests[request_id]
