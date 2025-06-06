@@ -1,4 +1,4 @@
-# jarvis/network/agents/ui_agent.py
+# jarvis/agents/ui_agent.py
 import asyncio
 import json
 from typing import Any, Dict, Set, List, Optional
@@ -7,8 +7,8 @@ from zoneinfo import ZoneInfo
 from tzlocal import get_localzone_name
 import uuid
 
-from ..base_agent import NetworkAgent
-from ..message import Message
+from .base import NetworkAgent
+from .message import Message
 from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 

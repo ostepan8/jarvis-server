@@ -1,9 +1,11 @@
 """Agent network package."""
 
-from .agent_network import AgentNetwork
-from .base_agent import NetworkAgent
-from .message import Message
-from .capability import Capability
+"""Legacy network package for backward compatibility."""
+
+from ..agents.agent_network import AgentNetwork
+from ..agents.base import NetworkAgent
+from ..agents.message import Message
+from ..agents.capability import Capability
 
 __all__ = [
     "AgentNetwork",

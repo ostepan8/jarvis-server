@@ -10,10 +10,10 @@ Additional Python packages used by the project:
 - **Language**: Python 3.11+
 - **App**: FastAPI server exposing AI agents for calendar management.
 - **Key modules**:
-  - `jarvis/network/` – framework for agent communication and coordination.
+  - `jarvis/agents/` – agent implementations and network infrastructure.
   - `jarvis/main_network.py` – creates the `JarvisSystem` using the agent network.
   - `jarvis/ai_clients/` – wrappers for OpenAI and Anthropic APIs.
-  - `jarvis/calendar_service.py` – HTTP client for an external calendar API.
+  - `jarvis/services/` – service layer utilities like the calendar API client.
   - `jarvis/logger.py` – writes logs to stdout and SQLite.
   - `server.py` – FastAPI entrypoint exposing the `/jarvis` endpoint.
 
