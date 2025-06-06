@@ -225,6 +225,17 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
         self.logger.log("INFO", f"Handling {capability}", json.dumps(data))
 
+        # Track active request details so follow-up responses can be managed
+        self.active_tasks.setdefault(
+            message.request_id,
+            {
+                "data": data,
+                "original_requester": message.from_agent,
+                "original_message_id": message.id,
+                "responses": [],
+            },
+        )
+
         try:
             result = None
 
