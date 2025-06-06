@@ -49,7 +49,7 @@ class JarvisLogger:
         message = f"{action}: {details_str}" if details_str else action
         self.logger.log(getattr(logging, level_name, logging.INFO), message)
 
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now().isoformat()
         with self.conn:
             self.conn.execute(
                 "INSERT INTO logs (timestamp, level, action, details) VALUES (?, ?, ?, ?)",

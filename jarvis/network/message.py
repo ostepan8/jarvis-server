@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 
 
@@ -16,5 +16,5 @@ class Message:
     message_type: str = ""
     content: Any = None
     request_id: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now())
     reply_to: Optional[str] = None  # For response tracking

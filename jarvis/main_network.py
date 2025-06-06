@@ -57,12 +57,12 @@ class JarvisSystem:
             f"Active agents: {list(self.network.agents.keys())}",
         )
 
-    async def process_request(self, user_input: str) -> Dict[str, Any]:
+    async def process_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Process a user request through the network"""
         if not self.ui_agent:
             raise RuntimeError("System not initialized")
 
-        return await self.ui_agent.process_user_request(user_input)
+        return await self.ui_agent.process_user_request(user_input, tz_name)
 
     async def shutdown(self):
         """Shutdown the system"""
@@ -108,7 +108,8 @@ async def demo():
     print(f"\nUser: {user_input}")
     print("-" * 80)
 
-    result = await jarvis.process_request(user_input)
+    from tzlocal import get_localzone_name
+    result = await jarvis.process_request(user_input, get_localzone_name())
 
     print(f"Jarvis: {result['response']}")
     print(f"\nAgents involved: {', '.join(result.get('agents_involved', []))}")

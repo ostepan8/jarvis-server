@@ -2,7 +2,9 @@
 import asyncio
 import json
 from typing import Any, Dict, Set, List, Optional
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from tzlocal import get_localzone_name
 import uuid
 
 from ..base_agent import NetworkAgent
@@ -40,7 +42,10 @@ class UIAgent(NetworkAgent):
             self.logger.log("ERROR", "Invalid user input", str(user_input))
             return
 
-        result = await self.process_user_request(user_input)
+        tz_name = get_localzone_name()
+        if isinstance(message.content, dict):
+            tz_name = message.content.get("timezone", tz_name)
+        result = await self.process_user_request(user_input, tz_name)
 
         # Send the formatted response back to the sender
         await self.send_message(
@@ -78,7 +83,7 @@ class UIAgent(NetworkAgent):
             "get_device_status",  # Smart home
         }
 
-    async def process_user_request(self, user_input: str) -> Dict[str, Any]:
+    async def process_user_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Main entry point for processing user requests"""
         request_id = f"req_{uuid.uuid4()}"
 
@@ -87,10 +92,11 @@ class UIAgent(NetworkAgent):
         # Store request
         self.pending_requests[request_id] = {
             "user_input": user_input,
-            "start_time": datetime.now(timezone.utc),
+            "start_time": datetime.now(ZoneInfo(tz_name)),
             "capability_requests": {},
             "responses": {},
             "status": "processing",
+            "timezone": tz_name,
         }
 
         # Add to conversation history
@@ -98,13 +104,13 @@ class UIAgent(NetworkAgent):
             {
                 "role": "user",
                 "content": user_input,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(ZoneInfo(tz_name)).isoformat(),
             }
         )
 
         try:
             # Parse request with AI
-            analysis = await self._analyze_request(user_input)
+            analysis = await self._analyze_request(user_input, tz_name)
 
             # Execute capability requests in parallel
             await self._execute_capability_requests(request_id, analysis)
@@ -115,7 +121,7 @@ class UIAgent(NetworkAgent):
             )
 
             # Format final response
-            final_response = await self._format_response(request_id, response)
+            final_response = await self._format_response(request_id, response, tz_name)
 
             self.pending_requests[request_id]["status"] = "completed"
 
@@ -142,7 +148,7 @@ class UIAgent(NetworkAgent):
                 "request_id": request_id,
             }
 
-    async def _analyze_request(self, user_input: str) -> Dict[str, Any]:
+    async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Use AI to analyze user request and determine needed capabilities"""
 
         # Create a system prompt that knows about available capabilities
@@ -152,10 +158,10 @@ class UIAgent(NetworkAgent):
                 f"- {cap}: provided by {', '.join(agents)}"
             )
 
-        current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        current_date = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
         system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
 
-Current date (UTC): {current_date}
+Current date: {current_date}
 
 Available capabilities:
 {chr(10).join(available_capabilities)}
@@ -232,7 +238,7 @@ Be thorough - include all capabilities that might be needed."""
 
         return pending["responses"]
 
-    async def _format_response(self, request_id: str, responses: Dict[str, Any]) -> str:
+    async def _format_response(self, request_id: str, responses: Dict[str, Any], tz_name: str) -> str:
         """Use AI to format a natural response from all agent responses"""
 
         request_data = self.pending_requests[request_id]
@@ -241,7 +247,7 @@ Be thorough - include all capabilities that might be needed."""
         context = {
             "user_request": request_data["user_input"],
             "agent_responses": responses,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(ZoneInfo(tz_name)).isoformat(),
         }
 
         system_prompt = """You are JARVIS, Tony Stark's AI assistant. 
