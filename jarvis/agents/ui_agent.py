@@ -325,7 +325,13 @@ Be concise but complete. Don't mention the internal agent names."""
         # Calendar-related
         if any(
             word in lower_input
-            for word in ["schedule", "calendar", "meeting", "appointment"]
+            for word in [
+                "schedule",
+                "calendar",
+                "meeting",
+                "appointment",
+                "event",
+            ]
         ):
             capabilities_needed.append("calendar_command")
             parameters["calendar_command"] = {"command": user_input}
