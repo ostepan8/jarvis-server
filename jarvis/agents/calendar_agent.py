@@ -1,12 +1,12 @@
-# jarvis/network/agents/calendar_agent.py
+# jarvis/agents/calendar_agent.py
 from typing import Any, Dict, Set, List
 import json
 from datetime import datetime, timedelta
 import uuid
 
-from ..base_agent import NetworkAgent
-from ..message import Message
-from ...calendar_service import CalendarService
+from .base import NetworkAgent
+from .message import Message
+from ..services.calendar_service import CalendarService
 from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 

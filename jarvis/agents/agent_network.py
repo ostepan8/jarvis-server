@@ -11,7 +11,7 @@ class AgentNetwork:
     """Central message broker for agent communication."""
 
     def __init__(self, logger: Optional[JarvisLogger] = None) -> None:
-        from .base_agent import NetworkAgent  # lazy import to avoid circular dep
+        from .base import NetworkAgent  # lazy import to avoid circular dep
 
         self.agents: Dict[str, NetworkAgent] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue()

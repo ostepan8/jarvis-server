@@ -4,10 +4,10 @@ import os
 from typing import Dict, Any
 from dotenv import load_dotenv
 
-from .network import AgentNetwork
-from .network.agents.calendary_agent import CollaborativeCalendarAgent
-from .network.agents.ui_agent import UIAgent
-from .calendar_service import CalendarService
+from .agents.agent_network import AgentNetwork
+from .agents.calendar_agent import CollaborativeCalendarAgent
+from .agents.ui_agent import UIAgent
+from .services.calendar_service import CalendarService
 from .ai_clients import AIClientFactory
 from .logger import JarvisLogger
 
