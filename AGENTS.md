@@ -6,12 +6,12 @@ This file gives high level guidance for working with the code base. It is intend
 - **Language**: Python 3.11+
 - **App**: FastAPI server exposing AI agents for calendar management.
 - **Key modules**:
-  - `jarvis/agent.py` – calendar agent implementing tool-based operations.
-  - `jarvis/main_agent.py` – main agent that delegates to sub agents.
+  - `jarvis/network/` – framework for agent communication and coordination.
+  - `jarvis/main_network.py` – creates the `JarvisSystem` using the agent network.
   - `jarvis/ai_clients/` – wrappers for OpenAI and Anthropic APIs.
   - `jarvis/calendar_service.py` – HTTP client for an external calendar API.
   - `jarvis/logger.py` – writes logs to stdout and SQLite.
-  - `server.py` – FastAPI entrypoint exposing `/calendar-agent` and `/jarvis` endpoints.
+  - `server.py` – FastAPI entrypoint exposing the `/jarvis` endpoint.
 
 ## Running the server
 ```bash
@@ -20,7 +20,7 @@ python server.py
 The API will listen on port 8000.
 
 ## Demo script
-`main.py` contains an async demo that uses the calendar agent directly. Run with:
+`main.py` contains an async demo that uses the collaborative Jarvis system. Run with:
 ```bash
 python -m asyncio run main.py
 ```
