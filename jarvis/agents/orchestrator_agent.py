@@ -136,6 +136,8 @@ class OrchestratorAgent(NetworkAgent):
         """Analyze and execute a user request sequentially."""
         request_id = f"req_{uuid.uuid4()}"
         analysis = await self._analyze_request(user_input, tz_name)
+        if analysis.get("analysis_failed"):
+            return {"success": False, "response": "Sorry, I couldn't understand that request.", "request_id": request_id}
         self.logger.log("INFO", "Analysis", json.dumps(analysis))
         tasks = self._create_tasks(analysis)
         future: asyncio.Future = asyncio.get_event_loop().create_future()
@@ -195,7 +197,8 @@ Be thorough - include all capabilities that might be needed."""
         try:
             analysis = json.loads(response[0].content)
         except Exception:
-            analysis = self._simple_request_analysis(user_input)
+            self.logger.log("ERROR", "Failed to analyze request", response[0].content)
+            return {"analysis_failed": True}
 
         self.logger.log("DEBUG", "Analysis result", json.dumps(analysis))
         return analysis
@@ -221,33 +224,3 @@ Be concise but complete. Don't mention the internal agent names."""
         result = await self.ai_client.chat(messages, [])
         return result[0].content
 
-    def _simple_request_analysis(self, user_input: str) -> Dict[str, Any]:
-        """Very basic keyword-based analysis as a fallback."""
-        lower_input = user_input.lower()
-        capabilities_needed: List[str] = []
-        parameters: Dict[str, Any] = {}
-        if (
-            "surprise me" in lower_input and "schedule" in lower_input
-        ) or "full day" in lower_input:
-            capabilities_needed.extend(["view_schedule", "find_free_time"])
-            today = datetime.now().strftime("%Y-%m-%d")
-            parameters["view_schedule"] = {"date": today}
-            parameters["find_free_time"] = {
-                "date": today,
-                "duration_minutes": 60,
-                "preferences": {"earliest": "08:00", "latest": "20:00"},
-            }
-            parameters["surprise_day"] = True
-        elif any(
-            word in lower_input
-            for word in ["schedule", "calendar", "meeting", "appointment"]
-        ):
-            capabilities_needed.append("calendar_command")
-            parameters["calendar_command"] = {"command": user_input}
-        if any(word in lower_input for word in ["email", "mail", "send"]):
-            capabilities_needed.append("send_email")
-        return {
-            "intent": "Process user request",
-            "capabilities_needed": capabilities_needed,
-            "parameters": parameters,
-        }
