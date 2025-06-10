@@ -1,13 +1,15 @@
 """Agent implementations used within the AgentNetwork."""
 
 from .calendar_agent import CollaborativeCalendarAgent
-from .ui_agent import UIAgent
+from .orchestrator_agent import OrchestratorAgent
+from .task import Task
 from .base import NetworkAgent
 from .agent_network import AgentNetwork
 
 __all__ = [
     "CollaborativeCalendarAgent",
-    "UIAgent",
+    "OrchestratorAgent",
+    "Task",
     "NetworkAgent",
     "AgentNetwork",
 ]
