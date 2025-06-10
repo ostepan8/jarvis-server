@@ -96,8 +96,8 @@ class CollaborativeCalendarAgent(NetworkAgent):
             {
                 "type": "function",
                 "function": {
-                    "name": "analyze_schedule",
-                    "description": "Analyze schedule patterns and provide insights",
+                    "name": "get_schedule_summary",
+                    "description": "Get a helpful summary of today's schedule",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -126,7 +126,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "get_events_by_date": self.calendar_service.get_events_by_date,
             "add_event": self.calendar_service.add_event,
             "delete_event": self.calendar_service.delete_event,
-            "analyze_schedule": self.calendar_service.analyze_schedule,
+            "get_schedule_summary": self.calendar_service.get_schedule_summary,
         }
 
         # Register additional handlers
@@ -156,7 +156,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "view_schedule",
             "add_event",
             "remove_event",
-            "analyze_schedule",
+            "get_schedule_summary",
         }
 
     @property
@@ -260,9 +260,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
                     return
                 result = await self.calendar_service.delete_event(event_id)
 
-            elif capability == "analyze_schedule":
+            elif capability == "get_schedule_summary":
                 date_range = data.get("date_range", "today")
-                result = await self.calendar_service.analyze_schedule(date_range)
+                result = await self.calendar_service.get_schedule_summary(date_range)
 
             if result:
                 await self.send_capability_response(

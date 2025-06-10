@@ -132,8 +132,8 @@ class CalendarService:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def analyze_schedule(self, date_range: str = "today") -> Dict[str, Any]:
-        """Analyze schedule and provide insights"""
+    async def get_schedule_summary(self, date_range: str = "today") -> Dict[str, Any]:
+        """Return a summary of the schedule for the given range."""
         if date_range == "today":
             today_data = await self.get_today_events()
             events = today_data.get("events", [])
@@ -144,7 +144,8 @@ class CalendarService:
                 "total_events": len(events),
                 "total_scheduled_minutes": total_time,
                 "analysis": f"You have {len(events)} events today totaling {total_time} minutes",
+                "events": events,
             }
-            self.logger.log("INFO", "Schedule analysis", str(result))
+            self.logger.log("INFO", "Schedule summary", str(result))
             return result
         return {"status": "error", "message": "Unsupported range"}
