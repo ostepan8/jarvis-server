@@ -107,24 +107,6 @@ class OrchestratorAgent(NetworkAgent):
         """Return full results for tasks this task depends on."""
         return {dep: results.get(dep) for dep in task.depends_on if dep in results}
 
-    def _find_dependencies(self, params: Any) -> List[str]:
-        """Recursively find capability dependencies referenced in parameters."""
-        deps: List[str] = []
-
-        def collect(item: Any) -> None:
-            if isinstance(item, str) and item.startswith("$"):
-                dep = item[1:].split(".")[0]
-                if dep not in deps:
-                    deps.append(dep)
-            elif isinstance(item, dict):
-                for v in item.values():
-                    collect(v)
-            elif isinstance(item, list):
-                for v in item:
-                    collect(v)
-
-        collect(params)
-        return deps
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output.
@@ -139,6 +121,7 @@ class OrchestratorAgent(NetworkAgent):
         tasks: List[Task] = []
         caps = analysis.get("capabilities_needed", [])
         params = analysis.get("parameters", {})
+        dependency_map = analysis.get("dependencies", {})
 
         for cap in caps:
             # Skip orchestrator capability to avoid recursion
@@ -159,7 +142,7 @@ class OrchestratorAgent(NetworkAgent):
                             capability=cap,
                             parameters=single_param,
                             assigned_agent=providers[0],
-                            depends_on=self._find_dependencies(single_param),
+                            depends_on=dependency_map.get(cap, []),
                         )
                     )
             else:
@@ -168,7 +151,7 @@ class OrchestratorAgent(NetworkAgent):
                         capability=cap,
                         parameters=param_data,
                         assigned_agent=providers[0],
-                        depends_on=self._find_dependencies(param_data),
+                        depends_on=dependency_map.get(cap, []),
                     )
                 )
 
@@ -225,19 +208,16 @@ Available capabilities:
 
 Parameter guidelines:
 - add_event expects: title, date (YYYY-MM-DD) and time (HH:MM). You may also provide start_time and end_time in ISO format instead of date/time and the system will convert them. Description is optional.
-- remove_event expects: event_id.
+- remove_event expects: event_id, or provide a title along with prior schedule data so the calendar agent can look up the ID.
 - view_schedule accepts an optional date.
 - get_schedule_summary accepts an optional date_range (defaults to "today").
-To use the result of a previous capability when specifying parameters, reference
-it with a dollar sign, e.g. "$view_schedule.events[0].id" will insert the ID
-from the first event returned by view_schedule. When you reference another
-capability, the orchestrator also passes that capability's full results in a
-"context" field for the dependent step.
+List any dependencies explicitly using a "dependencies" mapping. For example: "dependencies": {"remove_event": ["view_schedule"]}.
 
 Analyze the user's request and return a JSON object with:
 - "intent": brief description of what the user wants
 - "capabilities_needed": list of capability names needed
 - "parameters": dict of parameters for each capability
+- "dependencies": mapping of capability names to the capabilities they depend on
 - "coordination_notes": any special coordination needed between capabilities
 
 Be thorough - include all capabilities that might be needed."""
