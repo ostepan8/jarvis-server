@@ -63,6 +63,19 @@ class OrchestratorAgent(NetworkAgent):
         seq["current"] += 1
         await self._execute_next(message.request_id)
 
+    async def _handle_error(self, message: Message) -> None:
+        """Handle error messages from other agents gracefully."""
+        seq = self.sequences.get(message.request_id)
+        if seq:
+            task = seq["tasks"][seq["current"]]
+            seq["results"][task.capability] = {
+                "error": message.content.get("error")
+            }
+            seq["current"] += 1
+            await self._execute_next(message.request_id)
+        else:
+            await super()._handle_error(message)
+
     async def _execute_next(self, request_id: str) -> None:
         seq = self.sequences[request_id]
         if seq["current"] >= len(seq["tasks"]):
