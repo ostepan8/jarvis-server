@@ -445,13 +445,53 @@ class CollaborativeCalendarAgent(NetworkAgent):
         work_start = preferences.get("earliest", "09:00")
         work_end = preferences.get("latest", "17:00")
 
-        # Implementation of free slot calculation
-        free_slots = []
+        free_slots: List[Dict[str, Any]] = []
 
-        # Sort events by time
+        if not events:
+            free_slots.append(
+                {
+                    "start": work_start,
+                    "end": work_end,
+                    "date": preferences.get("date", self.calendar_service.current_date()),
+                }
+            )
+            return free_slots
+
+        # Sort events by start time
         sorted_events = sorted(events, key=lambda x: x["time"])
 
-        # ... calculation logic ...
+        date = preferences.get("date") or sorted_events[0]["time"].split(" ")[0]
+
+        start_dt = datetime.fromisoformat(f"{date} {work_start}")
+        end_dt = datetime.fromisoformat(f"{date} {work_end}")
+
+        current = start_dt
+        for event in sorted_events:
+            event_start = datetime.fromisoformat(event["time"])
+            duration = event.get("duration_minutes", 60)
+            event_end = event_start + timedelta(minutes=duration)
+
+            if event_start - current >= timedelta(minutes=duration_minutes):
+                free_slots.append(
+                    {
+                        "start": current.strftime("%H:%M"),
+                        "end": event_start.strftime("%H:%M"),
+                        "date": date,
+                        "duration": int((event_start - current).total_seconds() // 60),
+                    }
+                )
+
+            current = max(current, event_end)
+
+        if end_dt - current >= timedelta(minutes=duration_minutes):
+            free_slots.append(
+                {
+                    "start": current.strftime("%H:%M"),
+                    "end": end_dt.strftime("%H:%M"),
+                    "date": date,
+                    "duration": int((end_dt - current).total_seconds() // 60),
+                }
+            )
 
         return free_slots
 
