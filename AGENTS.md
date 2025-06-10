@@ -5,7 +5,6 @@ This file gives high level guidance for working with the code base. It is intend
 ## Dependencies
 Additional Python packages used by the project:
 - `tzlocal`
-- `jmespath`
 
 ## Overview
 - **Language**: Python 3.11+
