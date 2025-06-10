@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from .agents.agent_network import AgentNetwork
 from .agents.calendar_agent import CollaborativeCalendarAgent
-from .agents.ui_agent import UIAgent
+from .agents.orchestrator_agent import OrchestratorAgent
 from .services.calendar_service import CalendarService
 from .ai_clients import AIClientFactory
 from .logger import JarvisLogger
@@ -19,7 +19,7 @@ class JarvisSystem:
         self.config = config
         self.logger = JarvisLogger()
         self.network = AgentNetwork(self.logger)
-        self.ui_agent = None
+        self.orchestrator: OrchestratorAgent | None = None
 
     async def initialize(self):
         """Initialize all agents and start the network"""
@@ -29,10 +29,12 @@ class JarvisSystem:
             self.config.get("ai_provider", "openai"), api_key=self.config.get("api_key")
         )
 
-        # Create UI Agent (main interface)
-        ui_timeout = self.config.get("response_timeout", 15.0)
-        self.ui_agent = UIAgent(ai_client, self.logger, response_timeout=ui_timeout)
-        self.network.register_agent(self.ui_agent)
+        # Create Orchestrator Agent (handles user requests and task sequencing)
+        timeout = self.config.get("response_timeout", 15.0)
+        self.orchestrator = OrchestratorAgent(
+            ai_client, self.logger, response_timeout=timeout
+        )
+        self.network.register_agent(self.orchestrator)
 
         # Create Calendar Agent with integrated natural language logic
         calendar_service = CalendarService(
@@ -61,10 +63,10 @@ class JarvisSystem:
 
     async def process_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Process a user request through the network"""
-        if not self.ui_agent:
+        if not self.orchestrator:
             raise RuntimeError("System not initialized")
 
-        return await self.ui_agent.process_user_request(user_input, tz_name)
+        return await self.orchestrator.process_user_request(user_input, tz_name)
 
     async def shutdown(self):
         """Shutdown the system"""

@@ -11,7 +11,6 @@ from .ai_clients import (
 )
 from .agents.agent_network import AgentNetwork
 from .agents.calendar_agent import CollaborativeCalendarAgent
-from .agents.ui_agent import UIAgent
 from .main_network import JarvisSystem, create_collaborative_jarvis
 
 __all__ = [
@@ -24,7 +23,6 @@ __all__ = [
     "LogViewer",
     "AgentNetwork",
     "CollaborativeCalendarAgent",
-    "UIAgent",
     "JarvisSystem",
     "create_collaborative_jarvis",
 ]
