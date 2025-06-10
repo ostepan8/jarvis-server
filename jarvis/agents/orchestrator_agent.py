@@ -96,60 +96,26 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         task = seq["tasks"][seq["current"]]
-        params = self._resolve_references(task.parameters, seq["results"])
-        context = self._gather_dependency_results(task.parameters, seq["results"])
+        params = task.parameters
+        context = self._gather_dependency_results(task, seq["results"])
         content = {"capability": task.capability, "data": params}
         if context:
             content["context"] = context
         await self.send_message(task.assigned_agent, "capability_request", content, request_id)
 
-    def _resolve_references(self, params: Any, results: Dict[str, Any]) -> Any:
-        """Recursively resolve parameter references to prior task results."""
-        if isinstance(params, str) and params.startswith("$"):
-            path = params[1:]
-            return self._get_from_path(results, path)
-        if isinstance(params, dict):
-            return {k: self._resolve_references(v, results) for k, v in params.items()}
-        if isinstance(params, list):
-            return [self._resolve_references(v, results) for v in params]
-        return params
+    def _gather_dependency_results(self, task: Task, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Return full results for tasks this task depends on."""
+        return {dep: results.get(dep) for dep in task.depends_on if dep in results}
 
-    def _get_from_path(self, data: Dict[str, Any], path: str) -> Any:
-        parts = path.split(".")
-        cur: Any = data
-        for part in parts:
-            if isinstance(cur, dict):
-                if "[" in part and part.endswith("]"):
-                    key, idx = part[:-1].split("[")
-                    cur = cur.get(key, [])
-                    if isinstance(cur, list):
-                        try:
-                            cur = cur[int(idx)]
-                        except (ValueError, IndexError):
-                            return None
-                    else:
-                        return None
-                else:
-                    cur = cur.get(part)
-            elif isinstance(cur, list):
-                try:
-                    cur = cur[int(part)]
-                except (ValueError, IndexError):
-                    return None
-            else:
-                return None
-            if cur is None:
-                return None
-        return cur
-
-    def _gather_dependency_results(self, params: Any, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Collect full results for any referenced capabilities."""
-        dependencies: set[str] = set()
+    def _find_dependencies(self, params: Any) -> List[str]:
+        """Recursively find capability dependencies referenced in parameters."""
+        deps: List[str] = []
 
         def collect(item: Any) -> None:
             if isinstance(item, str) and item.startswith("$"):
                 dep = item[1:].split(".")[0]
-                dependencies.add(dep)
+                if dep not in deps:
+                    deps.append(dep)
             elif isinstance(item, dict):
                 for v in item.values():
                     collect(v)
@@ -158,7 +124,7 @@ class OrchestratorAgent(NetworkAgent):
                     collect(v)
 
         collect(params)
-        return {dep: results.get(dep) for dep in dependencies if dep in results}
+        return deps
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output.
@@ -193,6 +159,7 @@ class OrchestratorAgent(NetworkAgent):
                             capability=cap,
                             parameters=single_param,
                             assigned_agent=providers[0],
+                            depends_on=self._find_dependencies(single_param),
                         )
                     )
             else:
@@ -201,6 +168,7 @@ class OrchestratorAgent(NetworkAgent):
                         capability=cap,
                         parameters=param_data,
                         assigned_agent=providers[0],
+                        depends_on=self._find_dependencies(param_data),
                     )
                 )
 
