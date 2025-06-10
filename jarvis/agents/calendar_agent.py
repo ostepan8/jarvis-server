@@ -3,6 +3,7 @@ from typing import Any, Dict, Set, List
 import json
 from datetime import datetime
 import uuid
+import jmespath
 
 from .base import NetworkAgent
 from .message import Message
@@ -176,6 +177,23 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "get_traffic",  # From maps agent for travel time
         }
 
+    def _resolve_references(self, params: Any, context: Dict[str, Any]) -> Any:
+        """Resolve `$` references using provided context via jmespath."""
+        if isinstance(params, str) and params.startswith("$"):
+            expr = params[1:]
+            try:
+                result = jmespath.search(expr, context)
+                if isinstance(result, list) and len(result) == 1:
+                    return result[0]
+                return result
+            except Exception:
+                return None
+        if isinstance(params, dict):
+            return {k: self._resolve_references(v, context) for k, v in params.items()}
+        if isinstance(params, list):
+            return [self._resolve_references(v, context) for v in params]
+        return params
+
     async def _execute_function(
         self, function_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -196,6 +214,9 @@ class CollaborativeCalendarAgent(NetworkAgent):
         """Handle incoming capability requests"""
         capability = message.content.get("capability")
         data = message.content.get("data", {})
+        context_data = message.content.get("context", {})
+        if context_data:
+            data = self._resolve_references(data, context_data)
 
         if capability not in self.capabilities:
             self.logger.log(
