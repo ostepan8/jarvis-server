@@ -36,7 +36,8 @@ class OrchestratorAgent(NetworkAgent):
 
     @property
     def capabilities(self) -> set[str]:
-        return {"orchestrate_tasks"}
+        """Orchestrator exposes no public capabilities."""
+        return set()
 
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
@@ -103,11 +104,20 @@ class OrchestratorAgent(NetworkAgent):
         caps = analysis.get("capabilities_needed", [])
         params = analysis.get("parameters", {})
         for cap in caps:
-            provider = None
+            # Skip orchestrator capability to avoid recursion
+            if cap == "orchestrate_tasks":
+                continue
             providers = self.network.capability_registry.get(cap)
-            if providers:
-                provider = providers[0]
-            tasks.append(Task(capability=cap, parameters=params.get(cap, {}), assigned_agent=provider))
+            if not providers:
+                self.logger.log("WARNING", "No provider for capability", cap)
+                continue
+            tasks.append(
+                Task(
+                    capability=cap,
+                    parameters=params.get(cap, {}),
+                    assigned_agent=providers[0],
+                )
+            )
         return tasks
 
     async def process_user_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
@@ -145,7 +155,11 @@ class OrchestratorAgent(NetworkAgent):
         self.logger.log("DEBUG", "Analyzing request", user_input)
         available_capabilities = []
         for cap, agents in self.network.capability_registry.items():
-            available_capabilities.append(f"- {cap}: provided by {', '.join(agents)}")
+            if cap == "orchestrate_tasks":
+                continue
+            available_capabilities.append(
+                f"- {cap}: provided by {', '.join(agents)}"
+            )
 
         current_date = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
         system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
