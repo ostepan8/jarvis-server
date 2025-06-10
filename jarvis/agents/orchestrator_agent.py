@@ -194,6 +194,12 @@ Current date: {current_date}
 Available capabilities:
 {chr(10).join(available_capabilities)}
 
+Parameter guidelines:
+- add_event expects: title, date (YYYY-MM-DD) and time (HH:MM). You may also provide start_time and end_time in ISO format instead of date/time and the system will convert them. Description is optional.
+- remove_event expects: event_id.
+- view_schedule accepts an optional date.
+- get_schedule_summary accepts an optional date_range (defaults to "today").
+
 Analyze the user's request and return a JSON object with:
 - "intent": brief description of what the user wants
 - "capabilities_needed": list of capability names needed

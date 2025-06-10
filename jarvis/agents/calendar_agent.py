@@ -74,10 +74,18 @@ class CollaborativeCalendarAgent(NetworkAgent):
                                 "type": "string",
                                 "description": "Time in HH:MM format",
                             },
+                            "start_time": {
+                                "type": "string",
+                                "description": "ISO timestamp for event start",
+                            },
+                            "end_time": {
+                                "type": "string",
+                                "description": "ISO timestamp for event end",
+                            },
                             "duration_minutes": {"type": "integer", "default": 60},
                             "description": {"type": "string", "default": ""},
                         },
-                        "required": ["title", "date", "time"],
+                        "required": ["title"],
                     },
                 },
             },
@@ -218,6 +226,26 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 result = await self.calendar_service.get_events_by_date(date)
 
             elif capability == "add_event":
+                # Normalize parameters allowing start_time/end_time as an alternative
+                if ("date" not in data or "time" not in data) and (
+                    data.get("start_time") and data.get("end_time")
+                ):
+                    try:
+                        start_dt = datetime.fromisoformat(data["start_time"])
+                        end_dt = datetime.fromisoformat(data["end_time"])
+                        data["date"] = start_dt.strftime("%Y-%m-%d")
+                        data["time"] = start_dt.strftime("%H:%M")
+                        data["duration_minutes"] = int(
+                            (end_dt - start_dt).total_seconds() // 60
+                        )
+                    except Exception:
+                        await self.send_error(
+                            message.from_agent,
+                            "Invalid start_time or end_time format",
+                            message.request_id,
+                        )
+                        return
+
                 # Validate required fields
                 required = ["title", "date", "time"]
                 missing = [f for f in required if not data.get(f)]
@@ -314,6 +342,16 @@ class CollaborativeCalendarAgent(NetworkAgent):
         date = event_data.get("date")
         time = event_data.get("time")
         duration = event_data.get("duration_minutes", 60)
+
+        if (not date or not time) and event_data.get("start_time"):
+            try:
+                start_dt = datetime.fromisoformat(event_data["start_time"])
+                end_dt = datetime.fromisoformat(event_data.get("end_time", event_data["start_time"]))
+                date = start_dt.strftime("%Y-%m-%d")
+                time = start_dt.strftime("%H:%M")
+                duration = int((end_dt - start_dt).total_seconds() // 60)
+            except Exception:
+                return []
 
         if not date or not time:
             # Cannot check conflicts without a specific date and time
