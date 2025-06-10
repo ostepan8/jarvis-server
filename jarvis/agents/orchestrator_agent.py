@@ -60,29 +60,6 @@ class OrchestratorAgent(NetworkAgent):
         task = seq["tasks"][seq["current"]]
         task.result = message.content
         seq["results"][task.capability] = message.content
-        # Special handling for surprise day planning
-        if task.capability == "find_free_time" and seq.get("surprise_day"):
-            slots = message.content.get("free_slots", [])
-            add_tasks: List[Task] = []
-            provider = None
-            providers = self.network.capability_registry.get("add_event")
-            if providers:
-                provider = providers[0]
-            for idx, slot in enumerate(slots):
-                add_tasks.append(
-                    Task(
-                        capability="add_event",
-                        parameters={
-                            "title": f"Activity {idx + 1}",
-                            "date": slot.get("date", seq.get("surprise_date")),
-                            "time": slot.get("start", "09:00"),
-                            "duration_minutes": slot.get("duration", 60),
-                            "description": "Scheduled by Jarvis",
-                        },
-                        assigned_agent=provider,
-                    )
-                )
-            seq["tasks"][seq["current"] + 1:seq["current"] + 1] = add_tasks
 
         seq["current"] += 1
         await self._execute_next(message.request_id)
@@ -152,8 +129,6 @@ class OrchestratorAgent(NetworkAgent):
             "origin": self.name,
             "origin_msg": "",
             "results": {},
-            "surprise_day": analysis.get("parameters", {}).get("surprise_day"),
-            "surprise_date": datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d"),
         }
         await self._execute_next(request_id)
         try:

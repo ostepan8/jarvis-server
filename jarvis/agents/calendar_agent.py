@@ -1,7 +1,7 @@
 # jarvis/agents/calendar_agent.py
 from typing import Any, Dict, Set, List
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 
 from .base import NetworkAgent
@@ -130,7 +130,6 @@ class CollaborativeCalendarAgent(NetworkAgent):
         }
 
         # Register additional handlers
-        self.message_handlers["schedule_update"] = self._handle_schedule_update
         self.message_handlers["availability_check"] = self._handle_availability_check
 
     async def _handle_availability_check(self, message: Message) -> None:
@@ -157,11 +156,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "view_schedule",
             "add_event",
             "remove_event",
-            "modify_event",
-            "find_free_time",
-            "check_availability",
-            "schedule_optimization",
-            "calendar_command",
+            "analyze_schedule",
         }
 
     @property
@@ -188,63 +183,6 @@ class CollaborativeCalendarAgent(NetworkAgent):
             error = {"error": str(exc)}
             self.logger.log("ERROR", f"Error {function_name}", json.dumps(error))
             return error
-
-    async def _process_calendar_command(self, command: str) -> Dict[str, Any]:
-        """Process a natural language calendar command using AI."""
-        current_date = self.calendar_service.current_date()
-        messages = [
-            {
-                "role": "system",
-                "content": self.system_prompt.format(current_date=current_date),
-            },
-            {"role": "user", "content": command},
-        ]
-        actions_taken: List[Dict[str, Any]] = []
-
-        iterations = 0
-        MAX_ITERATIONS = 5
-        tool_calls = None
-        while iterations < MAX_ITERATIONS:
-            message, tool_calls = await self.ai_client.chat(messages, self.tools)
-            self.logger.log(
-                "INFO", "AI response", getattr(message, "content", str(message))
-            )
-
-            if not tool_calls:
-                break
-
-            messages.append(message.model_dump())
-            for call in tool_calls:
-                function_name = call.function.name
-                arguments = json.loads(call.function.arguments)
-                self.logger.log("INFO", "Tool call", function_name)
-                result = await self._execute_function(function_name, arguments)
-                actions_taken.append(
-                    {
-                        "function": function_name,
-                        "arguments": arguments,
-                        "result": result,
-                    }
-                )
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call.id,
-                        "content": json.dumps(result),
-                    }
-                )
-
-            iterations += 1
-
-        if iterations >= MAX_ITERATIONS:
-            self.logger.log("ERROR", "Max iterations reached", str(iterations))
-
-        if tool_calls:
-            message, _ = await self.ai_client.chat(messages, [])
-
-        response_text = message.content if hasattr(message, "content") else str(message)
-
-        return {"response": response_text, "actions": actions_taken}
 
     async def _handle_capability_request(self, message: Message) -> None:
         """Handle incoming capability requests"""
@@ -311,62 +249,20 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 # Notify other agents
                 await self._notify_event_change("added", result)
 
-            elif capability == "find_free_time":
-                duration = data.get("duration_minutes", 60)
-                date_str = data.get("date", self.calendar_service.current_date())
-                preferences = data.get("preferences", {})
-
-                # Get schedule
-                schedule = await self.calendar_service.get_events_by_date(date_str)
-
-                # If looking for meeting with someone else
-                if "attendees" in data:
-                    # Request their availability
-                    for attendee in data["attendees"]:
-                        await self.request_capability(
-                            "check_user_availability",
-                            {"user": attendee, "date": date_str},
-                            message.request_id,
-                        )
-                    self.active_tasks[message.request_id]["finding_mutual_time"] = True
-                    return
-
-                # Find free slots
-                free_slots = self._calculate_free_slots(
-                    schedule.get("events", []), duration, preferences
-                )
-                result = {"free_slots": free_slots, "date": date_str}
-
-            elif capability == "schedule_optimization":
-                # Complex operation that might need multiple agents
-                date_range = data.get("date_range", "week")
-                goals = data.get("goals", ["minimize_gaps", "respect_preferences"])
-
-                # Get current schedule
-                events = await self._get_events_for_range(date_range)
-
-                # Check weather for outdoor events
-                outdoor_events = [e for e in events if "outdoor" in e.get("tags", [])]
-                if outdoor_events:
-                    await self.request_capability(
-                        "get_weather_forecast",
-                        {"dates": [e["date"] for e in outdoor_events]},
+            elif capability == "remove_event":
+                event_id = data.get("event_id")
+                if not event_id:
+                    await self.send_error(
+                        message.from_agent,
+                        "Missing event_id for remove_event",
                         message.request_id,
                     )
-                    self.active_tasks[message.request_id]["optimizing"] = True
                     return
+                result = await self.calendar_service.delete_event(event_id)
 
-                # Optimize
-                result = self._optimize_schedule(events, goals)
-
-            elif capability == "calendar_command":
-                command = data.get("command")
-                if not isinstance(command, str):
-                    await self.send_error(
-                        message.from_agent, "Invalid command", message.request_id
-                    )
-                    return
-                result = await self._process_calendar_command(command)
+            elif capability == "analyze_schedule":
+                date_range = data.get("date_range", "today")
+                result = await self.calendar_service.analyze_schedule(date_range)
 
             if result:
                 await self.send_capability_response(
@@ -386,24 +282,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
         task = self.active_tasks[request_id]
 
         # Handle different types of responses
-        if "finding_mutual_time" in task:
-            task["responses"].append(message.content)
-
-            # If we have all responses, calculate mutual free time
-            if len(task["responses"]) == len(task["data"]["attendees"]):
-                mutual_slots = self._find_mutual_availability(task["responses"])
-
-                # Send final response
-                await self.send_capability_response(
-                    task["original_requester"],
-                    {"mutual_free_slots": mutual_slots},
-                    request_id,
-                    task["original_message_id"],
-                )
-
-                del self.active_tasks[request_id]
-
-        elif "pending_add" in task:
+        if "pending_add" in task:
             # User confirmation response
             if message.content.get("confirmed"):
                 # Add the event
@@ -415,15 +294,6 @@ class CollaborativeCalendarAgent(NetworkAgent):
                     task["original_message_id"],
                 )
 
-    async def _handle_schedule_update(self, message: Message) -> None:
-        """Handle schedule update notifications from other agents"""
-        update_type = message.content.get("type")
-
-        if update_type == "travel_time_changed":
-            # Adjust event times based on new travel time
-            event_id = message.content.get("event_id")
-            new_travel_time = message.content.get("travel_time_minutes")
-            await self._adjust_event_for_travel(event_id, new_travel_time)
 
     async def _notify_event_change(self, change_type: str, event_data: Dict) -> None:
         """Notify other agents about schedule changes"""
@@ -437,71 +307,6 @@ class CollaborativeCalendarAgent(NetworkAgent):
             },
             str(uuid.uuid4()),
         )
-
-    def _calculate_free_slots(
-        self, events: List[Dict], duration_minutes: int, preferences: Dict
-    ) -> List[Dict]:
-        """Calculate free time slots"""
-        work_start = preferences.get("earliest", "09:00")
-        work_end = preferences.get("latest", "17:00")
-
-        free_slots: List[Dict[str, Any]] = []
-
-        if not events:
-            free_slots.append(
-                {
-                    "start": work_start,
-                    "end": work_end,
-                    "date": preferences.get("date", self.calendar_service.current_date()),
-                }
-            )
-            return free_slots
-
-        # Sort events by start time
-        sorted_events = sorted(events, key=lambda x: x["time"])
-
-        date = preferences.get("date") or sorted_events[0]["time"].split(" ")[0]
-
-        start_dt = datetime.fromisoformat(f"{date} {work_start}")
-        end_dt = datetime.fromisoformat(f"{date} {work_end}")
-
-        current = start_dt
-        for event in sorted_events:
-            event_start = datetime.fromisoformat(event["time"])
-            duration = event.get("duration_minutes", 60)
-            event_end = event_start + timedelta(minutes=duration)
-
-            if event_start - current >= timedelta(minutes=duration_minutes):
-                free_slots.append(
-                    {
-                        "start": current.strftime("%H:%M"),
-                        "end": event_start.strftime("%H:%M"),
-                        "date": date,
-                        "duration": int((event_start - current).total_seconds() // 60),
-                    }
-                )
-
-            current = max(current, event_end)
-
-        if end_dt - current >= timedelta(minutes=duration_minutes):
-            free_slots.append(
-                {
-                    "start": current.strftime("%H:%M"),
-                    "end": end_dt.strftime("%H:%M"),
-                    "date": date,
-                    "duration": int((end_dt - current).total_seconds() // 60),
-                }
-            )
-
-        return free_slots
-
-    def _find_mutual_availability(
-        self, availability_responses: List[Dict]
-    ) -> List[Dict]:
-        """Find mutual free time from multiple availability responses"""
-        # Find intersection of all free slots
-        # ... implementation ...
-        return []
 
     async def _check_conflicts(self, event_data: Dict) -> List[str]:
         """Check for scheduling conflicts"""
@@ -521,34 +326,3 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
         return conflicts
 
-    async def _get_events_for_range(self, date_range: str) -> List[Dict]:
-        """Retrieve events for a given date range."""
-        events: List[Dict] = []
-        if date_range == "week":
-            start = datetime.now()
-            for i in range(7):
-                day = (start + timedelta(days=i)).strftime("%Y-%m-%d")
-                day_events = await self.calendar_service.get_events_by_date(day)
-                events.extend(day_events.get("events", []))
-        else:
-            today = datetime.now().strftime("%Y-%m-%d")
-            day_events = await self.calendar_service.get_events_by_date(today)
-            events.extend(day_events.get("events", []))
-        return events
-
-    def _optimize_schedule(
-        self, events: List[Dict], goals: List[str]
-    ) -> Dict[str, Any]:
-        """Return a naive optimized schedule."""
-        sorted_events = sorted(events, key=lambda e: e.get("time", ""))
-        return {"optimized_events": sorted_events, "goals": goals}
-
-    async def _adjust_event_for_travel(
-        self, event_id: str, new_travel_time: int
-    ) -> None:
-        """Placeholder for adjusting events based on travel time."""
-        self.logger.log(
-            "INFO",
-            "Adjust travel time",
-            f"{event_id} -> {new_travel_time}",
-        )
