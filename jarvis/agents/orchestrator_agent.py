@@ -12,6 +12,7 @@ from .message import Message
 from .task import Task
 from ..ai_clients import BaseAIClient
 from ..logger import JarvisLogger
+from ..utils import extract_json_from_text
 
 
 class OrchestratorAgent(NetworkAgent):
@@ -169,9 +170,8 @@ Be thorough - include all capabilities that might be needed."""
 
         response = await self.ai_client.chat(messages, [])
 
-        try:
-            analysis = json.loads(response[0].content)
-        except Exception:
+        analysis = extract_json_from_text(response[0].content)
+        if analysis is None:
             self.logger.log("ERROR", "Failed to analyze request", response[0].content)
             return {"analysis_failed": True}
 
