@@ -96,8 +96,69 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         task = seq["tasks"][seq["current"]]
-        content = {"capability": task.capability, "data": task.parameters}
+        params = self._resolve_references(task.parameters, seq["results"])
+        context = self._gather_dependency_results(task.parameters, seq["results"])
+        content = {"capability": task.capability, "data": params}
+        if context:
+            content["context"] = context
         await self.send_message(task.assigned_agent, "capability_request", content, request_id)
+
+    def _resolve_references(self, params: Any, results: Dict[str, Any]) -> Any:
+        """Recursively resolve parameter references to prior task results."""
+        if isinstance(params, str) and params.startswith("$"):
+            path = params[1:]
+            return self._get_from_path(results, path)
+        if isinstance(params, dict):
+            return {k: self._resolve_references(v, results) for k, v in params.items()}
+        if isinstance(params, list):
+            return [self._resolve_references(v, results) for v in params]
+        return params
+
+    def _get_from_path(self, data: Dict[str, Any], path: str) -> Any:
+        parts = path.split(".")
+        cur: Any = data
+        for part in parts:
+            if isinstance(cur, dict):
+                if "[" in part and part.endswith("]"):
+                    key, idx = part[:-1].split("[")
+                    cur = cur.get(key, [])
+                    if isinstance(cur, list):
+                        try:
+                            cur = cur[int(idx)]
+                        except (ValueError, IndexError):
+                            return None
+                    else:
+                        return None
+                else:
+                    cur = cur.get(part)
+            elif isinstance(cur, list):
+                try:
+                    cur = cur[int(part)]
+                except (ValueError, IndexError):
+                    return None
+            else:
+                return None
+            if cur is None:
+                return None
+        return cur
+
+    def _gather_dependency_results(self, params: Any, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Collect full results for any referenced capabilities."""
+        dependencies: set[str] = set()
+
+        def collect(item: Any) -> None:
+            if isinstance(item, str) and item.startswith("$"):
+                dep = item[1:].split(".")[0]
+                dependencies.add(dep)
+            elif isinstance(item, dict):
+                for v in item.values():
+                    collect(v)
+            elif isinstance(item, list):
+                for v in item:
+                    collect(v)
+
+        collect(params)
+        return {dep: results.get(dep) for dep in dependencies if dep in results}
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output.
@@ -199,6 +260,11 @@ Parameter guidelines:
 - remove_event expects: event_id.
 - view_schedule accepts an optional date.
 - get_schedule_summary accepts an optional date_range (defaults to "today").
+To use the result of a previous capability when specifying parameters, reference
+it with a dollar sign, e.g. "$view_schedule.events[0].id" will insert the ID
+from the first event returned by view_schedule. When you reference another
+capability, the orchestrator also passes that capability's full results in a
+"context" field for the dependent step.
 
 Analyze the user's request and return a JSON object with:
 - "intent": brief description of what the user wants
