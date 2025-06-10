@@ -60,6 +60,30 @@ class OrchestratorAgent(NetworkAgent):
         task = seq["tasks"][seq["current"]]
         task.result = message.content
         seq["results"][task.capability] = message.content
+        # Special handling for surprise day planning
+        if task.capability == "find_free_time" and seq.get("surprise_day"):
+            slots = message.content.get("free_slots", [])
+            add_tasks: List[Task] = []
+            provider = None
+            providers = self.network.capability_registry.get("add_event")
+            if providers:
+                provider = providers[0]
+            for idx, slot in enumerate(slots):
+                add_tasks.append(
+                    Task(
+                        capability="add_event",
+                        parameters={
+                            "title": f"Activity {idx + 1}",
+                            "date": slot.get("date", seq.get("surprise_date")),
+                            "time": slot.get("start", "09:00"),
+                            "duration_minutes": slot.get("duration", 60),
+                            "description": "Scheduled by Jarvis",
+                        },
+                        assigned_agent=provider,
+                    )
+                )
+            seq["tasks"][seq["current"] + 1:seq["current"] + 1] = add_tasks
+
         seq["current"] += 1
         await self._execute_next(message.request_id)
 
@@ -126,6 +150,8 @@ class OrchestratorAgent(NetworkAgent):
             "origin": self.name,
             "origin_msg": "",
             "results": {},
+            "surprise_day": analysis.get("parameters", {}).get("surprise_day"),
+            "surprise_date": datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d"),
         }
         await self._execute_next(request_id)
         try:
@@ -200,7 +226,22 @@ Be concise but complete. Don't mention the internal agent names."""
         lower_input = user_input.lower()
         capabilities_needed: List[str] = []
         parameters: Dict[str, Any] = {}
-        if any(word in lower_input for word in ["schedule", "calendar", "meeting", "appointment"]):
+        if (
+            "surprise me" in lower_input and "schedule" in lower_input
+        ) or "full day" in lower_input:
+            capabilities_needed.extend(["view_schedule", "find_free_time"])
+            today = datetime.now().strftime("%Y-%m-%d")
+            parameters["view_schedule"] = {"date": today}
+            parameters["find_free_time"] = {
+                "date": today,
+                "duration_minutes": 60,
+                "preferences": {"earliest": "08:00", "latest": "20:00"},
+            }
+            parameters["surprise_day"] = True
+        elif any(
+            word in lower_input
+            for word in ["schedule", "calendar", "meeting", "appointment"]
+        ):
             capabilities_needed.append("calendar_command")
             parameters["calendar_command"] = {"command": user_input}
         if any(word in lower_input for word in ["email", "mail", "send"]):
