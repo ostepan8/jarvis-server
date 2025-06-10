@@ -100,24 +100,49 @@ class OrchestratorAgent(NetworkAgent):
         await self.send_message(task.assigned_agent, "capability_request", content, request_id)
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
+        """Create a task list from analysis output.
+
+        The analysis parameters may contain either a single parameter dict or a
+        list of dicts for capabilities that should be executed multiple times
+        (e.g., adding several calendar events). This helper expands lists into
+        multiple ``Task`` objects so each capability request contains a simple
+        dictionary for the target agent.
+        """
+
         tasks: List[Task] = []
         caps = analysis.get("capabilities_needed", [])
         params = analysis.get("parameters", {})
+
         for cap in caps:
             # Skip orchestrator capability to avoid recursion
             if cap == "orchestrate_tasks":
                 continue
+
             providers = self.network.capability_registry.get(cap)
             if not providers:
                 self.logger.log("WARNING", "No provider for capability", cap)
                 continue
-            tasks.append(
-                Task(
-                    capability=cap,
-                    parameters=params.get(cap, {}),
-                    assigned_agent=providers[0],
+
+            param_data = params.get(cap, {})
+
+            if isinstance(param_data, list):
+                for single_param in param_data:
+                    tasks.append(
+                        Task(
+                            capability=cap,
+                            parameters=single_param,
+                            assigned_agent=providers[0],
+                        )
+                    )
+            else:
+                tasks.append(
+                    Task(
+                        capability=cap,
+                        parameters=param_data,
+                        assigned_agent=providers[0],
+                    )
                 )
-            )
+
         return tasks
 
     async def process_user_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
