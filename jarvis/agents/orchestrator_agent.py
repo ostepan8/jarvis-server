@@ -45,8 +45,12 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         analysis = message.content.get("data", {}).get("analysis", {})
+        self.logger.log("DEBUG", "Orchestration request analysis", json.dumps(analysis))
         history = message.content.get("context", {}).get("history", [])
         tasks = self._create_tasks(analysis)
+        self.logger.log(
+            "DEBUG", "Initial tasks", [t.capability for t in tasks]
+        )
         self.sequences[message.request_id] = {
             "tasks": tasks,
             "current": 0,
@@ -62,14 +66,15 @@ class OrchestratorAgent(NetworkAgent):
         if not seq:
             return
         task = seq["tasks"][seq["current"]]
+        self.logger.log(
+            "DEBUG",
+            f"Received result for {task.capability}",
+            json.dumps(message.content),
+        )
         task.result = message.content
         seq["results"][task.capability] = message.content
         seq.setdefault("context_history", []).append(
-            {
-                "capability": task.capability,
-                "parameters": task.parameters,
-                "result": message.content,
-            }
+            {"capability": task.capability, "result": message.content}
         )
 
         seq["current"] += 1
@@ -109,17 +114,37 @@ class OrchestratorAgent(NetworkAgent):
 
         task = seq["tasks"][seq["current"]]
         context = self._gather_dependency_results(task, seq["results"])
-        print(
-            f"Executing task {task.capability}, {task.assigned_agent} for request {request_id}"
+        self.logger.log(
+            "DEBUG",
+            "Execute task",
+            {
+                "task_id": task.id,
+                "capability": task.capability,
+                "agent": task.assigned_agent,
+                "context": context,
+            },
         )
-        print(f"Context for task: {context}")
 
         content = {
             "capability": task.capability,
-            # "coordination_notes": task.data,
+            "data": {
+                "command": self.pending_requests.get(request_id, {}).get(
+                    "user_input", ""
+                )
+            },
         }
         if context:
             content["context"] = context
+        self.logger.log(
+            "DEBUG",
+            "Send capability request",
+            {
+                "to": task.assigned_agent,
+                "capability": task.capability,
+                "data": content.get("data"),
+                "context": bool(context),
+            },
+        )
         await self.send_message(
             task.assigned_agent, "capability_request", content, request_id
         )
@@ -128,17 +153,17 @@ class OrchestratorAgent(NetworkAgent):
         self, task: Task, results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Return full results for tasks this task depends on."""
-        return {dep: results.get(dep) for dep in task.depends_on if dep in results}
+        context = {dep: results.get(dep) for dep in task.depends_on if dep in results}
+        if context:
+            self.logger.log(
+                "DEBUG",
+                f"Context for {task.capability}",
+                json.dumps(context),
+            )
+        return context
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
-        """Create a task list from analysis output.
-
-        The analysis parameters may contain either a single parameter dict or a
-        list of dicts for capabilities that should be executed multiple times
-        (e.g., adding several calendar events). This helper expands lists into
-        multiple ``Task`` objects so each capability request contains a simple
-        dictionary for the target agent.
-        """
+        """Create a task list from analysis output."""
 
         tasks: List[Task] = []
         intent = analysis.get("intent", "No intent found")
@@ -163,6 +188,19 @@ class OrchestratorAgent(NetworkAgent):
                     intent=intent,
                 )
             )
+        self.logger.log(
+            "DEBUG",
+            "Tasks created",
+            [
+                {
+                    "id": t.id,
+                    "capability": t.capability,
+                    "agent": t.assigned_agent,
+                    "depends_on": t.depends_on,
+                }
+                for t in tasks
+            ],
+        )
         return tasks
 
     async def process_user_request(
@@ -194,7 +232,6 @@ class OrchestratorAgent(NetworkAgent):
             "context_history": [
                 {
                     "capability": "user_request",
-                    "parameters": {},
                     "result": user_input,
                 }
             ],
@@ -215,6 +252,7 @@ class OrchestratorAgent(NetworkAgent):
             tz_name,
             history=result_data.get("context_history", []),
         )
+        self.logger.log("INFO", "Final response", final_text)
         return {"success": True, "response": final_text, "request_id": request_id}
 
     async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
@@ -234,11 +272,6 @@ Current date: {current_date}
 Available capabilities:
 {chr(10).join(available_capabilities)}
 
-Parameter guidelines:
-- add_event expects: title, date (YYYY-MM-DD) and time (HH:MM). You may also provide start_time and end_time in ISO format instead of date/time and the system will convert them. Description is optional.
-- remove_event expects: event_id, or provide a title along with prior schedule data so the calendar agent can look up the ID.
-- view_schedule accepts an optional date.
-- get_schedule_summary accepts an optional date_range (defaults to "today").
 List any dependencies explicitly using a "dependencies" mapping. For example: "dependencies": {{"remove_event": ["view_schedule"]}}.
 
 Analyze the user's request and return a JSON object with:
@@ -253,8 +286,12 @@ Be thorough - include all capabilities that might be needed."""
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ]
+        self.logger.log("DEBUG", "Analysis prompt", json.dumps(messages))
 
         response = await self.ai_client.chat(messages, [])
+        self.logger.log(
+            "DEBUG", "Analysis raw response", getattr(response[0], "content", str(response))
+        )
 
         analysis = extract_json_from_text(response[0].content)
         if analysis is None:
@@ -292,6 +329,10 @@ Be concise but complete. Don't mention the internal agent names."""
                 "content": f"Here's what I found: {json.dumps(context)}",
             },
         ]
+        self.logger.log("DEBUG", "Format prompt", json.dumps(messages))
 
         result = await self.ai_client.chat(messages, [])
+        self.logger.log(
+            "DEBUG", "Format raw response", getattr(result[0], "content", str(result))
+        )
         return result[0].content

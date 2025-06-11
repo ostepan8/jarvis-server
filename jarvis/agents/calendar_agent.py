@@ -162,6 +162,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
     async def _process_calendar_command(self, command: str) -> Dict[str, Any]:
         """Process a natural language calendar command using AI."""
+        self.logger.log("DEBUG", "Processing NL command", command)
         current_date = self.calendar_service.current_date()
         messages = [
             {
@@ -214,6 +215,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             message, _ = await self.ai_client.chat(messages, [])
 
         response_text = message.content if hasattr(message, "content") else str(message)
+        self.logger.log("INFO", "NL command result", response_text)
 
         return {"response": response_text, "actions": actions_taken}
 
@@ -226,6 +228,16 @@ class CollaborativeCalendarAgent(NetworkAgent):
             return
 
         self.logger.log("INFO", f"Handling {capability}", json.dumps(data))
+
+        command_text = data.get("command")
+        if command_text and capability != "calendar_command":
+            self.logger.log("DEBUG", "Using command text", command_text)
+            result = await self._process_calendar_command(command_text)
+            if result:
+                await self.send_capability_response(
+                    message.from_agent, result, message.request_id, message.id
+                )
+            return
 
         # Track active request details so follow-up responses can be managed
         self.active_tasks.setdefault(
@@ -350,6 +362,11 @@ class CollaborativeCalendarAgent(NetworkAgent):
             return
 
         task = self.active_tasks[request_id]
+        self.logger.log(
+            "DEBUG",
+            "Capability response received",
+            json.dumps({"request_id": request_id, "data": message.content}),
+        )
         # Implement the to
 
     async def _handle_schedule_update(self, message: Message) -> None:
