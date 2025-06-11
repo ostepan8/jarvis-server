@@ -32,11 +32,6 @@ class NetworkAgent:
         """Override in subclass."""
         return set()
 
-    @property
-    def dependencies(self) -> Set[str]:
-        """Override in subclass."""
-        return set()
-
     def set_network(self, network: AgentNetwork) -> None:
         """Set the network this agent belongs to."""
         self.network = network

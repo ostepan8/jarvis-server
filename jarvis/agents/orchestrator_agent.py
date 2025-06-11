@@ -71,9 +71,7 @@ class OrchestratorAgent(NetworkAgent):
         seq = self.sequences.get(message.request_id)
         if seq:
             task = seq["tasks"][seq["current"]]
-            seq["results"][task.capability] = {
-                "error": message.content.get("error")
-            }
+            seq["results"][task.capability] = {"error": message.content.get("error")}
             seq["current"] += 1
             await self._execute_next(message.request_id)
         else:
@@ -96,17 +94,27 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         task = seq["tasks"][seq["current"]]
-        params = task.parameters
         context = self._gather_dependency_results(task, seq["results"])
-        content = {"capability": task.capability, "data": params}
+        print(
+            f"Executing task {task.capability}, {task.assigned_agent} for request {request_id}"
+        )
+        print(f"Context for task: {context}")
+
+        content = {
+            "capability": task.capability,
+            # "coordination_notes": task.data,
+        }
         if context:
             content["context"] = context
-        await self.send_message(task.assigned_agent, "capability_request", content, request_id)
+        await self.send_message(
+            task.assigned_agent, "capability_request", content, request_id
+        )
 
-    def _gather_dependency_results(self, task: Task, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _gather_dependency_results(
+        self, task: Task, results: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Return full results for tasks this task depends on."""
         return {dep: results.get(dep) for dep in task.depends_on if dep in results}
-
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output.
@@ -119,8 +127,8 @@ class OrchestratorAgent(NetworkAgent):
         """
 
         tasks: List[Task] = []
+        intent = analysis.get("intent", "No intent found")
         caps = analysis.get("capabilities_needed", [])
-        params = analysis.get("parameters", {})
         dependency_map = analysis.get("dependencies", {})
 
         for cap in caps:
@@ -133,36 +141,28 @@ class OrchestratorAgent(NetworkAgent):
                 self.logger.log("WARNING", "No provider for capability", cap)
                 continue
 
-            param_data = params.get(cap, {})
-
-            if isinstance(param_data, list):
-                for single_param in param_data:
-                    tasks.append(
-                        Task(
-                            capability=cap,
-                            parameters=single_param,
-                            assigned_agent=providers[0],
-                            depends_on=dependency_map.get(cap, []),
-                        )
-                    )
-            else:
-                tasks.append(
-                    Task(
-                        capability=cap,
-                        parameters=param_data,
-                        assigned_agent=providers[0],
-                        depends_on=dependency_map.get(cap, []),
-                    )
+            tasks.append(
+                Task(
+                    capability=cap,
+                    assigned_agent=providers[0],
+                    depends_on=dependency_map.get(cap, []),
+                    intent=intent,
                 )
-
+            )
         return tasks
 
-    async def process_user_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
+    async def process_user_request(
+        self, user_input: str, tz_name: str
+    ) -> Dict[str, Any]:
         """Analyze and execute a user request sequentially."""
         request_id = f"req_{uuid.uuid4()}"
         analysis = await self._analyze_request(user_input, tz_name)
         if analysis.get("analysis_failed"):
-            return {"success": False, "response": "Sorry, I couldn't understand that request.", "request_id": request_id}
+            return {
+                "success": False,
+                "response": "Sorry, I couldn't understand that request.",
+                "request_id": request_id,
+            }
         self.logger.log("INFO", "Analysis", json.dumps(analysis))
         tasks = self._create_tasks(analysis)
         future: asyncio.Future = asyncio.get_event_loop().create_future()
@@ -182,7 +182,11 @@ class OrchestratorAgent(NetworkAgent):
         try:
             results = await asyncio.wait_for(future, timeout=self.response_timeout)
         except asyncio.TimeoutError:
-            return {"success": False, "response": "Request timed out", "request_id": request_id}
+            return {
+                "success": False,
+                "response": "Request timed out",
+                "request_id": request_id,
+            }
 
         final_text = await self._format_response(request_id, results, tz_name)
         return {"success": True, "response": final_text, "request_id": request_id}
@@ -194,9 +198,7 @@ class OrchestratorAgent(NetworkAgent):
         for cap, agents in self.network.capability_registry.items():
             if cap == "orchestrate_tasks":
                 continue
-            available_capabilities.append(
-                f"- {cap}: provided by {', '.join(agents)}"
-            )
+            available_capabilities.append(f"- {cap}: provided by {', '.join(agents)}")
 
         current_date = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
         system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
@@ -211,12 +213,11 @@ Parameter guidelines:
 - remove_event expects: event_id, or provide a title along with prior schedule data so the calendar agent can look up the ID.
 - view_schedule accepts an optional date.
 - get_schedule_summary accepts an optional date_range (defaults to "today").
-List any dependencies explicitly using a "dependencies" mapping. For example: "dependencies": {"remove_event": ["view_schedule"]}.
+List any dependencies explicitly using a "dependencies" mapping. For example: "dependencies": {{"remove_event": ["view_schedule"]}}.
 
 Analyze the user's request and return a JSON object with:
 - "intent": brief description of what the user wants
 - "capabilities_needed": list of capability names needed
-- "parameters": dict of parameters for each capability
 - "dependencies": mapping of capability names to the capabilities they depend on
 - "coordination_notes": any special coordination needed between capabilities
 
@@ -237,7 +238,9 @@ Be thorough - include all capabilities that might be needed."""
         self.logger.log("DEBUG", "Analysis result", json.dumps(analysis))
         return analysis
 
-    async def _format_response(self, request_id: str, responses: Dict[str, Any], tz_name: str) -> str:
+    async def _format_response(
+        self, request_id: str, responses: Dict[str, Any], tz_name: str
+    ) -> str:
         """Format a natural language response from agent results."""
         request_data = self.pending_requests.get(request_id, {})
         context = {
@@ -252,9 +255,11 @@ Be concise but complete. Don't mention the internal agent names."""
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"User asked: {context['user_request']}"},
-            {"role": "assistant", "content": f"Here's what I found: {json.dumps(context)}"},
+            {
+                "role": "assistant",
+                "content": f"Here's what I found: {json.dumps(context)}",
+            },
         ]
 
         result = await self.ai_client.chat(messages, [])
         return result[0].content
-
