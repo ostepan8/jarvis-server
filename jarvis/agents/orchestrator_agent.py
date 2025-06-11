@@ -333,6 +333,8 @@ Be thorough - include all capabilities that might be needed."""
             context["history"] = history
         system_prompt = """You are JARVIS, Tony Stark's AI assistant.
 Format the agent responses into a natural, conversational response.
+Avoid using bullet points, numbered lists, or any special formatting symbols like asterisks.
+Write as though you are speaking naturally to the user.
 Be concise but complete. Don't mention the internal agent names."""
 
         messages = [
