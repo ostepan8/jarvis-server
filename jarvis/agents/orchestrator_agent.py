@@ -45,6 +45,7 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         analysis = message.content.get("data", {}).get("analysis", {})
+        history = message.content.get("context", {}).get("history", [])
         tasks = self._create_tasks(analysis)
         self.sequences[message.request_id] = {
             "tasks": tasks,
@@ -52,6 +53,7 @@ class OrchestratorAgent(NetworkAgent):
             "origin": message.from_agent,
             "origin_msg": message.id,
             "results": {},
+            "context_history": history,
         }
         await self._execute_next(message.request_id)
 
@@ -62,6 +64,13 @@ class OrchestratorAgent(NetworkAgent):
         task = seq["tasks"][seq["current"]]
         task.result = message.content
         seq["results"][task.capability] = message.content
+        seq.setdefault("context_history", []).append(
+            {
+                "capability": task.capability,
+                "parameters": task.parameters,
+                "result": message.content,
+            }
+        )
 
         seq["current"] += 1
         await self._execute_next(message.request_id)
@@ -71,9 +80,15 @@ class OrchestratorAgent(NetworkAgent):
         seq = self.sequences.get(message.request_id)
         if seq:
             task = seq["tasks"][seq["current"]]
-            seq["results"][task.capability] = {
-                "error": message.content.get("error")
-            }
+            error_data = {"error": message.content.get("error")}
+            seq["results"][task.capability] = error_data
+            seq.setdefault("context_history", []).append(
+                {
+                    "capability": task.capability,
+                    "parameters": task.parameters,
+                    "result": error_data,
+                }
+            )
             seq["current"] += 1
             await self._execute_next(message.request_id)
         else:
@@ -83,14 +98,18 @@ class OrchestratorAgent(NetworkAgent):
         seq = self.sequences[request_id]
         if seq["current"] >= len(seq["tasks"]):
             # Finished - send results back
+            result_payload = {
+                "results": seq["results"],
+                "context_history": seq.get("context_history", []),
+            }
             if seq["origin"] != self.name:
                 await self.send_capability_response(
-                    seq["origin"], seq["results"], request_id, seq["origin_msg"]
+                    seq["origin"], result_payload, request_id, seq["origin_msg"]
                 )
             else:
                 pending = self.pending_requests.get(request_id)
                 if pending and not pending["future"].done():
-                    pending["future"].set_result(seq["results"])
+                    pending["future"].set_result(result_payload)
                     del self.pending_requests[request_id]
             del self.sequences[request_id]
             return
@@ -98,6 +117,9 @@ class OrchestratorAgent(NetworkAgent):
         task = seq["tasks"][seq["current"]]
         params = task.parameters
         context = self._gather_dependency_results(task, seq["results"])
+        history = seq.get("context_history", [])
+        if history:
+            context["history"] = history
         content = {"capability": task.capability, "data": params}
         if context:
             content["context"] = context
@@ -177,14 +199,32 @@ class OrchestratorAgent(NetworkAgent):
             "origin": self.name,
             "origin_msg": "",
             "results": {},
+            "context_history": [
+                {
+                    "capability": "user_request",
+                    "parameters": {},
+                    "result": user_input,
+                }
+            ],
         }
         await self._execute_next(request_id)
         try:
-            results = await asyncio.wait_for(future, timeout=self.response_timeout)
+            result_data = await asyncio.wait_for(
+                future, timeout=self.response_timeout
+            )
         except asyncio.TimeoutError:
-            return {"success": False, "response": "Request timed out", "request_id": request_id}
+            return {
+                "success": False,
+                "response": "Request timed out",
+                "request_id": request_id,
+            }
 
-        final_text = await self._format_response(request_id, results, tz_name)
+        final_text = await self._format_response(
+            request_id,
+            result_data["results"],
+            tz_name,
+            history=result_data.get("context_history", []),
+        )
         return {"success": True, "response": final_text, "request_id": request_id}
 
     async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
@@ -237,7 +277,13 @@ Be thorough - include all capabilities that might be needed."""
         self.logger.log("DEBUG", "Analysis result", json.dumps(analysis))
         return analysis
 
-    async def _format_response(self, request_id: str, responses: Dict[str, Any], tz_name: str) -> str:
+    async def _format_response(
+        self,
+        request_id: str,
+        responses: Dict[str, Any],
+        tz_name: str,
+        history: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         """Format a natural language response from agent results."""
         request_data = self.pending_requests.get(request_id, {})
         context = {
@@ -245,6 +291,8 @@ Be thorough - include all capabilities that might be needed."""
             "agent_responses": responses,
             "timestamp": datetime.now(ZoneInfo(tz_name)).isoformat(),
         }
+        if history:
+            context["history"] = history
         system_prompt = """You are JARVIS, Tony Stark's AI assistant.
 Format the agent responses into a natural, conversational response.
 Be concise but complete. Don't mention the internal agent names."""
