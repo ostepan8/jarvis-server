@@ -5,12 +5,14 @@ from dotenv import load_dotenv
 
 from jarvis.main_network import create_collaborative_jarvis
 from tzlocal import get_localzone_name
+from colorama import Fore, Style, init as colorama_init
 
 # Load environment variables from .env file
 load_dotenv()
 
 
 async def demo() -> None:
+    colorama_init(autoreset=True)
     jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
 
     # Get user input for the calendar command
@@ -20,7 +22,11 @@ async def demo() -> None:
         user_command,
         get_localzone_name(),
     )
-    print(result)
+    response_text = result.get("response", "")
+    if result.get("success"):
+        print(Fore.CYAN + response_text + Style.RESET_ALL)
+    else:
+        print(Fore.RED + response_text + Style.RESET_ALL)
     await jarvis.shutdown()
 
 

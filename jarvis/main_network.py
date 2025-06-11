@@ -133,6 +133,7 @@ async def create_collaborative_jarvis(api_key: str = None):
         "ai_provider": "openai",
         "api_key": api_key,
         "calendar_api_url": "http://localhost:8080",
+        "response_timeout": 30.0,
     }
 
     jarvis = JarvisSystem(config)
