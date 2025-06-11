@@ -125,13 +125,15 @@ class OrchestratorAgent(NetworkAgent):
             },
         )
 
+        command = self._build_task_command(
+            task,
+            self.pending_requests.get(request_id, {}).get("user_input", ""),
+            context,
+        )
+
         content = {
             "capability": task.capability,
-            "data": {
-                "command": self.pending_requests.get(request_id, {}).get(
-                    "user_input", ""
-                )
-            },
+            "data": {"command": command},
         }
         if context:
             content["context"] = context
@@ -161,6 +163,18 @@ class OrchestratorAgent(NetworkAgent):
                 json.dumps(context),
             )
         return context
+
+    def _build_task_command(
+        self, task: Task, user_input: str, context: Dict[str, Any]
+    ) -> str:
+        """Create a command instructing the agent to perform only the given task."""
+        base = (
+            f"User request: {user_input}. "
+            f"Your subtask is to execute capability '{task.capability}'."
+        )
+        if context:
+            base += f" Use these previous results as context: {json.dumps(context)}."
+        return base + " Only handle this capability and nothing else."
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output."""
