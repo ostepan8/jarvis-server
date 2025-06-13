@@ -442,6 +442,108 @@ class CollaborativeCalendarAgent(NetworkAgent):
                     },
                 },
             },
+            # ===== RECURRING EVENTS =====
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_recurring_events",
+                    "description": "List all recurring events",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_recurring_event",
+                    "description": "Create a recurring event",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Event title"},
+                            "start": {
+                                "type": "string",
+                                "description": "Start time in YYYY-MM-DD HH:MM format",
+                            },
+                            "duration_minutes": {
+                                "type": "integer",
+                                "description": "Duration in minutes",
+                            },
+                            "pattern": {
+                                "type": "object",
+                                "description": "Recurrence pattern description",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Event description",
+                                "default": "",
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Event category",
+                                "default": "",
+                            },
+                        },
+                        "required": ["title", "start", "duration_minutes", "pattern"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_recurring_event",
+                    "description": "Update an existing recurring event",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {"type": "string", "description": "Event ID"},
+                            "title": {"type": "string", "description": "Event title"},
+                            "start": {
+                                "type": "string",
+                                "description": "Start time in YYYY-MM-DD HH:MM format",
+                            },
+                            "duration_minutes": {
+                                "type": "integer",
+                                "description": "Duration in minutes",
+                            },
+                            "pattern": {
+                                "type": "object",
+                                "description": "Recurrence pattern description",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Event description",
+                                "default": "",
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Event category",
+                                "default": "",
+                            },
+                        },
+                        "required": [
+                            "event_id",
+                            "title",
+                            "start",
+                            "duration_minutes",
+                            "pattern",
+                        ],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "delete_recurring_event",
+                    "description": "Delete a recurring event",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {"type": "string", "description": "Event ID"}
+                        },
+                        "required": ["event_id"],
+                    },
+                },
+            },
             # ===== BULK OPERATIONS =====
             {
                 "type": "function",
@@ -720,7 +822,8 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "- Adding, updating, and deleting events (including bulk operations)\n"
             "- Finding free time slots and checking for conflicts\n"
             "- Analyzing schedule patterns and statistics\n"
-            "- Managing soft-deleted events (can be restored)\n\n"
+            "- Managing soft-deleted events (can be restored)\n"
+            "- Handling recurring events\n\n"
             "When working with events, remember:\n"
             "- Events have an ID, title, time, duration, description, and optional category\n"
             "- Times are in 'YYYY-MM-DD HH:MM' format\n"
@@ -758,6 +861,11 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "update_event": self.calendar_service.update_event,
             "update_event_fields": self.calendar_service.update_event_fields,
             "reschedule_event": self.calendar_service.reschedule_event,
+            # Recurring events
+            "get_recurring_events": self.calendar_service.get_recurring_events,
+            "add_recurring_event": self.calendar_service.add_recurring_event,
+            "update_recurring_event": self.calendar_service.update_recurring_event,
+            "delete_recurring_event": self.calendar_service.delete_recurring_event,
             # Bulk operations
             "add_events_bulk": self.calendar_service.add_events_bulk,
             "delete_events_bulk": self.calendar_service.delete_events_bulk,
@@ -815,6 +923,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "get_week_schedule",
             "get_month_schedule",
             "check_busy_days",
+            "manage_recurring_events",
         }
 
     async def _execute_function(
