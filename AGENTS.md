@@ -6,6 +6,7 @@ This file gives high level guidance for working with the code base. It is intend
 Additional Python packages used by the project:
 - `tzlocal`
 - `colorama`
+- `httpx`
 
 ## Overview
 - **Language**: Python 3.11+
