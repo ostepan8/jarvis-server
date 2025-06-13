@@ -48,9 +48,7 @@ class OrchestratorAgent(NetworkAgent):
         self.logger.log("DEBUG", "Orchestration request analysis", json.dumps(analysis))
         history = message.content.get("context", {}).get("history", [])
         tasks = self._create_tasks(analysis)
-        self.logger.log(
-            "DEBUG", "Initial tasks", [t.capability for t in tasks]
-        )
+        self.logger.log("DEBUG", "Initial tasks", [t.capability for t in tasks])
         self.sequences[message.request_id] = {
             "tasks": tasks,
             "current": 0,
@@ -304,7 +302,9 @@ Be thorough - include all capabilities that might be needed."""
 
         response = await self.ai_client.chat(messages, [])
         self.logger.log(
-            "DEBUG", "Analysis raw response", getattr(response[0], "content", str(response))
+            "DEBUG",
+            "Analysis raw response",
+            getattr(response[0], "content", str(response)),
         )
 
         analysis = extract_json_from_text(response[0].content)
@@ -324,28 +324,58 @@ Be thorough - include all capabilities that might be needed."""
     ) -> str:
         """Format a natural language response from agent results."""
         request_data = self.pending_requests.get(request_id, {})
+        user_input = request_data.get("user_input", "")
+
+        # Build a clear context that emphasizes the original request
         context = {
-            "user_request": request_data.get("user_input", ""),
+            "original_request": user_input,
             "agent_responses": responses,
             "timestamp": datetime.now(ZoneInfo(tz_name)).isoformat(),
         }
         if history:
-            context["history"] = history
-        system_prompt = """You are JARVIS, Tony Stark's AI assistant.
-Format the agent responses into a natural, conversational response.
-Avoid using bullet points, numbered lists, or any special formatting symbols like asterisks.
-Write as though you are speaking naturally to the user.
-Be concise but complete. Don't mention the internal agent names."""
+            context["execution_history"] = history
 
+        # Enhanced system prompt that better utilizes the original command
+        system_prompt = """You are JARVIS, Tony Stark's AI assistant.
+
+    Your primary objective is to respond in a natural, conversational tone, just as you would if speaking aloud to Tony Stark.
+
+    CRITICAL INSTRUCTIONS:
+    1. Always keep the user's original request in mind when formulating your response
+    2. Directly address what the user asked for, using their own words when appropriate
+    3. Frame your response as a direct answer to their specific question or request
+    4. If the user asked for something specific (like viewing a schedule, creating a reminder, etc.), acknowledge that specific request in your response
+
+    FORMATTING RULES:
+    - NEVER use bullet points, numbered lists, or special formatting symbols
+    - No asterisks, dashes, emojis, or markdown formatting
+    - Reword everything into flowing, natural speech
+    - Break down any structured data into conversational explanations
+
+    RESPONSE STYLE:
+    - Be concise, clear, and natural
+    - Speak as if having a calm, intelligent conversation
+    - Don't reference internal system behavior or "agents"
+    - Always relate your response back to what the user originally asked for"""
+
+        # Structured messages that emphasize the original request
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"User asked: {context['user_request']}"},
             {
-                "role": "assistant",
-                "content": f"Here's what I found: {json.dumps(context)}",
+                "role": "user",
+                "content": f"Original request: '{user_input}'\n\nSystem data: {json.dumps(context)}\n\nPlease provide a natural response that directly addresses the original request.",
             },
         ]
-        self.logger.log("DEBUG", "Format prompt", json.dumps(messages))
+
+        self.logger.log(
+            "DEBUG",
+            "Format prompt with original request emphasis",
+            {
+                "original_request": user_input,
+                "has_responses": bool(responses),
+                "response_count": len(responses),
+            },
+        )
 
         result = await self.ai_client.chat(messages, [])
         self.logger.log(
