@@ -20,6 +20,25 @@ class CalendarService:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
 
+    def _format_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize event structure returned by the API."""
+        return {
+            "id": event.get("id"),
+            "title": event.get("title"),
+            "time": event.get("time"),
+            "duration_minutes": event.get("duration", 0) // 60,
+            "description": event.get("description", ""),
+            "category": event.get("category", ""),
+        }
+
+    def _format_time_slot(self, slot: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize free/busy slot data."""
+        return {
+            "start": slot.get("start"),
+            "end": slot.get("end"),
+            "duration_minutes": slot.get("duration", 0) // 60,
+        }
+
     def current_date(self) -> str:
         """Return the current date as YYYY-MM-DD."""
         return date.today().strftime("%Y-%m-%d")
@@ -620,11 +639,13 @@ class CalendarService:
 
     async def get_all_events(self) -> List[Dict[str, Any]]:
         result = await self._request("GET", "/events")
-        return result.get("data", [])
+        events = result.get("data", [])
+        return [self._format_event(e) for e in events]
 
     async def get_next_event(self) -> Optional[Dict[str, Any]]:
         result = await self._request("GET", "/events/next")
-        return result.get("data")
+        event = result.get("data")
+        return self._format_event(event) if event else None
 
     async def get_tomorrow_events(self) -> Dict[str, Any]:
         tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -812,3 +833,62 @@ class CalendarService:
     async def get_event_stats(self, start: str, end: str) -> Dict[str, Any]:
         result = await self._request("GET", f"/stats/events/{start}/{end}")
         return result.get("data", {})
+
+    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single event by its ID if found."""
+        events = await self.get_all_events()
+        for ev in events:
+            if ev.get("id") == event_id:
+                return self._format_event(ev)
+        return None
+
+    async def get_busy_days(
+        self, start_date: str, end_date: str, threshold_events: int = 3
+    ) -> List[Dict[str, Any]]:
+        """Return days within the range that have many events."""
+        events = await self.get_events_in_range(start_date, end_date)
+        counts: Dict[str, int] = {}
+        for ev in events:
+            day = ev["time"].split(" ")[0]
+            counts[day] = counts.get(day, 0) + 1
+        busy = [
+            {"date": day, "event_count": count}
+            for day, count in counts.items()
+            if count >= threshold_events
+        ]
+        busy.sort(key=lambda d: d["event_count"], reverse=True)
+        return busy
+
+    async def get_overlapping_events(self) -> List[Dict[str, Any]]:
+        """Find all overlapping events."""
+        events = [self._format_event(e) for e in await self.get_all_events()]
+        overlaps = []
+        for i, ev1 in enumerate(events):
+            start1 = datetime.strptime(ev1["time"], "%Y-%m-%d %H:%M")
+            end1 = start1 + timedelta(minutes=ev1["duration_minutes"])
+            for ev2 in events[i + 1 :]:
+                start2 = datetime.strptime(ev2["time"], "%Y-%m-%d %H:%M")
+                end2 = start2 + timedelta(minutes=ev2["duration_minutes"])
+                if start1 < end2 and start2 < end1:
+                    overlaps.append({"event1": ev1, "event2": ev2})
+        return overlaps
+
+    async def find_best_time_for_event(
+        self,
+        duration_minutes: int,
+        preferred_dates: List[str],
+        working_hours: Tuple[int, int] = (9, 17),
+    ) -> Optional[Dict[str, Any]]:
+        """Return the first free slot matching preferences."""
+        start_h, end_h = working_hours
+        for day in preferred_dates:
+            slot_info = await self.find_free_slots(
+                date=day,
+                start_hour=start_h,
+                end_hour=end_h,
+                min_duration_minutes=duration_minutes,
+            )
+            free_slots = slot_info.get("free_slots") or []
+            if free_slots:
+                return free_slots[0]
+        return None
