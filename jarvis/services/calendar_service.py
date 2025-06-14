@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import aiohttp
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -19,6 +18,7 @@ class CalendarService:
     ) -> None:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
+        self.client = httpx.AsyncClient()
 
     def _format_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize event structure returned by the API."""
@@ -66,8 +66,7 @@ class CalendarService:
             "API request",
             f"{method} {url} params={params} json={json}",
         )
-        async with httpx.AsyncClient() as client:
-            response = await client.request(method, url, params=params, json=json)
+        response = await self.client.request(method, url, params=params, json=json)
         result = response.json()
         if result.get("status") == "error":
             raise Exception(result.get("message", "Unknown error"))
@@ -892,3 +891,7 @@ class CalendarService:
             if free_slots:
                 return free_slots[0]
         return None
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self.client.aclose()
