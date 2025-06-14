@@ -37,6 +37,7 @@ async def startup_event() -> None:
 async def shutdown_event() -> None:
     if jarvis_system:
         await jarvis_system.shutdown()
+    logger.close()
 
 
 @app.post("/jarvis")
