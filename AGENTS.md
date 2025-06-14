@@ -55,7 +55,12 @@ python -m jarvis.log_viewer
 ```
 
 ## Tests
-There are currently no automated tests. When adding new features, prefer small functions and consider adding tests under a new `tests/` folder using `pytest`.
+Automated tests live under the `tests/` directory. Install the dependencies from
+`requirements.txt` (or run `poetry install`) and execute:
+```bash
+pytest
+```
+The suite uses `pytest` and `pytest-asyncio`.
 
 ## Pull Request instructions for Agents
 1. Keep the repository in a clean state (`git status` should show no changes) before finishing.
