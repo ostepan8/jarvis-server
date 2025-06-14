@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -12,8 +11,6 @@ from jarvis import JarvisLogger, JarvisSystem
 from jarvis.utils import detect_timezone
 
 app = FastAPI(title="Jarvis API")
-logger: Optional[JarvisLogger] = None
-jarvis_system: Optional[JarvisSystem] = None
 
 
 class JarvisRequest(BaseModel):
@@ -24,39 +21,50 @@ class JarvisRequest(BaseModel):
 async def startup_event() -> None:
     """Initialize the collaborative Jarvis system."""
     load_dotenv()
+    level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    app.state.logger = JarvisLogger(log_level=level)
     config = {
         "ai_provider": "openai",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "calendar_api_url": os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
     }
-    global jarvis_system
     jarvis_system = JarvisSystem(config)
     await jarvis_system.initialize()
+    app.state.jarvis_system = jarvis_system
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
+    jarvis_system: JarvisSystem | None = getattr(app.state, "jarvis_system", None)
     if jarvis_system:
         await jarvis_system.shutdown()
+    logger: JarvisLogger | None = getattr(app.state, "logger", None)
+    if logger:
+        logger.close()
+
+
+async def get_jarvis(request: Request) -> JarvisSystem:
+    jarvis_system: JarvisSystem | None = getattr(request.app.state, "jarvis_system", None)
+    if jarvis_system is None:
+        raise HTTPException(status_code=500, detail="Jarvis system not initialized")
+    return jarvis_system
 
 
 @app.post("/jarvis")
-async def jarvis(req: JarvisRequest, request: Request):
+async def jarvis(
+    req: JarvisRequest,
+    request: Request,
+    jarvis_system: JarvisSystem = Depends(get_jarvis),
+):
     """Execute a command using the agent network."""
-    if jarvis_system is None:
-        raise HTTPException(status_code=500, detail="Jarvis system not initialized")
     tz_name = detect_timezone(request)
     return await jarvis_system.process_request(req.command, tz_name)
 
 
 def run():
     import uvicorn
-    global logger
-    level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
-    level = getattr(logging, level_name, logging.INFO)
-    with JarvisLogger(log_level=level) as log:
-        logger = log
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
