@@ -43,6 +43,20 @@ python -m jarvis.log_viewer
 - `server.py` – FastAPI entrypoint
 - `main.py` – simple demo using `create_collaborative_jarvis`
 
+## Running tests
+Install all dependencies and run the suite with `pytest`.
+
+Using `pip`:
+```bash
+make install
+make test
+```
+
+With Poetry:
+```bash
+poetry install
+poetry run make test
+```
 
 ## License
 This project is licensed under the [MIT License](LICENSE).
