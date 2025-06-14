@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -11,7 +12,7 @@ from jarvis import JarvisLogger, JarvisSystem
 from jarvis.utils import detect_timezone
 
 app = FastAPI(title="Jarvis API")
-logger = JarvisLogger()
+logger: Optional[JarvisLogger] = None
 jarvis_system: Optional[JarvisSystem] = None
 
 
@@ -37,7 +38,6 @@ async def startup_event() -> None:
 async def shutdown_event() -> None:
     if jarvis_system:
         await jarvis_system.shutdown()
-    logger.close()
 
 
 @app.post("/jarvis")
@@ -51,8 +51,12 @@ async def jarvis(req: JarvisRequest, request: Request):
 
 def run():
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    global logger
+    level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    with JarvisLogger(log_level=level) as log:
+        logger = log
+        uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":

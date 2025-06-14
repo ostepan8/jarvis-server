@@ -10,8 +10,9 @@ class JarvisLogger:
 
     def __init__(self, db_path: str = "jarvis_logs.db", log_level: int = logging.INFO) -> None:
         self.db_path = db_path
-        self.conn = sqlite3.connect(self.db_path)
-        self._ensure_table()
+        self.conn: Optional[sqlite3.Connection] = None
+        self.log_level = log_level
+        self._open_connection()
 
         self.logger = logging.getLogger("jarvis")
         if not self.logger.handlers:
@@ -20,6 +21,12 @@ class JarvisLogger:
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
+
+    def _open_connection(self) -> None:
+        """Open the SQLite connection if not already open."""
+        if self.conn is None:
+            self.conn = sqlite3.connect(self.db_path)
+            self._ensure_table()
 
     def close(self) -> None:
         """Close the SQLite connection if open."""
@@ -30,6 +37,7 @@ class JarvisLogger:
                 self.conn = None
 
     def __enter__(self) -> "JarvisLogger":
+        self._open_connection()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -51,6 +59,7 @@ class JarvisLogger:
 
     def log(self, level: str, action: str, details: Optional[Any] = None) -> None:
         """Log a message to stdout and the SQLite database."""
+        self._open_connection()
         level_name = level.upper()
         if details is not None and not isinstance(details, str):
             try:
