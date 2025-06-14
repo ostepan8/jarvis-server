@@ -14,6 +14,8 @@ Additional Python packages used by the project:
 - `python-dotenv`
 - `openai`
 - `anthropic`
+- `pytest`
+- `pytest-asyncio`
 
 ## Overview
 - **Language**: Python 3.11+
