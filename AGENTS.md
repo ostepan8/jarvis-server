@@ -4,9 +4,16 @@ This file gives high level guidance for working with the code base. It is intend
 
 ## Dependencies
 Additional Python packages used by the project:
+- `fastapi`
+- `uvicorn`
+- `pydantic`
+- `httpx`
+- `aiohttp`
 - `tzlocal`
 - `colorama`
-- `httpx`
+- `python-dotenv`
+- `openai`
+- `anthropic`
 
 ## Overview
 - **Language**: Python 3.11+
