@@ -44,3 +44,6 @@ python -m jarvis.log_viewer
 - `main.py` – simple demo using `create_collaborative_jarvis`
 
 
+## License
+This project is licensed under the [MIT License](LICENSE).
+
