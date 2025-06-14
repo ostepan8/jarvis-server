@@ -455,31 +455,68 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 "type": "function",
                 "function": {
                     "name": "add_recurring_event",
-                    "description": "Create a recurring event",
+                    "description": "Create a recurring calendar event with a specific recurrence rule. Use this for any event that repeats on a daily, weekly, monthly, or yearly basis, such as workouts, classes, alarms, or birthdays.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "title": {"type": "string", "description": "Event title"},
+                            "title": {
+                                "type": "string",
+                                "description": "Name of the recurring event. Example: 'Wake Up', 'Gym Session', 'Team Meeting'",
+                            },
                             "start": {
                                 "type": "string",
-                                "description": "Start time in YYYY-MM-DD HH:MM format",
+                                "description": "Start time in 'YYYY-MM-DD HH:MM' format (24-hour clock, local time)",
                             },
                             "duration_minutes": {
                                 "type": "integer",
-                                "description": "Duration in minutes",
+                                "description": "Length of the event in minutes. Example: 30 for a 30-minute event, 60 for 1 hour",
                             },
                             "pattern": {
                                 "type": "object",
-                                "description": "Recurrence pattern description",
+                                "description": 'Describes the recurrence pattern. Always include \'type\'. Add \'days\' only if it\'s weekly.\n\nExamples:\n- Daily: { "type": "daily" }\n- Every 2 days: { "type": "daily", "interval": 2 }\n- Weekly on Monday and Wednesday: { "type": "weekly", "days": [1, 3] }\n- Monthly: { "type": "monthly" }\n- Yearly: { "type": "yearly" }',
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "daily",
+                                            "weekly",
+                                            "monthly",
+                                            "yearly",
+                                        ],
+                                        "description": "How often the event repeats:\n- 'daily': every X days\n- 'weekly': every X weeks on specified days (see 'days')\n- 'monthly': every X months on the same date\n- 'yearly': every X years on the same date",
+                                    },
+                                    "interval": {
+                                        "type": "integer",
+                                        "description": "Repeat interval. Example:\n- interval: 1 with type 'daily' = every day\n- interval: 2 with type 'weekly' = every other week",
+                                        "default": 1,
+                                    },
+                                    "max": {
+                                        "type": "integer",
+                                        "description": "Maximum number of times the event should repeat. Use -1 for unlimited recurrence.",
+                                        "default": -1,
+                                    },
+                                    "end": {
+                                        "type": "string",
+                                        "description": "Optional end date. Format: 'YYYY-MM-DD HH:MM'. If set, event stops on or before this time.",
+                                        "default": "",
+                                    },
+                                    "days": {
+                                        "type": "array",
+                                        "items": {"type": "integer"},
+                                        "description": "For weekly recurrence only. List of weekdays: 0 = Sunday, 1 = Monday, ..., 6 = Saturday. Example: [1,3,5] for Mon/Wed/Fri.",
+                                        "default": [],
+                                    },
+                                },
+                                "required": ["type"],
                             },
                             "description": {
                                 "type": "string",
-                                "description": "Event description",
+                                "description": "Optional additional info for the event. Example: 'Take meds after waking up'.",
                                 "default": "",
                             },
                             "category": {
                                 "type": "string",
-                                "description": "Event category",
+                                "description": "Optional label for organizing events. Example: 'Health', 'Work', 'Personal'.",
                                 "default": "",
                             },
                         },
@@ -491,32 +528,72 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 "type": "function",
                 "function": {
                     "name": "update_recurring_event",
-                    "description": "Update an existing recurring event",
+                    "description": "Update a recurring event by changing its title, time, duration, or recurrence pattern.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "event_id": {"type": "string", "description": "Event ID"},
-                            "title": {"type": "string", "description": "Event title"},
+                            "event_id": {
+                                "type": "string",
+                                "description": "ID of the recurring event to update. This must already exist.",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "New or unchanged title for the event. Example: 'Wake Up'",
+                            },
                             "start": {
                                 "type": "string",
-                                "description": "Start time in YYYY-MM-DD HH:MM format",
+                                "description": "New start time in 'YYYY-MM-DD HH:MM' format",
                             },
                             "duration_minutes": {
                                 "type": "integer",
-                                "description": "Duration in minutes",
+                                "description": "Updated length of the event in minutes",
                             },
                             "pattern": {
                                 "type": "object",
-                                "description": "Recurrence pattern description",
+                                "description": 'Updated recurrence pattern. Use the same structure as add_recurring_event.\n\nExamples:\n- Daily: { "type": "daily" }\n- Every 3 days: { "type": "daily", "interval": 3 }\n- Weekly on Tue/Thu: { "type": "weekly", "days": [2, 4] }\n- Monthly: { "type": "monthly" }\n- Yearly: { "type": "yearly" }',
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "daily",
+                                            "weekly",
+                                            "monthly",
+                                            "yearly",
+                                        ],
+                                        "description": "Type of recurrence: daily / weekly / monthly / yearly",
+                                    },
+                                    "interval": {
+                                        "type": "integer",
+                                        "description": "How frequently the event repeats. Example: 1 = every period, 2 = every other period",
+                                        "default": 1,
+                                    },
+                                    "max": {
+                                        "type": "integer",
+                                        "description": "Maximum number of occurrences. -1 for infinite repetition",
+                                        "default": -1,
+                                    },
+                                    "end": {
+                                        "type": "string",
+                                        "description": "Cutoff date/time for recurrence (optional). Format: 'YYYY-MM-DD HH:MM'",
+                                        "default": "",
+                                    },
+                                    "days": {
+                                        "type": "array",
+                                        "items": {"type": "integer"},
+                                        "description": "Only for weekly recurrence. Days of the week as integers: 0 = Sun, ..., 6 = Sat",
+                                        "default": [],
+                                    },
+                                },
+                                "required": ["type"],
                             },
                             "description": {
                                 "type": "string",
-                                "description": "Event description",
+                                "description": "Updated description text (optional)",
                                 "default": "",
                             },
                             "category": {
                                 "type": "string",
-                                "description": "Event category",
+                                "description": "Optional new category label",
                                 "default": "",
                             },
                         },
@@ -831,6 +908,12 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "- Some functions use duration_seconds internally\n"
             "- Soft delete allows events to be restored later\n"
             "- Always validate times before adding events to avoid conflicts"
+            "\n\n"
+            "When the user gives a command, do not ask clarifying questions unless it is absolutely necessary to perform the action. "
+            "If any required information is missing but can be inferred from context, do so intelligently and proceed with the task. "
+            "Assume reasonable defaults when unsure (e.g., default recurring time is 09:15, default duration is 15 minutes, default category is 'General'). "
+            "Only prompt the user if critical ambiguity prevents action. Prioritize completing the request smoothly and efficiently without back-and-forth. "
+            "Favor decisive execution over cautious delays."
         )
 
         self._function_map = {
@@ -902,8 +985,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "view_upcoming_appointments",
             "check_calendar_availability",
             # Modification capabilities
-            "add_calendar_event",
-            "schedule_appointment",
+            "schedule_appointment",  # covers generic adds
             "update_calendar_event",
             "reschedule_appointment",
             "remove_calendar_event",
@@ -923,7 +1005,11 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "get_week_schedule",
             "get_month_schedule",
             "check_busy_days",
-            "manage_recurring_events",
+            # Use this to represent recurring creation
+            "add_recurring_event",  # ✅ Direct tool that handles creation and recurrence
+            "update_recurring_event",
+            "delete_recurring_event",
+            "get_recurring_events",
         }
 
     async def _execute_function(

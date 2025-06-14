@@ -277,22 +277,36 @@ class OrchestratorAgent(NetworkAgent):
             available_capabilities.append(f"- {cap}: provided by {', '.join(agents)}")
 
         current_date = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
-        system_prompt = f"""You are JARVIS, analyzing user requests to determine which capabilities are needed.
+        system_prompt = f"""
+You are JARVIS, analyzing user requests to determine which capabilities are needed to fulfill them using available tools. You must prioritize dependency resolution and task decomposition over improvisation.
 
 Current date: {current_date}
 
 Available capabilities:
 {chr(10).join(available_capabilities)}
 
-List any dependencies explicitly using a "dependencies" mapping. For example: "dependencies": {{"remove_event": ["view_schedule"]}}.
+Your job is to reason carefully through what the user is asking, and return a JSON object with:
 
-Analyze the user's request and return a JSON object with:
-- "intent": brief description of what the user wants
-- "capabilities_needed": list of capability names needed
-- "dependencies": mapping of capability names to the capabilities they depend on
-- "coordination_notes": any special coordination needed between capabilities
+- "intent": a concise summary of what the user wants
+- "capabilities_needed": all capability names required to fulfill the task
+- "dependencies": a mapping like {{capability: [dependent_capability, ...]}} showing any information that must be retrieved first
+- "coordination_notes": a precise, step-by-step breakdown of what order capabilities should run in and how they work together
 
-Be thorough - include all capabilities that might be needed."""
+Instructions:
+1. Do **not** guess or assume any state. If the request involves modifying, deleting, or interacting with something that must already exist (like events, files, settings), you must first retrieve or inspect it using the appropriate capabilities.
+2. Only plan actions **after verifying the target exists** or meets the right conditions.
+3. Be comprehensive—include ALL capabilities needed to fully satisfy the request, even if they’re only for internal verification.
+4. Use prior context or capabilities to reason about the current request. This system assumes prior data is retrievable.
+5. Err on the side of being conservative and explicit. Avoid hallucinating behaviors that haven’t been defined as capabilities.
+
+Example dependency mapping:
+"dependencies": {{
+    "update_event": ["view_calendar_events"],
+    "reschedule_appointment": ["check_calendar_availability"],
+    "add_event": ["find_free_time_slots"]
+}}
+
+Make sure the result enables deterministic scheduling and coordination between agents. Think like a task planner, not an LLM."""
 
         messages = [
             {"role": "system", "content": system_prompt},
