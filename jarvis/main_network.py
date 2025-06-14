@@ -20,6 +20,7 @@ class JarvisSystem:
         self.logger = JarvisLogger()
         self.network = AgentNetwork(self.logger)
         self.orchestrator: OrchestratorAgent | None = None
+        self.calendar_service: CalendarService | None = None
 
     async def initialize(self):
         """Initialize all agents and start the network"""
@@ -37,11 +38,11 @@ class JarvisSystem:
         self.network.register_agent(self.orchestrator)
 
         # Create Calendar Agent with integrated natural language logic
-        calendar_service = CalendarService(
+        self.calendar_service = CalendarService(
             self.config.get("calendar_api_url", "http://localhost:8080")
         )
         calendar_agent = CollaborativeCalendarAgent(
-            ai_client, calendar_service, self.logger
+            ai_client, self.calendar_service, self.logger
         )
         self.network.register_agent(calendar_agent)
 
@@ -71,6 +72,8 @@ class JarvisSystem:
     async def shutdown(self):
         """Shutdown the system"""
         await self.network.stop()
+        if self.calendar_service:
+            await self.calendar_service.close()
         self.logger.log("INFO", "Jarvis system shutdown complete")
         self.logger.close()
 
