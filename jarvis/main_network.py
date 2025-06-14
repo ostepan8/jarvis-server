@@ -72,6 +72,7 @@ class JarvisSystem:
         """Shutdown the system"""
         await self.network.stop()
         self.logger.log("INFO", "Jarvis system shutdown complete")
+        self.logger.close()
 
 
 # Example usage and demo

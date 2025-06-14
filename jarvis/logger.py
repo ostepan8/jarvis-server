@@ -21,6 +21,20 @@ class JarvisLogger:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
+    def close(self) -> None:
+        """Close the SQLite connection if open."""
+        if getattr(self, "conn", None):
+            try:
+                self.conn.close()
+            finally:
+                self.conn = None
+
+    def __enter__(self) -> "JarvisLogger":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
     def _ensure_table(self) -> None:
         with self.conn:
             self.conn.execute(
