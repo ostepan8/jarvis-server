@@ -269,7 +269,7 @@ class CalendarService:
             "title": title,
         }
 
-        result = await self._request("POST", "/events/validate", data)
+        result = await self._request("POST", "/events/validate", json=data)
         valid = result.get("valid", False)
         conflicts = result.get("conflicts", [])
 
@@ -394,7 +394,7 @@ class CalendarService:
             "category": category,
         }
 
-        result = await self._request("PUT", f"/events/{event_id}", data)
+        result = await self._request("PUT", f"/events/{event_id}", json=data)
         event = result.get("data", {})
 
         return {
@@ -407,7 +407,7 @@ class CalendarService:
         self, event_id: str, fields: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Update specific fields of an event (PATCH)."""
-        result = await self._request("PATCH", f"/events/{event_id}", fields)
+        result = await self._request("PATCH", f"/events/{event_id}", json=fields)
         event = result.get("data", {})
 
         return {
@@ -435,7 +435,7 @@ class CalendarService:
             formatted_events.append(formatted_event)
 
         data = {"events": formatted_events}
-        result = await self._request("POST", "/events/bulk", data)
+        result = await self._request("POST", "/events/bulk", json=data)
         response_data = result.get("data", {})
 
         return {
@@ -448,7 +448,7 @@ class CalendarService:
     async def delete_events_bulk(self, event_ids: List[str]) -> Dict[str, Any]:
         """Delete multiple events at once."""
         data = {"ids": event_ids}
-        result = await self._request("DELETE", "/events/bulk", data)
+        result = await self._request("DELETE", "/events/bulk", json=data)
 
         return {
             "success": True,
