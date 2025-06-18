@@ -1113,16 +1113,6 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
         self.logger.log("INFO", f"Handling {capability}", json.dumps(data))
 
-        command_text = data.get("command")
-        if command_text and capability != "calendar_command":
-            self.logger.log("INFO", "Using command text", command_text)
-            result = await self._process_calendar_command(command_text)
-            if result:
-                await self.send_capability_response(
-                    message.from_agent, result, message.request_id, message.id
-                )
-            return
-
         # Track active request details so follow-up responses can be managed
         self.active_tasks.setdefault(
             message.request_id,
@@ -1135,14 +1125,14 @@ class CollaborativeCalendarAgent(NetworkAgent):
         )
 
         try:
-            result = None
-            print(f"Processing capability request: {capability} with data: {data}")
             command = data.get("command")
             if not isinstance(command, str):
                 await self.send_error(
                     message.from_agent, "Invalid command", message.request_id
                 )
                 return
+
+            self.logger.log("INFO", "Processing command", command)
             result = await self._process_calendar_command(command)
 
             if result:

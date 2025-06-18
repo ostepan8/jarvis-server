@@ -1673,12 +1673,14 @@ Examples:
         return {"response": final_text, "actions": actions_taken}
 
     async def _handle_capability_request(self, message: Message) -> None:
-        """Handle incoming 'hue_command' requests."""
+        """Handle incoming capability requests."""
         capability = message.content.get("capability")
         data = message.content.get("data", {})
 
-        if capability != "hue_command":
+        if capability not in self.capabilities:
             return
+
+        self.logger.log("INFO", f"Handling capability: {capability}", str(data))
 
         cmd = data.get("command")
         if not isinstance(cmd, str):
@@ -1686,10 +1688,22 @@ Examples:
                 message.from_agent, "Invalid or missing command", message.request_id
             )
             return
-
-        self.logger.log("INFO", "Handling hue_command", cmd)
         result = await self._process_hue_command(cmd)
 
         await self.send_capability_response(
             message.from_agent, result, message.request_id, message.id
         )
+
+    async def _handle_group_control(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle group control operations."""
+        action = data.get("action", "on")
+        if action == "on":
+            return await self._execute_function("turn_on_group", data)
+        elif action == "off":
+            return await self._execute_function("turn_off_group", data)
+        elif action == "brightness":
+            return await self._execute_function("set_group_brightness", data)
+        elif action == "color":
+            return await self._execute_function("set_group_color", data)
+        else:
+            return {"error": f"Unknown group action: {action}"}
