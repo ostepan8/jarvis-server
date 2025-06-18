@@ -80,6 +80,10 @@ class AgentNetwork:
                     fut = self._response_futures.get(message.request_id)
                     if fut and not fut.done():
                         fut.set_result(message.content)
+                    if message.to_agent and message.to_agent in self.agents:
+                        asyncio.create_task(
+                            self.agents[message.to_agent].receive_message(message)
+                        )
                     continue
 
                 # 2) If it's an error reply, treat it as a response too
@@ -88,6 +92,10 @@ class AgentNetwork:
                     if fut and not fut.done():
                         # you can choose to set_exception instead
                         fut.set_result({"error": message.content.get("error")})
+                    if message.to_agent and message.to_agent in self.agents:
+                        asyncio.create_task(
+                            self.agents[message.to_agent].receive_message(message)
+                        )
                     continue
 
                 # 3) Direct message: deliver to the specified agent
