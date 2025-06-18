@@ -11,8 +11,9 @@ from .ai_clients import (
 )
 from .agents.agent_network import AgentNetwork
 from .agents.calendar_agent import CollaborativeCalendarAgent
-from .main_network import JarvisSystem, create_collaborative_jarvis
+from .main_jarvis import JarvisSystem, create_collaborative_jarvis
 
+222
 __all__ = [
     "CalendarService",
     "AIClientFactory",

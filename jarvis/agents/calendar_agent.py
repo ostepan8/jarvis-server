@@ -1136,6 +1136,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
 
         try:
             result = None
+            print(f"Processing capability request: {capability} with data: {data}")
             command = data.get("command")
             if not isinstance(command, str):
                 await self.send_error(

@@ -456,6 +456,52 @@ class CalendarService:
             "requested": result.get("requested", len(event_ids)),
         }
 
+    async def delete_events_by_date(self, date: str) -> Dict[str, Any]:
+        """Delete all events on a specific date."""
+        try:
+            result = await self._request("DELETE", f"/events/day/{date}")
+            removed_count = result.get("removed", 0)
+            self.logger.log("INFO", f"Deleted {removed_count} events on date", date)
+            return {
+                "success": True,
+                "message": f"Deleted {removed_count} events on {date}",
+                "removed_count": removed_count,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def delete_events_in_week(self, start_date: str) -> Dict[str, Any]:
+        """Delete all events in a week starting from the given date."""
+        try:
+            result = await self._request("DELETE", f"/events/week/{start_date}")
+            removed_count = result.get("removed", 0)
+            self.logger.log(
+                "INFO", f"Deleted {removed_count} events in week", start_date
+            )
+            return {
+                "success": True,
+                "message": f"Deleted {removed_count} events in week starting {start_date}",
+                "removed_count": removed_count,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def delete_events_before(self, datetime_str: str) -> Dict[str, Any]:
+        """Delete all events before a specific datetime (format: YYYY-MM-DDTHH:MM)."""
+        try:
+            result = await self._request("DELETE", f"/events/before/{datetime_str}")
+            removed_count = result.get("removed", 0)
+            self.logger.log(
+                "INFO", f"Deleted {removed_count} events before", datetime_str
+            )
+            return {
+                "success": True,
+                "message": f"Deleted {removed_count} events before {datetime_str}",
+                "removed_count": removed_count,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     # ===== SOFT DELETE AND RESTORE =====
 
     async def get_deleted_events(self) -> Dict[str, Any]:
@@ -528,7 +574,6 @@ class CalendarService:
             "event": self._format_event(event),
         }
 
-
     async def get_schedule_summary(self, date_range: str = "today") -> Dict[str, Any]:
         """Return a summary of the schedule for the given range."""
         if date_range == "today":
@@ -587,7 +632,6 @@ class CalendarService:
         result = await self._request("GET", "/events/next")
         event = result.get("data")
         return self._format_event(event) if event else None
-
 
     async def reschedule_event(
         self, event_id: str, new_time: str, duration_minutes: Optional[int] = None
@@ -648,7 +692,6 @@ class CalendarService:
 
     async def delete_all_events(self) -> Dict[str, Any]:
         return await self._request("DELETE", "/events")
-
 
     async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
         """Return a single event by its ID if found."""
