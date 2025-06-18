@@ -22,7 +22,7 @@ class OrchestratorAgent(NetworkAgent):
         self,
         ai_client: BaseAIClient,
         logger: Optional[JarvisLogger] = None,
-        response_timeout: float = 10.0,
+        response_timeout: float = 30.0,  # Increased timeout
     ) -> None:
         super().__init__("OrchestratorAgent", logger)
         self.ai_client = ai_client
@@ -45,10 +45,10 @@ class OrchestratorAgent(NetworkAgent):
             return
 
         analysis = message.content.get("data", {}).get("analysis", {})
-        self.logger.log("DEBUG", "Orchestration request analysis", json.dumps(analysis))
+        self.logger.log("INFO", "Orchestration request analysis", json.dumps(analysis))
         history = message.content.get("context", {}).get("history", [])
         tasks = self._create_tasks(analysis)
-        self.logger.log("DEBUG", "Initial tasks", [t.capability for t in tasks])
+        self.logger.log("INFO", "Initial tasks", [t.capability for t in tasks])
         self.sequences[message.request_id] = {
             "tasks": tasks,
             "current": 0,
@@ -62,89 +62,140 @@ class OrchestratorAgent(NetworkAgent):
     async def _handle_capability_response(self, message: Message) -> None:
         seq = self.sequences.get(message.request_id)
         if not seq:
+            self.logger.log(
+                "WARNING", f"No sequence found for request_id: {message.request_id}"
+            )
             return
+
+        # Log current state for debugging
+        self.logger.log(
+            "INFO",
+            f"Current sequence state",
+            {
+                "request_id": message.request_id,
+                "current_index": seq["current"],
+                "total_tasks": len(seq["tasks"]),
+                "completed_tasks": list(seq["results"].keys()),
+            },
+        )
+
+        if seq["current"] >= len(seq["tasks"]):
+            self.logger.log("WARNING", "Received response but no current task")
+            return
+
         task = seq["tasks"][seq["current"]]
         self.logger.log(
-            "DEBUG",
+            "INFO",
             f"Received result for {task.capability}",
             json.dumps(message.content),
         )
+
+        # Store the result
         task.result = message.content
         seq["results"][task.capability] = message.content
         seq.setdefault("context_history", []).append(
             {"capability": task.capability, "result": message.content}
         )
 
+        # Move to next task
         seq["current"] += 1
+
+        # Continue execution
         await self._execute_next(message.request_id)
 
     async def _handle_error(self, message: Message) -> None:
         """Handle error messages from other agents gracefully."""
         seq = self.sequences.get(message.request_id)
-        if seq:
+        if seq and seq["current"] < len(seq["tasks"]):
             task = seq["tasks"][seq["current"]]
+            self.logger.log(
+                "ERROR", f"Error in task {task.capability}", message.content
+            )
             seq["results"][task.capability] = {"error": message.content.get("error")}
 
+            # Continue to next task even on error
             seq["current"] += 1
             await self._execute_next(message.request_id)
         else:
             await super()._handle_error(message)
 
     async def _execute_next(self, request_id: str) -> None:
-        seq = self.sequences[request_id]
+        seq = self.sequences.get(request_id)
+        if not seq:
+            self.logger.log("ERROR", f"No sequence found for request_id: {request_id}")
+            return
+
+        self.logger.log(
+            "INFO",
+            f"Execute next task",
+            {
+                "request_id": request_id,
+                "current": seq["current"],
+                "total": len(seq["tasks"]),
+                "completed": list(seq["results"].keys()),
+            },
+        )
+
         if seq["current"] >= len(seq["tasks"]):
-            # Finished - send results back
+            # All tasks completed
+            self.logger.log("INFO", f"All tasks completed for request {request_id}")
+
+            # Prepare final results
             result_payload = {
                 "results": seq["results"],
                 "context_history": seq.get("context_history", []),
             }
+
             if seq["origin"] != self.name:
+                # Response to another agent
                 await self.send_capability_response(
                     seq["origin"], result_payload, request_id, seq["origin_msg"]
                 )
             else:
+                # Response to user request
                 pending = self.pending_requests.get(request_id)
                 if pending and not pending["future"].done():
                     pending["future"].set_result(result_payload)
-                    del self.pending_requests[request_id]
+                    # Don't delete pending_requests yet - _format_response needs it
+
+            # Clean up sequence
             del self.sequences[request_id]
             return
 
+        # Execute current task
         task = seq["tasks"][seq["current"]]
         context = self._gather_dependency_results(task, seq["results"])
+
         self.logger.log(
-            "DEBUG",
-            "Execute task",
+            "INFO",
+            f"Executing task {seq['current'] + 1}/{len(seq['tasks'])}",
             {
-                "task_id": task.id,
                 "capability": task.capability,
                 "agent": task.assigned_agent,
-                "context": context,
+                "has_context": bool(context),
             },
         )
 
-        command = self._build_task_command(
-            task,
-            self.pending_requests.get(request_id, {}).get("user_input", ""),
-            context,
-        )
+        # Build command for the task
+        user_input = self.pending_requests.get(request_id, {}).get("user_input", "")
+        command = self._build_task_command(task, user_input, context)
 
+        # Prepare capability request
         content = {
             "capability": task.capability,
             "data": {"command": command},
         }
         if context:
             content["context"] = context
+
+        # Send to the agent
+        # Log before sending the message
         self.logger.log(
-            "DEBUG",
-            "Send capability request",
-            {
-                "to": task.assigned_agent,
-                "capability": task.capability,
-                "data": content.get("data"),
-                "context": bool(context),
-            },
+            "INFO",
+            f"Sending capability request to {task.assigned_agent}",
+            {"capability": task.capability, "request_id": request_id},
         )
+
         await self.send_message(
             task.assigned_agent, "capability_request", content, request_id
         )
@@ -153,7 +204,15 @@ class OrchestratorAgent(NetworkAgent):
         self, task: Task, results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Return full results for tasks this task depends on."""
-        context = {dep: results.get(dep) for dep in task.depends_on if dep in results}
+        context = {}
+        for dep in task.depends_on:
+            if dep in results:
+                context[dep] = results[dep]
+            else:
+                self.logger.log(
+                    "WARNING", f"Missing dependency {dep} for {task.capability}"
+                )
+
         if context:
             self.logger.log(
                 "DEBUG",
@@ -176,7 +235,6 @@ class OrchestratorAgent(NetworkAgent):
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output."""
-
         tasks: List[Task] = []
         intent = analysis.get("intent", "No intent found")
         caps = analysis.get("capabilities_needed", [])
@@ -189,7 +247,7 @@ class OrchestratorAgent(NetworkAgent):
 
             providers = self.network.capability_registry.get(cap)
             if not providers:
-                self.logger.log("WARNING", "No provider for capability", cap)
+                self.logger.log("WARNING", f"No provider for capability: {cap}")
                 continue
 
             tasks.append(
@@ -200,12 +258,12 @@ class OrchestratorAgent(NetworkAgent):
                     intent=intent,
                 )
             )
+
         self.logger.log(
-            "DEBUG",
-            "Tasks created",
+            "INFO",
+            f"Created {len(tasks)} tasks",
             [
                 {
-                    "id": t.id,
                     "capability": t.capability,
                     "agent": t.assigned_agent,
                     "depends_on": t.depends_on,
@@ -220,6 +278,8 @@ class OrchestratorAgent(NetworkAgent):
     ) -> Dict[str, Any]:
         """Analyze and execute a user request sequentially."""
         request_id = f"req_{uuid.uuid4()}"
+
+        # Analyze the request
         analysis = await self._analyze_request(user_input, tz_name)
         if analysis.get("analysis_failed"):
             return {
@@ -227,14 +287,31 @@ class OrchestratorAgent(NetworkAgent):
                 "response": "Sorry, I couldn't understand that request.",
                 "request_id": request_id,
             }
-        self.logger.log("INFO", "Analysis", json.dumps(analysis))
+
+        self.logger.log(
+            "INFO", f"Analysis complete: {analysis.get('intent', 'Unknown')}"
+        )
+
+        # Create tasks
         tasks = self._create_tasks(analysis)
+        if not tasks:
+            return {
+                "success": False,
+                "response": "I couldn't find any capabilities to handle that request.",
+                "request_id": request_id,
+            }
+
+        # Set up future for async response
         future: asyncio.Future = asyncio.get_event_loop().create_future()
+
+        # Store request data
         self.pending_requests[request_id] = {
             "future": future,
             "user_input": user_input,
             "tz": tz_name,
         }
+
+        # Initialize sequence
         self.sequences[request_id] = {
             "tasks": tasks,
             "current": 0,
@@ -248,28 +325,47 @@ class OrchestratorAgent(NetworkAgent):
                 }
             ],
         }
+
+        # Start execution
         await self._execute_next(request_id)
+
+        # Wait for completion
         try:
             result_data = await asyncio.wait_for(future, timeout=self.response_timeout)
         except asyncio.TimeoutError:
+            self.logger.log("ERROR", f"Request {request_id} timed out")
+            # Clean up
+            if request_id in self.sequences:
+                del self.sequences[request_id]
+            if request_id in self.pending_requests:
+                del self.pending_requests[request_id]
             return {
                 "success": False,
-                "response": "Request timed out",
+                "response": "The request took too long to complete. Please try again.",
                 "request_id": request_id,
             }
 
+        # Format final response
         final_text = await self._format_response(
             request_id,
             result_data["results"],
             tz_name,
             history=result_data.get("context_history", []),
         )
-        self.logger.log("INFO", "Final response", final_text)
+
+        # Clean up pending request
+        if request_id in self.pending_requests:
+            del self.pending_requests[request_id]
+
+        self.logger.log("INFO", f"Request {request_id} completed successfully")
+
         return {"success": True, "response": final_text, "request_id": request_id}
 
     async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Use AI to analyze the user request and determine needed tasks."""
         self.logger.log("DEBUG", "Analyzing request", user_input)
+
+        # Get available capabilities
         available_capabilities = []
         for cap, agents in self.network.capability_registry.items():
             if cap == "orchestrate_tasks":
@@ -295,15 +391,15 @@ Your job is to reason carefully through what the user is asking, and return a JS
 Instructions:
 1. Do **not** guess or assume any state. If the request involves modifying, deleting, or interacting with something that must already exist (like events, files, settings), you must first retrieve or inspect it using the appropriate capabilities.
 2. Only plan actions **after verifying the target exists** or meets the right conditions.
-3. Be comprehensive—include ALL capabilities needed to fully satisfy the request, even if they’re only for internal verification.
+3. Be comprehensive—include ALL capabilities needed to fully satisfy the request, even if they're only for internal verification.
 4. Use prior context or capabilities to reason about the current request. This system assumes prior data is retrievable.
-5. Err on the side of being conservative and explicit. Avoid hallucinating behaviors that haven’t been defined as capabilities.
+5. Err on the side of being conservative and explicit. Avoid hallucinating behaviors that haven't been defined as capabilities.
 
 Example dependency mapping:
 "dependencies": {{
+    "schedule_appointment": ["get_today_schedule"],
     "update_event": ["view_calendar_events"],
-    "reschedule_appointment": ["check_calendar_availability"],
-    "add_event": ["find_free_time_slots"]
+    "reschedule_appointment": ["check_calendar_availability"]
 }}
 
 Make sure the result enables deterministic scheduling and coordination between agents. Think like a task planner, not an LLM."""
@@ -312,7 +408,6 @@ Make sure the result enables deterministic scheduling and coordination between a
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ]
-        self.logger.log("DEBUG", "Analysis prompt", json.dumps(messages))
 
         response = await self.ai_client.chat(messages, [])
         self.logger.log(
@@ -340,7 +435,7 @@ Make sure the result enables deterministic scheduling and coordination between a
         request_data = self.pending_requests.get(request_id, {})
         user_input = request_data.get("user_input", "")
 
-        # Build a clear context that emphasizes the original request
+        # Build context
         context = {
             "original_request": user_input,
             "agent_responses": responses,
@@ -349,30 +444,28 @@ Make sure the result enables deterministic scheduling and coordination between a
         if history:
             context["execution_history"] = history
 
-        # Enhanced system prompt that better utilizes the original command
         system_prompt = """You are JARVIS, Tony Stark's AI assistant.
 
-    Your primary objective is to respond in a natural, conversational tone, just as you would if speaking aloud to Tony Stark.
+Your primary objective is to respond in a natural, conversational tone, just as you would if speaking aloud to Tony Stark.
 
-    CRITICAL INSTRUCTIONS:
-    1. Always keep the user's original request in mind when formulating your response
-    2. Directly address what the user asked for, using their own words when appropriate
-    3. Frame your response as a direct answer to their specific question or request
-    4. If the user asked for something specific (like viewing a schedule, creating a reminder, etc.), acknowledge that specific request in your response
+CRITICAL INSTRUCTIONS:
+1. Always keep the user's original request in mind when formulating your response
+2. Directly address what the user asked for, using their own words when appropriate
+3. Frame your response as a direct answer to their specific question or request
+4. If the user asked for something specific (like viewing a schedule, creating a reminder, etc.), acknowledge that specific request in your response
 
-    FORMATTING RULES:
-    - NEVER use bullet points, numbered lists, or special formatting symbols
-    - No asterisks, dashes, emojis, or markdown formatting
-    - Reword everything into flowing, natural speech
-    - Break down any structured data into conversational explanations
+FORMATTING RULES:
+- NEVER use bullet points, numbered lists, or special formatting symbols
+- No asterisks, dashes, emojis, or markdown formatting
+- Reword everything into flowing, natural speech
+- Break down any structured data into conversational explanations
 
-    RESPONSE STYLE:
-    - Be concise, clear, and natural
-    - Speak as if having a calm, intelligent conversation
-    - Don't reference internal system behavior or "agents"
-    - Always relate your response back to what the user originally asked for"""
+RESPONSE STYLE:
+- Be concise, clear, and natural
+- Speak as if having a calm, intelligent conversation
+- Don't reference internal system behavior or "agents"
+- Always relate your response back to what the user originally asked for"""
 
-        # Structured messages that emphasize the original request
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -381,18 +474,5 @@ Make sure the result enables deterministic scheduling and coordination between a
             },
         ]
 
-        self.logger.log(
-            "DEBUG",
-            "Format prompt with original request emphasis",
-            {
-                "original_request": user_input,
-                "has_responses": bool(responses),
-                "response_count": len(responses),
-            },
-        )
-
         result = await self.ai_client.chat(messages, [])
-        self.logger.log(
-            "DEBUG", "Format raw response", getattr(result[0], "content", str(result))
-        )
         return result[0].content

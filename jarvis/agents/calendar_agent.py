@@ -1095,10 +1095,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
         if iterations >= MAX_ITERATIONS:
             self.logger.log("ERROR", "Max iterations reached", str(iterations))
 
-        if tool_calls:
-            message, _ = await self.ai_client.chat(messages, [])
-
-        response_text = message.content if hasattr(message, "content") else str(message)
+        response_text = message.content
         self.logger.log("INFO", "NL command result", response_text)
 
         return {"response": response_text, "actions": actions_taken}
@@ -1148,11 +1145,16 @@ class CollaborativeCalendarAgent(NetworkAgent):
         request_id = message.request_id
 
         if request_id not in self.active_tasks:
+            self.logger.log(
+                "WARNING",
+                "Received capability response for unknown request_id",
+                request_id,
+            )
             return
 
         task = self.active_tasks[request_id]
         self.logger.log(
-            "DEBUG",
+            "INFO",
             "Capability response received",
             json.dumps({"request_id": request_id, "data": message.content}),
         )

@@ -1582,11 +1582,15 @@ Examples:
             message, tool_calls = await self.ai_client.chat(messages, self.tools)
 
             self.logger.log(
-                "DEBUG",
+                "INFO",
                 f"AI response (iteration {iterations + 1})",
                 message.content if hasattr(message, "content") else str(message),
             )
-            self.logger.log("INFO", f"Tool calls received", f"Count: {len(tool_calls)}")
+            self.logger.log(
+                "INFO",
+                f"Tool calls received",
+                f"Count: {len(tool_calls) if tool_calls else 0}",
+            )  # ✅ FIXED
 
             if not tool_calls:
                 self.logger.log(
