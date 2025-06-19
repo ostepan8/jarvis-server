@@ -9,6 +9,34 @@ from . import Protocol, ProtocolStep
 from .registry import ProtocolRegistry
 
 
+def create_interactively(registry: ProtocolRegistry) -> Protocol:
+    """Prompt the user for protocol details and store it in the registry."""
+    name = input("Protocol name: ").strip()
+    description = input("Description: ").strip()
+
+    steps = []
+    while True:
+        intent = input("Step intent (blank to finish): ").strip()
+        if not intent:
+            break
+        params_str = input("Step parameters as JSON (blank for none): ").strip()
+        try:
+            parameters = json.loads(params_str) if params_str else {}
+        except json.JSONDecodeError:
+            print("Invalid JSON, using empty parameters")
+            parameters = {}
+        steps.append(ProtocolStep(intent=intent, parameters=parameters))
+
+    proto = Protocol(
+        id=str(uuid.uuid4()),
+        name=name,
+        description=description,
+        steps=steps,
+    )
+    registry.register(proto)
+    return proto
+
+
 def create_from_file(file_path: str, registry: ProtocolRegistry) -> Protocol:
     data = json.loads(Path(file_path).read_text())
     steps = [ProtocolStep(**s) for s in data.get("steps", [])]
@@ -24,11 +52,12 @@ def create_from_file(file_path: str, registry: ProtocolRegistry) -> Protocol:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Protocol builder")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub = parser.add_subparsers(dest="cmd")
 
-    create_cmd = sub.add_parser("create", help="Create protocol from JSON file")
+    create_cmd = sub.add_parser("create", help="Import protocol from JSON file")
     create_cmd.add_argument("file", help="Path to JSON definition")
 
+    sub.add_parser("interactive", help="Create protocol interactively")
     sub.add_parser("list", help="List protocols")
 
     describe_cmd = sub.add_parser("describe", help="Describe a protocol")
@@ -38,7 +67,10 @@ def main(argv: list[str] | None = None) -> None:
 
     registry = ProtocolRegistry()
 
-    if args.cmd == "create":
+    if args.cmd is None or args.cmd == "interactive":
+        proto = create_interactively(registry)
+        print(f"Created protocol {proto.name} ({proto.id})")
+    elif args.cmd == "create":
         proto = create_from_file(args.file, registry)
         print(f"Created protocol {proto.name} ({proto.id})")
     elif args.cmd == "list":
