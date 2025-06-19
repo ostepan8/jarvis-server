@@ -11,7 +11,11 @@ from .ai_clients import (
 )
 from .agents.agent_network import AgentNetwork
 from .agents.calendar_agent import CollaborativeCalendarAgent
-from .main_jarvis import JarvisSystem, create_collaborative_jarvis
+try:  # Optional import to avoid heavy dependencies during module import
+    from .main_jarvis import JarvisSystem, create_collaborative_jarvis
+except Exception:  # pragma: no cover - optional dependency may be missing
+    JarvisSystem = None
+    create_collaborative_jarvis = None
 from .protocols import Protocol, ProtocolStep
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
