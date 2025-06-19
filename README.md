@@ -38,6 +38,13 @@ Agent activity is stored in `jarvis_logs.db`. Launch the interactive viewer with
 python -m jarvis.log_viewer
 ```
 
+## Default protocols
+Several common protocols are provided under `jarvis/protocols/defaults`. To load
+them into `protocols.db` run:
+```bash
+python -m jarvis.protocols.defaults.loader
+```
+
 ## Project structure
 - `jarvis/` – main package with agent implementations and utilities
 - `server.py` – FastAPI entrypoint
