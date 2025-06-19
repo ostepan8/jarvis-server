@@ -11,7 +11,7 @@ from jarvis.logger import JarvisLogger
 class DummyAgent(NetworkAgent):
     def __init__(self):
         super().__init__("dummy")
-        self.intent_tool_map = {"dummy_cap": self.echo}
+        self.intent_map = {"dummy_cap": self.echo}
 
     @property
     def capabilities(self):
@@ -31,10 +31,10 @@ async def test_protocol_execution():
     logger = JarvisLogger()
     executor = ProtocolExecutor(network, logger)
 
-    step = ProtocolStep(intent="dummy_cap", parameters={"foo": "bar"})
-    proto = Protocol(id="1", name="test", description="", steps=[step])
+    step = ProtocolStep(intent="dummy_cap", parameters={"msg": "Hello {name}"})
+    proto = Protocol(id="1", name="test", description="", arguments={"name": "world"}, steps=[step])
 
-    result = await executor.execute(proto)
+    result = await executor.execute(proto, {"name": "Jarvis"})
     await network.stop()
 
-    assert result["dummy_cap"]["echo"] == {"foo": "bar"}
+    assert result["dummy_cap"]["echo"] == {"name": "Jarvis", "msg": "Hello Jarvis"}

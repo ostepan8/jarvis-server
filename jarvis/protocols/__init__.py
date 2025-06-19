@@ -27,6 +27,7 @@ class Protocol:
     id: str
     name: str
     description: str
+    arguments: Dict[str, Any] = field(default_factory=dict)
     steps: List[ProtocolStep] = field(default_factory=list)
 
     @classmethod
@@ -39,6 +40,7 @@ class Protocol:
             id=pid,
             name=data["name"],
             description=data.get("description", ""),
+            arguments=data.get("arguments", {}),
             steps=steps,
         )
 

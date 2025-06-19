@@ -17,6 +17,8 @@ class NetworkAgent:
         self.logger = logger or JarvisLogger()
         self.active_tasks: Dict[str, Any] = {}
         self.message_handlers: Dict[str, Callable] = {}
+        # Map intent names to bound methods for direct invocation
+        self.intent_map: Dict[str, Callable] = {}
         self._setup_base_handlers()
 
     @property

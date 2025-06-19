@@ -55,12 +55,19 @@ class ProtocolAgent(NetworkAgent):
         name = data.get("name")
         description = data.get("description", "")
         raw_steps = data.get("steps", [])
+        arguments = data.get("arguments", {}) or {}
         if not name or not isinstance(raw_steps, list):
             await self.send_error(message.from_agent, "Invalid protocol definition", message.request_id)
             return
 
         steps = [ProtocolStep(intent=s.get("intent"), parameters=s.get("parameters", {})) for s in raw_steps]
-        proto = Protocol(id=str(uuid.uuid4()), name=name, description=description, steps=steps)
+        proto = Protocol(
+            id=str(uuid.uuid4()),
+            name=name,
+            description=description,
+            arguments=arguments,
+            steps=steps,
+        )
         self.registry.register(proto)
         self._sync_registry()
         await self.send_capability_response(
@@ -91,6 +98,7 @@ class ProtocolAgent(NetworkAgent):
                 "id": proto.id,
                 "name": proto.name,
                 "description": proto.description,
+                "arguments": proto.arguments,
                 "steps": [step.__dict__ for step in proto.steps],
             },
             request_id=message.request_id,

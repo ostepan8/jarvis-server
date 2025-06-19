@@ -27,15 +27,20 @@ class ProtocolRegistry:
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     description TEXT,
+                    arguments TEXT,
                     steps TEXT
                 )
                 """
             )
+            # Backwards compatible upgrade
+            cols = [r[1] for r in self.conn.execute("PRAGMA table_info(protocols)").fetchall()]
+            if "arguments" not in cols:
+                self.conn.execute("ALTER TABLE protocols ADD COLUMN arguments TEXT")
 
     def load(self) -> None:
         self.protocols.clear()
         rows = self.conn.execute(
-            "SELECT id, name, description, steps FROM protocols"
+            "SELECT id, name, description, arguments, steps FROM protocols"
         ).fetchall()
         for row in rows:
             try:
@@ -43,10 +48,15 @@ class ProtocolRegistry:
             except Exception:
                 steps_data = []
             steps = [ProtocolStep(**step) for step in steps_data]
+            try:
+                args_data = json.loads(row["arguments"] or "{}")
+            except Exception:
+                args_data = {}
             proto = Protocol(
                 id=row["id"],
                 name=row["name"],
                 description=row["description"],
+                arguments=args_data,
                 steps=steps,
             )
             self.protocols[proto.id] = proto
@@ -55,9 +65,10 @@ class ProtocolRegistry:
         with self.conn:
             for proto in self.protocols.values():
                 steps_json = json.dumps([s.__dict__ for s in proto.steps])
+                args_json = json.dumps(proto.arguments)
                 self.conn.execute(
-                    "INSERT OR REPLACE INTO protocols (id, name, description, steps) VALUES (?, ?, ?, ?)",
-                    (proto.id, proto.name, proto.description, steps_json),
+                    "INSERT OR REPLACE INTO protocols (id, name, description, arguments, steps) VALUES (?, ?, ?, ?, ?)",
+                    (proto.id, proto.name, proto.description, args_json, steps_json),
                 )
 
     def register(self, protocol: Protocol) -> None:
