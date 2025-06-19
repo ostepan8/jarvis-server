@@ -1,0 +1,7 @@
+{
+  "name": "check_today_schedule",
+  "description": "Show events scheduled for today",
+  "steps": [
+    {"intent": "get_today_schedule", "parameters": {"command": "Check my schedule for today"}}
+  ]
+}
