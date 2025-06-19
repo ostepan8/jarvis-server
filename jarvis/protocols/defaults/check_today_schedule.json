@@ -1,7 +1,8 @@
 {
   "name": "check_today_schedule",
-  "description": "Show events scheduled for today",
+  "description": "Show events scheduled for a given day",
+  "arguments": {"day": "today"},
   "steps": [
-    {"intent": "get_today_schedule", "parameters": {"command": "Check my schedule for today"}}
+    {"intent": "get_today_schedule", "parameters": {"command": "Check my schedule for {day}"}}
   ]
 }

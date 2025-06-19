@@ -1,7 +1,8 @@
 {
   "name": "turn_lights_blue",
-  "description": "Set all connected lights to blue",
+  "description": "Set all connected lights to a color",
+  "arguments": {"color": "blue"},
   "steps": [
-    {"intent": "hue_command", "parameters": {"command": "Turn the lights blue"}}
+    {"intent": "hue_command", "parameters": {"command": "Turn the lights {color}"}}
   ]
 }
