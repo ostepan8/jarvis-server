@@ -346,6 +346,14 @@ class OrchestratorAgent(NetworkAgent):
             }
 
         # Format final response
+        self.logger.log(
+            "INFO",
+            f"Formatting final response for request {request_id}",
+            {
+                "num_results": len(result_data["results"]),
+                "history_length": len(result_data.get("context_history", [])),
+            },
+        )
         final_text = await self._format_response(
             request_id,
             result_data["results"],
