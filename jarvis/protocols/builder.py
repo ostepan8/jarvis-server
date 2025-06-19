@@ -38,14 +38,7 @@ def create_interactively(registry: ProtocolRegistry) -> Protocol:
 
 
 def create_from_file(file_path: str, registry: ProtocolRegistry) -> Protocol:
-    data = json.loads(Path(file_path).read_text())
-    steps = [ProtocolStep(**s) for s in data.get("steps", [])]
-    proto = Protocol(
-        id=str(uuid.uuid4()),
-        name=data["name"],
-        description=data.get("description", ""),
-        steps=steps,
-    )
+    proto = Protocol.from_file(file_path)
     registry.register(proto)
     return proto
 

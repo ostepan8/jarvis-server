@@ -39,10 +39,15 @@ python -m jarvis.log_viewer
 ```
 
 ## Default protocols
-Several common protocols are provided under `jarvis/protocols/defaults`. To load
-them into `protocols.db` run:
+Several common protocols are provided under `jarvis/protocols/defaults`.
+To load them into `protocols.db` run:
 ```bash
-python -m jarvis.protocols.defaults.loader
+python -m jarvis.protocols.defaults.loader load
+```
+
+You can also run a protocol directly from a JSON file:
+```bash
+python -m jarvis.protocols.defaults.loader run path/to/protocol.json
 ```
 
 ## Project structure
