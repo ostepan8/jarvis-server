@@ -7,9 +7,9 @@ import os
 import uuid
 from typing import Any, Dict, List, Optional, Set
 
-from .base import NetworkAgent
-from .message import Message
-from ..logger import JarvisLogger
+from ..base import NetworkAgent
+from ..message import Message
+from ...logger import JarvisLogger
 
 
 class ProtocolAgent(NetworkAgent):
