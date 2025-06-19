@@ -50,6 +50,39 @@ You can also run a protocol directly from a JSON file:
 python -m jarvis.protocols.defaults.loader run path/to/protocol.json
 ```
 
+### Protocol arguments
+Protocols can define an `arguments` object which specifies parameter names and default values.
+When executed, you may pass a dictionary of values that override these defaults. Parameter values
+within each step can reference arguments using Python `str.format` syntax.
+
+Example protocol definition:
+
+```json
+{
+  "name": "greet",
+  "description": "Echo a greeting twice",
+  "arguments": {"name": "world"},
+  "steps": [
+    {"intent": "dummy_cap", "parameters": {"text": "Hello {name}"}},
+    {"intent": "dummy_cap", "parameters": {"text": "Bye {name}"}}
+  ]
+}
+```
+
+Manually executing this protocol:
+
+```python
+from jarvis.protocols import ProtocolExecutor, Protocol
+from jarvis.agents.agent_network import AgentNetwork
+from jarvis.logger import JarvisLogger
+
+network = AgentNetwork()
+# register agents with `intent_map` entries...
+executor = ProtocolExecutor(network, JarvisLogger())
+proto = Protocol.from_file("greet.json")
+results = await executor.execute(proto, {"name": "Alice"})
+```
+
 ## Project structure
 - `jarvis/` – main package with agent implementations and utilities
 - `server.py` – FastAPI entrypoint

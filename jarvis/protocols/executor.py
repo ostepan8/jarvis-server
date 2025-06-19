@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any, Dict
 
 import asyncio
@@ -19,12 +18,12 @@ class ProtocolExecutor:
         self.logger = logger
 
     async def execute(
-        self, protocol: Protocol, extra_params: Dict[str, Any] | None = None
+        self, protocol: Protocol, args: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Run each step in *protocol* synchronously without AI reasoning."""
 
         results: Dict[str, Any] = {}
-        extra_params = extra_params or {}
+        args = {**protocol.arguments, **(args or {})}
 
         for step in protocol.steps:
             capability = step.intent
@@ -46,42 +45,42 @@ class ProtocolExecutor:
                 results[step.intent] = {"error": "no_provider"}
                 continue
 
-            mapping = getattr(provider, "intent_tool_map", None)
-            if mapping and capability in mapping:
-                func = mapping[capability]
-                params = {**step.parameters, **extra_params}
-                try:
-                    if asyncio.iscoroutinefunction(func):
-                        result = await func(**params)
-                    else:
-                        loop = asyncio.get_running_loop()
-                        result = await loop.run_in_executor(
-                            None, partial(func, **params)
-                        )
-                    results[step.intent] = result
-                    continue
-                except Exception as exc:  # pragma: no cover - error path
-                    self.logger.log(
-                        "ERROR",
-                        f"Error executing {capability} via tool",
-                        str(exc),
-                    )
-                    results[step.intent] = {"error": str(exc)}
-                    continue
-
-            # Fallback to legacy capability request/response
-            request_id = str(uuid.uuid4())
-            params = {**step.parameters, **extra_params}
-            await self.network.request_capability(
-                from_agent="ProtocolExecutor",
-                capability=capability,
-                data=params,
-                request_id=request_id,
+            mapping = (
+                getattr(provider, "intent_map", None)
+                or getattr(provider, "intent_tool_map", None)
             )
+            if not mapping or capability not in mapping:
+                self.logger.log(
+                    "ERROR",
+                    f"Provider '{provider.name}' lacks intent map for '{capability}'",
+                )
+                results[step.intent] = {"error": "no_handler"}
+                continue
+
+            func = mapping[capability]
+            params = {**args}
+            for k, v in step.parameters.items():
+                if isinstance(v, str):
+                    try:
+                        params[k] = v.format(**args)
+                    except Exception:
+                        params[k] = v
+                else:
+                    params[k] = v
+
             try:
-                response = await self.network.wait_for_response(request_id)
-                results[step.intent] = response
-            except Exception as exc:
+                if asyncio.iscoroutinefunction(func):
+                    result = await func(**params)
+                else:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, partial(func, **params))
+                results[step.intent] = result
+            except Exception as exc:  # pragma: no cover - error path
+                self.logger.log(
+                    "ERROR",
+                    f"Error executing {capability} via direct call",
+                    str(exc),
+                )
                 results[step.intent] = {"error": str(exc)}
 
         return results
