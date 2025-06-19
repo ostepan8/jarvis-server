@@ -11,20 +11,14 @@ from jarvis.logger import JarvisLogger
 class DummyAgent(NetworkAgent):
     def __init__(self):
         super().__init__("dummy")
-        self.received = asyncio.Queue()
+        self.intent_tool_map = {"dummy_cap": self.echo}
 
     @property
     def capabilities(self):
         return {"dummy_cap"}
 
-    async def _handle_capability_request(self, message):
-        await self.received.put(message)
-        await self.send_capability_response(
-            message.from_agent,
-            {"echo": message.content.get("data")},
-            message.request_id,
-            message.id,
-        )
+    async def echo(self, **kwargs):
+        return {"echo": kwargs}
 
 
 @pytest.mark.asyncio
