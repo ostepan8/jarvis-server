@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional, Set
 
-from .base import NetworkAgent
-from .message import Message
-from ..ai_clients import BaseAIClient
-from ..logger import JarvisLogger
-from ..utils import extract_json_from_text
+from ..base import NetworkAgent
+from ..message import Message
+from ...ai_clients import BaseAIClient
+from ...logger import JarvisLogger
+from ...utils import extract_json_from_text
 
 
 class NLUAgent(NetworkAgent):

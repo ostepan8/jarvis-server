@@ -8,10 +8,10 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Union
 from phue import Bridge
-from .base import NetworkAgent
-from .message import Message
-from ..logger import JarvisLogger
-from ..ai_clients.base import BaseAIClient
+from ..base import NetworkAgent
+from ..message import Message
+from ...logger import JarvisLogger
+from ...ai_clients.base import BaseAIClient
 
 
 class PhillipsHueAgent(NetworkAgent):

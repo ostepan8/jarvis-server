@@ -7,12 +7,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
-from .base import NetworkAgent
-from .message import Message
-from .task import Task
-from ..ai_clients import BaseAIClient
-from ..logger import JarvisLogger
-from ..utils import extract_json_from_text
+from ..base import NetworkAgent
+from ..message import Message
+from ..task import Task
+from ...ai_clients import BaseAIClient
+from ...logger import JarvisLogger
+from ...utils import extract_json_from_text
 
 
 class OrchestratorAgent(NetworkAgent):
