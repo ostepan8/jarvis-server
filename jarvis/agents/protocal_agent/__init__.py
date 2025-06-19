@@ -1,69 +1,46 @@
-# agents/protocol_agent.py
-
 from __future__ import annotations
 
-import json
-import os
 import uuid
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from ..base import NetworkAgent
 from ..message import Message
 from ...logger import JarvisLogger
+from ...protocols import Protocol, ProtocolStep
+from ...protocols.registry import ProtocolRegistry
+from ...protocols.executor import ProtocolExecutor
 
 
 class ProtocolAgent(NetworkAgent):
-    """Agent that stores, describes, and runs named multi-step protocols."""
+    """Agent that manages multi-step protocols."""
 
-    STORAGE_PATH = "protocols.json"
+    STORAGE_PATH = "protocols.db"
 
     def __init__(self, logger: Optional[JarvisLogger] = None) -> None:
         super().__init__("ProtocolAgent", logger)
-        # Load existing protocols or start empty
-        self.protocols: Dict[str, Dict[str, Any]] = self._load_protocols()
-        # Expose them to the network for NLU discovery
-        self.network and self._sync_registry()
+        self.registry = ProtocolRegistry(self.STORAGE_PATH)
+        self.executor: Optional[ProtocolExecutor] = None
+
+    def set_network(self, network) -> None:  # type: ignore[override]
+        super().set_network(network)
+        self.executor = ProtocolExecutor(network, self.logger)
+        self._sync_registry()
 
     @property
     def description(self) -> str:
-        return (
-            "Manages named multi-step protocols: define, list, describe, and run them."
-        )
+        return "Stores, describes, and executes named protocols"
 
     @property
     def capabilities(self) -> Set[str]:
-        return {
-            "define_protocol",
-            "list_protocols",
-            "describe_protocol",
-            "run_protocol",
-        }
-
-    def _load_protocols(self) -> Dict[str, Dict[str, Any]]:
-        if os.path.exists(self.STORAGE_PATH):
-            try:
-                with open(self.STORAGE_PATH, "r") as f:
-                    return json.load(f)
-            except Exception:
-                self.logger.log("ERROR", "Failed to load protocols", "")
-        return {}
-
-    def _save_protocols(self) -> None:
-        try:
-            with open(self.STORAGE_PATH, "w") as f:
-                json.dump(self.protocols, f, indent=2)
-        except Exception as e:
-            self.logger.log("ERROR", "Failed to save protocols", str(e))
+        return {"define_protocol", "list_protocols", "describe_protocol", "run_protocol"}
 
     def _sync_registry(self) -> None:
-        """Sync network.protocol_registry with current protocols."""
         if self.network:
-            self.network.protocol_registry = list(self.protocols.keys())
+            self.network.protocol_registry = list(self.registry.list_ids())
 
     async def _handle_capability_request(self, message: Message) -> None:
         cap = message.content.get("capability")
         data = message.content.get("data", {}) or {}
-        req_id = message.request_id
 
         if cap == "define_protocol":
             await self._handle_define(message, data)
@@ -73,30 +50,22 @@ class ProtocolAgent(NetworkAgent):
             await self._handle_describe(message, data)
         elif cap == "run_protocol":
             await self._handle_run(message, data)
-        else:
-            # Not our concern
-            return
 
     async def _handle_define(self, message: Message, data: Dict[str, Any]) -> None:
         name = data.get("name")
         description = data.get("description", "")
-        steps = data.get("steps", [])
-        if not name or not isinstance(steps, list):
-            await self.send_error(
-                message.from_agent, "Invalid protocol definition", message.request_id
-            )
+        raw_steps = data.get("steps", [])
+        if not name or not isinstance(raw_steps, list):
+            await self.send_error(message.from_agent, "Invalid protocol definition", message.request_id)
             return
 
-        self.protocols[name] = {
-            "description": description,
-            "steps": steps,
-        }
-        self._save_protocols()
+        steps = [ProtocolStep(intent=s.get("intent"), parameters=s.get("parameters", {})) for s in raw_steps]
+        proto = Protocol(id=str(uuid.uuid4()), name=name, description=description, steps=steps)
+        self.registry.register(proto)
         self._sync_registry()
-
         await self.send_capability_response(
             to_agent=message.from_agent,
-            result={"status": "ok", "name": name},
+            result={"status": "ok", "id": proto.id},
             request_id=message.request_id,
             original_message_id=message.id,
         )
@@ -104,70 +73,42 @@ class ProtocolAgent(NetworkAgent):
     async def _handle_list(self, message: Message) -> None:
         await self.send_capability_response(
             to_agent=message.from_agent,
-            result={"protocols": list(self.protocols.keys())},
+            result={"protocols": list(self.registry.list_ids())},
             request_id=message.request_id,
             original_message_id=message.id,
         )
 
     async def _handle_describe(self, message: Message, data: Dict[str, Any]) -> None:
-        name = data.get("protocol_name")
-        proto = self.protocols.get(name)
+        ident = data.get("protocol_name")
+        proto = self.registry.get(ident)
         if not proto:
-            await self.send_error(
-                message.from_agent, f"Unknown protocol '{name}'", message.request_id
-            )
+            await self.send_error(message.from_agent, f"Unknown protocol '{ident}'", message.request_id)
             return
 
         await self.send_capability_response(
             to_agent=message.from_agent,
             result={
-                "name": name,
-                "description": proto.get("description", ""),
-                "steps": proto.get("steps", []),
+                "id": proto.id,
+                "name": proto.name,
+                "description": proto.description,
+                "steps": [step.__dict__ for step in proto.steps],
             },
             request_id=message.request_id,
             original_message_id=message.id,
         )
 
     async def _handle_run(self, message: Message, data: Dict[str, Any]) -> None:
-        name = data.get("protocol_name")
+        ident = data.get("protocol_name")
         args = data.get("args", {}) or {}
-        proto = self.protocols.get(name)
-        if not proto:
-            await self.send_error(
-                message.from_agent, f"Unknown protocol '{name}'", message.request_id
-            )
+        proto = self.registry.get(ident)
+        if not proto or not self.executor:
+            await self.send_error(message.from_agent, f"Unknown protocol '{ident}'", message.request_id)
             return
 
-        results: Dict[str, Any] = {}
-        # Execute each step in sequence
-        for step in proto["steps"]:
-            agent_name = step.get("agent")
-            capability = step.get("capability")
-            step_args = {**step.get("args", {}), **args}
-
-            if not agent_name or not capability:
-                results.setdefault("errors", []).append(
-                    f"Invalid step in protocol '{name}': {step}"
-                )
-                continue
-
-            # Send request to the specific agent
-            step_req = str(uuid.uuid4())
-            await self.send_message(
-                to_agent=agent_name,
-                message_type="capability_request",
-                content={"capability": capability, "data": step_args},
-                request_id=step_req,
-            )
-            # Wait for its response or error
-            res = await self.network.wait_for_response(step_req)
-            results[capability] = res
-
-        # Send back the aggregated results
+        results = await self.executor.execute(proto, args)
         await self.send_capability_response(
             to_agent=message.from_agent,
-            result={"protocol": name, "results": results},
+            result={"protocol": proto.name, "results": results},
             request_id=message.request_id,
             original_message_id=message.id,
         )

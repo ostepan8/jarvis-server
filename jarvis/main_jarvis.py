@@ -61,14 +61,15 @@ class JarvisSystem:
 
         # 4) ProtocolAgent (for managing protocols)
         self.protocal_agent = ProtocolAgent(self.logger)
-
+        
         # 5) LightsAgent (for smart home control)
         load_dotenv()
         BRIDGE_IP = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=BRIDGE_IP)
         self.network.register_agent(self.lights_agent)
 
-        # self.network.register_agent(self.protocal_agent)
+        # Register protocol agent after other providers so capability map exists
+        self.network.register_agent(self.protocal_agent)
 
         # Start the message processing loop
         await self.network.start()
@@ -126,10 +127,6 @@ class JarvisSystem:
             return await self.orchestrator.process_user_request(user_input, tz_name)
 
         if intent == "run_protocol":
-            # placeholder for ProtocolAgent.run_protocol()
-            return {"response": f"[Protocol run: {proto}]"}
-
-        if intent == "define_protocol":
             run_id = str(uuid.uuid4())
             await self.network.request_capability(
                 from_agent=self.nlu_agent.name,
@@ -139,7 +136,7 @@ class JarvisSystem:
             )
             result = await self.network.wait_for_response(run_id)
             return {"response": result}
-            # placeholder for ProtocolAgent.create_protocol()
+
         if intent == "define_protocol":
             define_id = str(uuid.uuid4())
             await self.network.request_capability(
