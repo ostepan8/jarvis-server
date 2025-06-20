@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .agents.agent_network import AgentNetwork
 from .agents.nlu_agent import NLUAgent
-from .agents.protocal_agent import ProtocolAgent
+from .agents.protocol_agent import ProtocolAgent
 from .agents.lights_agent import PhillipsHueAgent
 from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
@@ -37,7 +37,7 @@ class JarvisSystem:
         self.orchestrator: OrchestratorAgent = None
         self.calendar_service: CalendarService = None
         self.lights_agent: PhillipsHueAgent = None
-        self.protocal_agent: ProtocalAgent = None  # type: ignore
+        self.protocol_agent: ProtocolAgent | None = None
 
         # Protocol system components
         self.protocol_registry = ProtocolRegistry()
@@ -71,7 +71,7 @@ class JarvisSystem:
         self.network.register_agent(calendar_agent)
 
         # 4) ProtocolAgent (for managing protocols)
-        self.protocal_agent = ProtocolAgent(self.logger)
+        self.protocol_agent = ProtocolAgent(self.logger)
 
         # 5) LightsAgent (for smart home control)
         load_dotenv()
@@ -80,7 +80,7 @@ class JarvisSystem:
         self.network.register_agent(self.lights_agent)
 
         # Register protocol agent after other providers so capability map exists
-        self.network.register_agent(self.protocal_agent)
+        self.network.register_agent(self.protocol_agent)
 
         # Initialize protocol system components
         self.protocol_executor = ProtocolExecutor(self.network, self.logger)
