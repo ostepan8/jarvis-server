@@ -15,9 +15,13 @@ if TYPE_CHECKING:
 class AgentNetwork:
     """Central message broker for agent communication."""
 
-    def __init__(self, logger: Optional[JarvisLogger] = None) -> None:
+    def __init__(
+        self,
+        logger: Optional[JarvisLogger] = None,
+        queue_maxsize: int = 1000,
+    ) -> None:
         self.agents: Dict[str, NetworkAgent] = {}
-        self.message_queue: asyncio.Queue = asyncio.Queue()
+        self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
         self.capability_registry: Dict[str, List[str]] = {}
         self.logger = logger or JarvisLogger()
         self._running = False
