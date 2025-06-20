@@ -22,7 +22,8 @@ class CollaborativeCalendarAgent(NetworkAgent):
         super().__init__("CalendarAgent", logger)
         self.calendar_service = calendar_service
         self.ai_client = ai_client
-        print("USING THE OTHER CALENDAR AGENT :()")
+        # Log initialization instead of printing to stdout
+        self.logger.log("DEBUG", "Initialized CollaborativeCalendarAgent")
 
         # Tools and prompt for natural language commands
         self.tools = [
