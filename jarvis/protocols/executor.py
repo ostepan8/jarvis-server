@@ -17,6 +17,12 @@ class ProtocolExecutor:
         self.network = network
         self.logger = logger
 
+    async def run_protocol(
+        self, protocol: Protocol, arguments: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        """Public helper to execute a protocol."""
+        return await self.execute(protocol, arguments)
+
     async def execute(
         self, protocol: Protocol, context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:

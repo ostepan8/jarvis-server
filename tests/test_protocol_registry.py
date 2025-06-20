@@ -33,3 +33,19 @@ def test_register_duplicate_triggers(tmp_path):
     assert result == {"success": False, "reason": "Duplicate trigger phrases"}
     assert registry.get("2") is None
     registry.close()
+
+
+def test_find_matching_protocol(tmp_path):
+    registry = ProtocolRegistry(db_path=str(tmp_path / "db.sqlite"))
+    proto1 = make_protocol("1", "Sleep Mode", ["sleep mode", "goodnight"])
+    proto2 = make_protocol("2", "Movie Mode", ["movie mode", "start movie mode"])
+    registry.register(proto1)
+    registry.register(proto2)
+
+    match = registry.find_matching_protocol("Start movie mode")
+    assert match is not None
+    assert match.name == "Movie Mode"
+
+    no_match = registry.find_matching_protocol("unknown command")
+    assert no_match is None
+    registry.close()

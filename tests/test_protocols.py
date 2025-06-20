@@ -34,7 +34,7 @@ async def test_protocol_execution():
     step = ProtocolStep(agent="dummy", function="dummy_cap", parameters={"msg": "Hello {name}"})
     proto = Protocol(id="1", name="test", description="", arguments={"name": "world"}, steps=[step])
 
-    result = await executor.execute(proto, {"name": "Jarvis"})
+    result = await executor.run_protocol(proto, {"name": "Jarvis"})
     await network.stop()
 
     assert result["step_0_dummy_cap"]["echo"] == {"msg": "Hello {name}"}

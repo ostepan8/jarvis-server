@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Dict, Iterable, Optional, List
+import re
 
 from . import Protocol, ProtocolStep
 
@@ -120,6 +121,32 @@ class ProtocolRegistry:
         self.protocols[protocol.id] = protocol
         self.save()
         return {"success": True, "id": protocol.id}
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        """Lowercase and remove punctuation for comparison."""
+        text = text.lower().strip()
+        text = re.sub(r"[\W_]+", " ", text)
+        return " ".join(text.split())
+
+    def find_matching_protocol(self, user_input: str) -> Optional[Protocol]:
+        """Find a protocol whose trigger phrase matches the given input."""
+        normalized_input = self._normalize_text(user_input)
+
+        # First try exact matches
+        for proto in self.protocols.values():
+            for phrase in proto.trigger_phrases:
+                if self._normalize_text(phrase) == normalized_input:
+                    return proto
+
+        # Fallback: partial match
+        for proto in self.protocols.values():
+            for phrase in proto.trigger_phrases:
+                norm_phrase = self._normalize_text(phrase)
+                if norm_phrase and norm_phrase in normalized_input:
+                    return proto
+
+        return None
 
     def get(self, identifier: str) -> Optional[Protocol]:
         if identifier in self.protocols:
