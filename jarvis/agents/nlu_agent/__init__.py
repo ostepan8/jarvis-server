@@ -77,8 +77,14 @@ class NLUAgent(NetworkAgent):
         classification["raw"] = user_input
         self.logger.log("INFO", "NLU classification result", classification)
 
-        print(
-            f"NLUAgent sending response to {message.from_agent}. Classification: {json.dumps(classification, indent=2)}. Request ID: {message.request_id}"
+        self.logger.log(
+            "DEBUG",
+            "NLUAgent sending response",
+            {
+                "to_agent": message.from_agent,
+                "classification": classification,
+                "request_id": message.request_id,
+            },
         )
         await self.send_capability_response(
             to_agent=message.from_agent,
