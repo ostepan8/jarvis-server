@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
+import types
 
 import httpx
 
@@ -19,6 +20,18 @@ class CalendarService:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
         self.client = httpx.AsyncClient()
+
+    async def __aenter__(self) -> "CalendarService":
+        """Allow use as an async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[types.TracebackType],
+    ) -> None:
+        await self.close()
 
     def _format_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize event structure returned by the API."""
