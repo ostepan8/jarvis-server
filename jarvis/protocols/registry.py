@@ -51,7 +51,17 @@ class ProtocolRegistry:
     def load(self, directory: Path | None = None) -> None:
         self.protocols.clear()
         if directory is not None:
-            # … unchanged …
+            directory = Path(directory)
+            if not directory.exists():
+                print(f"Directory {directory} does not exist")
+                return
+
+            for json_file in directory.glob("*.json"):
+                try:
+                    protocol = Protocol.from_file(json_file)
+                    self.register(protocol)
+                except Exception as e:
+                    print(f"Failed to load protocol from {json_file}: {e}")
             return
 
         rows = self.conn.execute(
