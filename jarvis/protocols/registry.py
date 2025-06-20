@@ -131,21 +131,32 @@ class ProtocolRegistry:
 
     def find_matching_protocol(self, user_input: str) -> Optional[Protocol]:
         """Find a protocol whose trigger phrase matches the given input."""
+        print(f"Finding protocol for input: '{user_input}'")
         normalized_input = self._normalize_text(user_input)
+        print(f"Normalized input: '{normalized_input}'")
 
         # First try exact matches
+        print("Trying exact matches:")
         for proto in self.protocols.values():
+            print(f"  Checking protocol: {proto.id} ({proto.name})")
             for phrase in proto.trigger_phrases:
-                if self._normalize_text(phrase) == normalized_input:
+                norm_phrase = self._normalize_text(phrase)
+                print(f"    Comparing with trigger: '{phrase}' -> '{norm_phrase}'")
+                if norm_phrase == normalized_input:
+                    print(f"    EXACT MATCH FOUND: {proto.id}")
                     return proto
 
         # Fallback: partial match
+        print("Trying partial matches:")
         for proto in self.protocols.values():
             for phrase in proto.trigger_phrases:
                 norm_phrase = self._normalize_text(phrase)
+                print(f"    Checking if '{norm_phrase}' in '{normalized_input}'")
                 if norm_phrase and norm_phrase in normalized_input:
+                    print(f"    PARTIAL MATCH FOUND: {proto.id}")
                     return proto
 
+        print("No matching protocol found")
         return None
 
     def get(self, identifier: str) -> Optional[Protocol]:
