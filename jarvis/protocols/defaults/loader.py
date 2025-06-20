@@ -31,32 +31,33 @@ def register_protocols_from_directory(
     else:
         directory = Path(directory)
 
+    logger = logger or JarvisLogger()
+
     if not directory.exists():
-        print(f"Directory {directory} does not exist!")
+        logger.log("ERROR", "Directory does not exist", str(directory))
         return
 
     json_files = list(directory.glob("*.json"))
-    print(f"Found {len(json_files)} JSON files in {directory}")
+    logger.log("INFO", f"Found {len(json_files)} JSON files", str(directory))
 
     for file_path in json_files:
         try:
-            print(f"Loading {file_path.name}...")
+            logger.log("INFO", f"Loading {file_path.name}...")
             proto = Protocol.from_file(file_path)
             result = registry.register(proto)
-            logger = logger or JarvisLogger()
-            if result.get("success") is True and logger is not None:
+            if result.get("success") is True:
                 logger.log("INFO", f"Registered protocol: {proto.name} ({proto.id})")
-            elif result.get("success") is False and logger is not None:
+            elif result.get("success") is False:
                 logger.log(
                     "ERROR",
-                    f"Failed to register protocol {proto.name}: {result.get("reason")}",
+                    f"Failed to register protocol {proto.name}: {result.get('reason')}",
                 )
 
         except Exception as e:
-            print(f"  ✗ Failed to load {file_path.name}: {e}")
+            logger.log("ERROR", f"Failed to load {file_path.name}", str(e))
 
 
-async def execute_protocol_file(file_path: str) -> None:
+async def execute_protocol_file(file_path: str, logger: JarvisLogger | None = None) -> None:
     """
     Execute a protocol defined in the specified JSON file using a collaborative Jarvis instance.
 
@@ -66,38 +67,36 @@ async def execute_protocol_file(file_path: str) -> None:
     Returns:
         Prints execution results as formatted JSON
     """
-    print(f"Loading protocol from {file_path}...")
+    logger = logger or JarvisLogger()
+    logger.log("INFO", f"Loading protocol from {file_path}...")
     jarvis = await create_collaborative_jarvis()
     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
     proto = Protocol.from_file(file_path)
-    print(f"Executing protocol: {proto.name}")
+    logger.log("INFO", f"Executing protocol: {proto.name}")
     results = await executor.execute(proto)
-    print("\nResults:")
-    print(json.dumps(results, indent=2))
+    logger.log("INFO", "Results", results)
     await jarvis.shutdown()
 
 
-async def execute_protocol_by_name(name: str) -> None:
+async def execute_protocol_by_name(name: str, logger: JarvisLogger | None = None) -> None:
     """
     Execute a protocol by name using voice trigger matching.
 
     Args:
         name: Protocol name or voice trigger phrase
     """
+    logger = logger or JarvisLogger()
     jarvis = await create_collaborative_jarvis()
 
     # Try to find a matching protocol
     matched_protocol = jarvis.voice_matcher.match_command(name)
     if matched_protocol:
-        print(f"Matched protocol: {matched_protocol.name}")
+        logger.log("INFO", f"Matched protocol: {matched_protocol.name}")
         results = await jarvis.protocol_executor.execute(matched_protocol)
-        print("\nResults:")
-        print(json.dumps(results, indent=2))
+        logger.log("INFO", "Results", results)
     else:
-        print(f"No protocol found matching '{name}'")
-        print("\nAvailable triggers:")
-        for trigger, proto_name in jarvis.voice_matcher.get_all_triggers().items():
-            print(f"  - '{trigger}' → {proto_name}")
+        logger.log("WARNING", f"No protocol found matching '{name}'")
+        logger.log("INFO", "Available triggers", jarvis.voice_matcher.get_all_triggers())
 
     await jarvis.shutdown()
 

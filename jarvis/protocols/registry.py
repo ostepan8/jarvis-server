@@ -6,14 +6,18 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional, List
 import re
 
+from ..logger import JarvisLogger
 from . import Protocol, ProtocolStep
 
 
 class ProtocolRegistry:
     """Stores and retrieves Protocol definitions using SQLite."""
 
-    def __init__(self, db_path: str = "protocols.db") -> None:
+    def __init__(
+        self, db_path: str = "protocols.db", logger: JarvisLogger | None = None
+    ) -> None:
         self.db_path = Path(db_path)
+        self.logger = logger or JarvisLogger()
         self.conn: sqlite3.Connection = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._ensure_table()
@@ -72,7 +76,11 @@ class ProtocolRegistry:
                 trigger_phrases=triggers,  # <<< new
             )
             self.protocols[proto.id] = proto
-            print(f"Loaded protocol: {proto.id} – {proto.name}")
+            self.logger.log(
+                "DEBUG",
+                "Protocol loaded",
+                f"{proto.id} - {proto.name}",
+            )
 
     def save(self) -> None:
         with self.conn:
@@ -140,18 +148,34 @@ class ProtocolRegistry:
     def find_matching_protocol(self, user_input: str) -> Optional[Protocol]:
         """Find a protocol whose trigger phrase exactly matches the given input."""
         normalized_input = self._normalize_text(user_input)
-        print(f"Looking for protocol matching: '{normalized_input}'")
+        self.logger.log(
+            "DEBUG",
+            "Looking for protocol matching",
+            normalized_input,
+        )
 
         for proto in self.protocols.values():
-            print(f"Checking protocol {proto.id}: {proto.name}")
+            self.logger.log(
+                "DEBUG",
+                "Checking protocol",
+                f"{proto.id}: {proto.name}",
+            )
             for phrase in proto.trigger_phrases:
                 norm_phrase = self._normalize_text(phrase)
-                print(f"  Comparing with trigger: '{norm_phrase}'")
+                self.logger.log(
+                    "DEBUG",
+                    "Comparing with trigger",
+                    norm_phrase,
+                )
                 if norm_phrase == normalized_input:
-                    print(f"Found matching protocol: {proto.id}")
+                    self.logger.log(
+                        "DEBUG",
+                        "Found matching protocol",
+                        proto.id,
+                    )
                     return proto
 
-        print("No matching protocol found")
+        self.logger.log("DEBUG", "No matching protocol found")
         return None
 
     def get(self, identifier: str) -> Optional[Protocol]:
