@@ -21,6 +21,17 @@ class ProtocolRegistry:
         self.load()
 
     def _ensure_table(self) -> None:
+        """Ensure the SQLite table for protocols exists.
+
+        Columns:
+            id              TEXT PRIMARY KEY
+            name            TEXT
+            description     TEXT
+            arguments       TEXT  -- JSON mapping of argument definitions
+            steps           TEXT  -- JSON list of ProtocolStep definitions
+            trigger_phrases TEXT  -- JSON list of phrases that activate the protocol
+        """
+
         with self.conn:
             self.conn.execute(
                 """
@@ -29,8 +40,8 @@ class ProtocolRegistry:
                     name TEXT,
                     description TEXT,
                     arguments TEXT,
-                    steps TEXT
-                    -- no trigger_phrases yet
+                    steps TEXT,
+                    trigger_phrases TEXT
                 )
                 """
             )
