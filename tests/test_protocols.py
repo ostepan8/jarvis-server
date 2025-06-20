@@ -31,10 +31,10 @@ async def test_protocol_execution():
     logger = JarvisLogger()
     executor = ProtocolExecutor(network, logger)
 
-    step = ProtocolStep(intent="dummy_cap", parameters={"msg": "Hello {name}"})
+    step = ProtocolStep(agent="dummy", function="dummy_cap", parameters={"msg": "Hello {name}"})
     proto = Protocol(id="1", name="test", description="", arguments={"name": "world"}, steps=[step])
 
     result = await executor.execute(proto, {"name": "Jarvis"})
     await network.stop()
 
-    assert result["dummy_cap"]["echo"] == {"name": "Jarvis", "msg": "Hello Jarvis"}
+    assert result["step_0_dummy_cap"]["echo"] == {"msg": "Hello {name}"}

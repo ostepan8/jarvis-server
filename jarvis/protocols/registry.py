@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, List
 
 from . import Protocol, ProtocolStep
 
@@ -37,8 +37,21 @@ class ProtocolRegistry:
             if "arguments" not in cols:
                 self.conn.execute("ALTER TABLE protocols ADD COLUMN arguments TEXT")
 
-    def load(self) -> None:
+    def load(self, directory: Path | None = None) -> None:
+        """Load protocols from the database or a directory of JSON files."""
         self.protocols.clear()
+
+        if directory is not None:
+            directory = Path(directory)
+            for file_path in directory.glob("*.json"):
+                try:
+                    proto = Protocol.from_file(file_path)
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    print(f"Failed to load {file_path}: {e}")
+                    continue
+                self.register(proto)
+            return
+
         rows = self.conn.execute(
             "SELECT id, name, description, arguments, steps FROM protocols"
         ).fetchall()
@@ -71,9 +84,41 @@ class ProtocolRegistry:
                     (proto.id, proto.name, proto.description, args_json, steps_json),
                 )
 
-    def register(self, protocol: Protocol) -> None:
+    @staticmethod
+    def normalize_trigger_phrases(phrases: List[str]) -> List[str]:
+        """Normalize trigger phrases by trimming, lowercasing and sorting."""
+        unique = {p.strip().lower() for p in phrases}
+        return sorted(unique)
+
+    def is_duplicate(self, protocol: Protocol) -> bool:
+        """Check if protocol duplicates an existing one by name or triggers."""
+        name_key = protocol.name.strip().lower()
+        triggers_key = self.normalize_trigger_phrases(protocol.trigger_phrases)
+        for proto in self.protocols.values():
+            if proto.name.strip().lower() == name_key:
+                return True
+            if self.normalize_trigger_phrases(proto.trigger_phrases) == triggers_key:
+                return True
+        return False
+
+    def register(self, protocol: Protocol) -> dict:
+        """Register a protocol if not a duplicate."""
+        name_key = protocol.name.strip().lower()
+        triggers_key = self.normalize_trigger_phrases(protocol.trigger_phrases)
+
+        for proto in self.protocols.values():
+            if proto.name.strip().lower() == name_key:
+                print(f"⚠️ Protocol '{protocol.name}' already exists. Skipping.")
+                return {"success": False, "reason": "Duplicate name"}
+
+        for proto in self.protocols.values():
+            if self.normalize_trigger_phrases(proto.trigger_phrases) == triggers_key:
+                print(f"⚠️ Protocol '{protocol.name}' already exists. Skipping.")
+                return {"success": False, "reason": "Duplicate trigger phrases"}
+
         self.protocols[protocol.id] = protocol
         self.save()
+        return {"success": True, "id": protocol.id}
 
     def get(self, identifier: str) -> Optional[Protocol]:
         if identifier in self.protocols:
