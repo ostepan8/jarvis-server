@@ -33,7 +33,10 @@ class ProtocolRegistry:
                 """
             )
             # Backwards compatible upgrade
-            cols = [r[1] for r in self.conn.execute("PRAGMA table_info(protocols)").fetchall()]
+            cols = [
+                r[1]
+                for r in self.conn.execute("PRAGMA table_info(protocols)").fetchall()
+            ]
             if "arguments" not in cols:
                 self.conn.execute("ALTER TABLE protocols ADD COLUMN arguments TEXT")
 
@@ -108,12 +111,10 @@ class ProtocolRegistry:
 
         for proto in self.protocols.values():
             if proto.name.strip().lower() == name_key:
-                print(f"⚠️ Protocol '{protocol.name}' already exists. Skipping.")
                 return {"success": False, "reason": "Duplicate name"}
 
         for proto in self.protocols.values():
             if self.normalize_trigger_phrases(proto.trigger_phrases) == triggers_key:
-                print(f"⚠️ Protocol '{protocol.name}' already exists. Skipping.")
                 return {"success": False, "reason": "Duplicate trigger phrases"}
 
         self.protocols[protocol.id] = protocol

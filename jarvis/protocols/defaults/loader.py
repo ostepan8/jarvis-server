@@ -10,10 +10,13 @@ from .. import Protocol
 from ..registry import ProtocolRegistry
 from ..executor import ProtocolExecutor
 from ...main_jarvis import create_collaborative_jarvis
+from ...logger import JarvisLogger
 
 
 def register_protocols_from_directory(
-    registry: ProtocolRegistry, directory: str | Path | None = None
+    registry: ProtocolRegistry,
+    directory: str | Path | None = None,
+    logger: JarvisLogger | None = None,
 ) -> None:
     """
     Discover and register all protocol definitions from JSON files in the specified directory.
@@ -39,8 +42,16 @@ def register_protocols_from_directory(
         try:
             print(f"Loading {file_path.name}...")
             proto = Protocol.from_file(file_path)
-            registry.register(proto)
-            print(f"  ✓ Loaded: {proto.name} - {proto.description}")
+            result = registry.register(proto)
+            logger = logger or JarvisLogger()
+            if result.get("success") is True and logger is not None:
+                logger.log("INFO", f"Registered protocol: {proto.name} ({proto.id})")
+            elif result.get("success") is False and logger is not None:
+                logger.log(
+                    "ERROR",
+                    f"Failed to register protocol {proto.name}: {result.get("reason")}",
+                )
+
         except Exception as e:
             print(f"  ✗ Failed to load {file_path.name}: {e}")
 
@@ -128,7 +139,10 @@ def launch_protocol_management_cli() -> None:
             ).strip()
             if not directory:
                 directory = None
-            register_protocols_from_directory(registry, directory)
+            register_protocols_from_directory(
+                registry,
+                directory,
+            )
             print(f"\nTotal protocols in registry: {len(registry.protocols)}")
 
         elif choice == "2":

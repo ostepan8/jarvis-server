@@ -1,5 +1,5 @@
 .env*
-jarvis_logs.db
+*.db
 
 
 __pycache__/

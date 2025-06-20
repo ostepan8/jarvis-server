@@ -107,12 +107,19 @@ class JarvisSystem:
         for json_file in directory.glob("*.json"):
             try:
                 protocol = Protocol.from_file(json_file)
-                self.protocol_registry.register(protocol)
-                self.logger.log(
-                    "INFO",
-                    f"Loaded protocol: {protocol.name}",
-                    f"Triggers: {protocol.trigger_phrases}",
-                )
+                result = self.protocol_registry.register(protocol)
+                if result.get("success") is True:
+                    self.logger.log(
+                        "INFO",
+                        f"Loaded protocol: {protocol.name}",
+                        f"Triggers: {protocol.trigger_phrases}",
+                    )
+                elif result.get("success") is False:
+                    self.logger.log(
+                        "WARNING",
+                        f"Failed to register protocol: {protocol.name}. Reason: {result.reason}",
+                        result.message,
+                    )
             except Exception as e:
                 self.logger.log(
                     "ERROR", f"Failed to load protocol from {json_file}", str(e)
