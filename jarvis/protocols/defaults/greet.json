@@ -1,9 +1,0 @@
-{
-  "name": "greet",
-  "description": "Echo a greeting twice",
-  "arguments": {"name": "world"},
-  "steps": [
-    {"intent": "dummy_cap", "parameters": {"text": "Hello {name}"}},
-    {"intent": "dummy_cap", "parameters": {"text": "Bye {name}"}}
-  ]
-}

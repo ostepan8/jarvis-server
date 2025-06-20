@@ -1,23 +1,33 @@
+# protocols/__init__.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Callable
 
 
 @dataclass
 class ProtocolStep:
-    """Single step inside a protocol."""
+    """Single step inside a protocol - directly maps to a function call."""
 
-    intent: str
+    agent: str  # Which agent provides this capability
+    function: str  # Exact function name in the agent's intent_map
     parameters: Dict[str, Any] = field(default_factory=dict)
+
+    # Optional: for dynamic parameters that depend on previous step results
+    parameter_mappings: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ProtocolStep":
         """Create a step from a mapping."""
-        return cls(intent=data.get("intent"), parameters=data.get("parameters", {}))
+        return cls(
+            agent=data["agent"],
+            function=data["function"],
+            parameters=data.get("parameters", {}),
+            parameter_mappings=data.get("parameter_mappings", {}),
+        )
 
 
 @dataclass
@@ -27,11 +37,14 @@ class Protocol:
     id: str
     name: str
     description: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: Dict[str, Any] = field(default_factory=dict)  # For protocol parameters
+    trigger_phrases: List[str] = field(default_factory=list)  # For voice activation
     steps: List[ProtocolStep] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], protocol_id: str | None = None) -> "Protocol":
+    def from_dict(
+        cls, data: Dict[str, Any], protocol_id: str | None = None
+    ) -> "Protocol":
         """Create a Protocol from a mapping."""
         steps_data = data.get("steps", [])
         steps = [ProtocolStep.from_dict(s) for s in steps_data]
@@ -40,7 +53,8 @@ class Protocol:
             id=pid,
             name=data["name"],
             description=data.get("description", ""),
-            arguments=data.get("arguments", {}),
+            arguments=data.get("arguments", {}),  # Handle missing arguments field
+            trigger_phrases=data.get("trigger_phrases", [data["name"]]),
             steps=steps,
         )
 

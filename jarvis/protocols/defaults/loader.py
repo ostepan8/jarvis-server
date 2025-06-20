@@ -20,16 +20,29 @@ def register_protocols_from_directory(
 
     Args:
         registry: The protocol registry to populate
-        directory: Directory containing JSON protocol definitions (defaults to this module's directory)
+        directory: Directory containing JSON protocol definitions (defaults to protocols/definitions/)
     """
     if directory is None:
-        directory = Path(__file__).parent
+        # Default to protocols/definitions/ directory
+        directory = Path(__file__).parent / "definitions"
     else:
         directory = Path(directory)
 
-    for file_path in directory.glob("*.json"):
-        proto = Protocol.from_file(file_path)
-        registry.register(proto)
+    if not directory.exists():
+        print(f"Directory {directory} does not exist!")
+        return
+
+    json_files = list(directory.glob("*.json"))
+    print(f"Found {len(json_files)} JSON files in {directory}")
+
+    for file_path in json_files:
+        try:
+            print(f"Loading {file_path.name}...")
+            proto = Protocol.from_file(file_path)
+            registry.register(proto)
+            print(f"  ✓ Loaded: {proto.name} - {proto.description}")
+        except Exception as e:
+            print(f"  ✗ Failed to load {file_path.name}: {e}")
 
 
 async def execute_protocol_file(file_path: str) -> None:
@@ -42,11 +55,39 @@ async def execute_protocol_file(file_path: str) -> None:
     Returns:
         Prints execution results as formatted JSON
     """
+    print(f"Loading protocol from {file_path}...")
     jarvis = await create_collaborative_jarvis()
     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
     proto = Protocol.from_file(file_path)
+    print(f"Executing protocol: {proto.name}")
     results = await executor.execute(proto)
+    print("\nResults:")
     print(json.dumps(results, indent=2))
+    await jarvis.shutdown()
+
+
+async def execute_protocol_by_name(name: str) -> None:
+    """
+    Execute a protocol by name using voice trigger matching.
+
+    Args:
+        name: Protocol name or voice trigger phrase
+    """
+    jarvis = await create_collaborative_jarvis()
+
+    # Try to find a matching protocol
+    matched_protocol = jarvis.voice_matcher.match_command(name)
+    if matched_protocol:
+        print(f"Matched protocol: {matched_protocol.name}")
+        results = await jarvis.protocol_executor.execute(matched_protocol)
+        print("\nResults:")
+        print(json.dumps(results, indent=2))
+    else:
+        print(f"No protocol found matching '{name}'")
+        print("\nAvailable triggers:")
+        for trigger, proto_name in jarvis.voice_matcher.get_all_triggers().items():
+            print(f"  - '{trigger}' → {proto_name}")
+
     await jarvis.shutdown()
 
 
@@ -60,48 +101,71 @@ def launch_protocol_management_cli() -> None:
     - Viewing protocol details and listings
     """
     registry = ProtocolRegistry()
-    parser = argparse.ArgumentParser(description="Protocol Management CLI")
-    args = parser.parse_args()
+
+    # Try to load protocols on startup
+    print("Loading protocols from registry database...")
+    registry.load()
+    print(f"Loaded {len(registry.protocols)} protocols from database")
 
     while True:
-        print("\nProtocol Management CLI")
-        print("1. Load protocols into registry")
+        print("\n" + "=" * 50)
+        print("Protocol Management CLI")
+        print("=" * 50)
+        print("1. Load protocols from definitions directory")
         print("2. Run protocol from registry")
         print("3. Run protocol from JSON file")
-        print("4. View details of a protocol")
-        print("5. List all protocols in registry")
-        print("6. Exit")
+        print("4. Execute protocol by voice trigger")
+        print("5. View protocol details")
+        print("6. List all protocols in registry")
+        print("7. List all voice triggers")
+        print("8. Exit")
 
-        choice = input("\nEnter your choice (1-6): ")
+        choice = input("\nEnter your choice (1-8): ")
 
         if choice == "1":
-            register_protocols_from_directory(registry)
-            print(f"Loaded {len(registry.protocols)} protocols into registry")
+            directory = input(
+                "Enter directory path (press Enter for default): "
+            ).strip()
+            if not directory:
+                directory = None
+            register_protocols_from_directory(registry, directory)
+            print(f"\nTotal protocols in registry: {len(registry.protocols)}")
 
         elif choice == "2":
             if not registry.protocols:
                 print("No protocols in registry. Please load protocols first.")
                 continue
 
-            print("Available protocols:")
-            for i, proto_id in enumerate(registry.protocols.keys(), 1):
-                proto = registry.protocols[proto_id]
-                print(f"{i}. {proto.name} (ID: {proto.id})")
+            print("\nAvailable protocols:")
+            protocols_list = list(registry.protocols.items())
+            for i, (proto_id, proto) in enumerate(protocols_list, 1):
+                print(f"{i}. {proto.name} - {proto.description}")
+                print(f"   Triggers: {', '.join(proto.trigger_phrases)}")
 
-            proto_index = input("Enter protocol number to run: ")
+            proto_index = input("\nEnter protocol number to run: ")
             try:
                 proto_index = int(proto_index) - 1
-                proto_id = list(registry.protocols.keys())[proto_index]
-                proto = registry.protocols[proto_id]
-                jarvis = asyncio.run(create_collaborative_jarvis())
-                executor = ProtocolExecutor(jarvis.network, jarvis.logger)
-                results = asyncio.run(executor.execute(proto))
+                proto_id, proto = protocols_list[proto_index]
+
+                print(f"\nExecuting protocol: {proto.name}")
+
+                async def run_protocol():
+                    jarvis = await create_collaborative_jarvis()
+                    executor = ProtocolExecutor(jarvis.network, jarvis.logger)
+                    results = await executor.execute(proto)
+                    await jarvis.shutdown()
+                    return results
+
+                results = asyncio.run(run_protocol())
+                print("\nResults:")
                 print(json.dumps(results, indent=2))
-                asyncio.run(jarvis.shutdown())
             except (ValueError, IndexError) as e:
                 print(f"Invalid selection: {e}")
             except Exception as e:
                 print(f"Error running protocol: {e}")
+                import traceback
+
+                traceback.print_exc()
 
         elif choice == "3":
             file_path = input("Enter path to protocol JSON file: ")
@@ -109,34 +173,76 @@ def launch_protocol_management_cli() -> None:
                 asyncio.run(execute_protocol_file(file_path))
             except Exception as e:
                 print(f"Error running protocol: {e}")
+                import traceback
+
+                traceback.print_exc()
 
         elif choice == "4":
-            file_path = input("Enter path to protocol JSON file: ")
+            trigger = input("Enter voice trigger phrase (e.g., 'lights off'): ")
             try:
-                protocol = Protocol.from_file(file_path)
-                print(f"Protocol ID: {protocol.id}")
-                print(f"Name: {protocol.name}")
-                print(f"Description: {protocol.description}")
-                print(f"Steps ({len(protocol.steps)}):")
-                for i, step in enumerate(protocol.steps, 1):
-                    print(f"  {i}. {step.intent}")
-                    if step.parameters:
-                        print(
-                            f"     Parameters: {json.dumps(step.parameters, indent=2)}"
-                        )
+                asyncio.run(execute_protocol_by_name(trigger))
             except Exception as e:
-                print(f"Error loading protocol: {e}")
+                print(f"Error executing protocol: {e}")
+                import traceback
+
+                traceback.print_exc()
 
         elif choice == "5":
+            if not registry.protocols:
+                print("No protocols in registry.")
+                continue
+
+            print("\nEnter protocol name or ID:")
+            identifier = input().strip()
+
+            proto = registry.get(identifier)
+            if proto:
+                print(f"\nProtocol Details:")
+                print(f"ID: {proto.id}")
+                print(f"Name: {proto.name}")
+                print(f"Description: {proto.description}")
+                print(f"Trigger phrases: {', '.join(proto.trigger_phrases)}")
+                print(f"Steps ({len(proto.steps)}):")
+                for i, step in enumerate(proto.steps, 1):
+                    print(f"  {i}. Agent: {step.agent}, Function: {step.function}")
+                    if step.parameters:
+                        print(
+                            f"     Parameters: {json.dumps(step.parameters, indent=8)}"
+                        )
+                    if step.parameter_mappings:
+                        print(
+                            f"     Mappings: {json.dumps(step.parameter_mappings, indent=8)}"
+                        )
+            else:
+                print(f"Protocol '{identifier}' not found")
+
+        elif choice == "6":
             if not registry.protocols:
                 print("No protocols in registry. Please load protocols first.")
                 continue
 
-            print("Protocols in registry:")
+            print("\nProtocols in registry:")
             for proto_id, proto in registry.protocols.items():
-                print(f"- {proto.name} (ID: {proto.id})")
+                print(f"\n{proto.name} (ID: {proto.id})")
+                print(f"  Description: {proto.description}")
+                print(f"  Triggers: {', '.join(proto.trigger_phrases)}")
+                print(f"  Steps: {len(proto.steps)}")
 
-        elif choice == "6":
+        elif choice == "7":
+            if not registry.protocols:
+                print("No protocols loaded.")
+                continue
+
+            print("\nAll voice triggers:")
+            all_triggers = {}
+            for proto in registry.protocols.values():
+                for trigger in proto.trigger_phrases:
+                    all_triggers[trigger] = proto.name
+
+            for trigger, proto_name in sorted(all_triggers.items()):
+                print(f"  '{trigger}' → {proto_name}")
+
+        elif choice == "8":
             print("Exiting...")
             break
 

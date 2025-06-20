@@ -782,7 +782,7 @@ class PhillipsHueAgent(NetworkAgent):
         }
 
         # Map function names to methods
-        self._function_map = {
+        self.intent_map = {
             # Basic Light Control
             "list_lights": self._list_lights,
             "get_light_status": self._get_light_status,
@@ -887,7 +887,7 @@ class PhillipsHueAgent(NetworkAgent):
         self, function_name: str, arguments: dict[str, any]
     ) -> dict[str, any]:
         """Run a tool function (potentially blocking) in an executor."""
-        func = self._function_map.get(function_name)
+        func = self.intent_map.get(function_name)
         if not func:
             return {"error": f"Unknown function: {function_name}"}
         try:

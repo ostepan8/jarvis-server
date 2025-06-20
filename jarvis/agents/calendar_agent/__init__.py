@@ -22,6 +22,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
         super().__init__("CalendarAgent", logger)
         self.calendar_service = calendar_service
         self.ai_client = ai_client
+        print("USING THE OTHER CALENDAR AGENT :()")
 
         # Tools and prompt for natural language commands
         self.tools = [
@@ -915,7 +916,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "Favor decisive execution over cautious delays."
         )
 
-        self._function_map = {
+        self.intent_map = {
             # Existing routes
             "get_all_events": self.calendar_service.get_all_events,
             "get_next_event": self.calendar_service.get_next_event,
@@ -1014,7 +1015,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
     async def _execute_function(
         self, function_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        func = self._function_map.get(function_name)
+        func = self.intent_map.get(function_name)
         if not func:
             return {"error": f"Unknown function: {function_name}"}
         try:

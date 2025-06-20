@@ -1,0 +1,12 @@
+{
+  "name": "lights_on",
+  "description": "Turn on all lights",
+  "trigger_phrases": ["lights on", "all lights on", "turn on all lights", "turn on the lights"],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "turn_on_all_lights",
+      "parameters": {}
+    }
+  ]
+}

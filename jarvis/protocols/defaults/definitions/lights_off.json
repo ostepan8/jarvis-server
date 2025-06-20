@@ -1,0 +1,12 @@
+{
+  "name": "lights_off",
+  "description": "Turn off all lights",
+  "trigger_phrases": ["lights off", "all lights off", "turn off all lights", "turn off the lights"],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "turn_off_all_lights",
+      "parameters": {}
+    }
+  ]
+}

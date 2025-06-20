@@ -1,7 +1,7 @@
+# protocols/executor.py
 from __future__ import annotations
 
-from typing import Any, Dict
-
+from typing import Any, Dict, Optional
 import asyncio
 from functools import partial
 
@@ -11,76 +11,79 @@ from . import Protocol
 
 
 class ProtocolExecutor:
-    """Executes Protocol steps sequentially using the agent network."""
+    """Executes Protocol steps directly without AI reasoning."""
 
     def __init__(self, network: AgentNetwork, logger: JarvisLogger) -> None:
         self.network = network
         self.logger = logger
 
     async def execute(
-        self, protocol: Protocol, args: Dict[str, Any] | None = None
+        self, protocol: Protocol, context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
-        """Run each step in *protocol* synchronously without AI reasoning."""
+        """Execute each step in protocol directly."""
 
         results: Dict[str, Any] = {}
-        args = {**protocol.arguments, **(args or {})}
+        context = context or {}
 
-        for step in protocol.steps:
-            capability = step.intent
-            providers = self.network.capability_registry.get(capability, [])
-            if not providers:
+        for i, step in enumerate(protocol.steps):
+            step_id = f"step_{i}_{step.function}"
+
+            # Get the agent
+            agent = self.network.agents.get(step.agent)
+            if not agent:
                 self.logger.log(
                     "ERROR",
-                    f"No provider for capability '{capability}'",
+                    f"Agent '{step.agent}' not found",
                 )
-                results[step.intent] = {"error": "no_provider"}
+                results[step_id] = {"error": "agent_not_found"}
                 continue
 
-            provider = self.network.agents.get(providers[0])
-            if not provider:
+            # Get the function from intent_map
+            intent_map = getattr(agent, "intent_map", {})
+            func = intent_map.get(step.function)
+
+            if not func:
                 self.logger.log(
                     "ERROR",
-                    f"Provider '{providers[0]}' not found for '{capability}'",
+                    f"Function '{step.function}' not found in {step.agent}",
                 )
-                results[step.intent] = {"error": "no_provider"}
+                results[step_id] = {"error": "function_not_found"}
                 continue
 
-            mapping = (
-                getattr(provider, "intent_map", None)
-                or getattr(provider, "intent_tool_map", None)
-            )
-            if not mapping or capability not in mapping:
-                self.logger.log(
-                    "ERROR",
-                    f"Provider '{provider.name}' lacks intent map for '{capability}'",
-                )
-                results[step.intent] = {"error": "no_handler"}
-                continue
+            # Prepare parameters
+            params = dict(step.parameters)
 
-            func = mapping[capability]
-            params = {**args}
-            for k, v in step.parameters.items():
-                if isinstance(v, str):
-                    try:
-                        params[k] = v.format(**args)
-                    except Exception:
-                        params[k] = v
-                else:
-                    params[k] = v
+            # Apply parameter mappings (use results from previous steps)
+            for param_name, mapping in step.parameter_mappings.items():
+                if mapping.startswith("$"):
+                    # Reference to previous result
+                    ref = mapping[1:]  # Remove $
+                    if ref in results:
+                        params[param_name] = results[ref]
+                    elif ref in context:
+                        params[param_name] = context[ref]
 
+            # Execute the function
             try:
+                self.logger.log(
+                    "INFO", f"Executing {step.agent}.{step.function}", str(params)
+                )
+
                 if asyncio.iscoroutinefunction(func):
                     result = await func(**params)
                 else:
                     loop = asyncio.get_running_loop()
                     result = await loop.run_in_executor(None, partial(func, **params))
-                results[step.intent] = result
-            except Exception as exc:  # pragma: no cover - error path
+
+                results[step_id] = result
+                self.logger.log("INFO", f"Step {step_id} completed", str(result))
+
+            except Exception as exc:
                 self.logger.log(
                     "ERROR",
-                    f"Error executing {capability} via direct call",
+                    f"Error executing {step.agent}.{step.function}",
                     str(exc),
                 )
-                results[step.intent] = {"error": str(exc)}
+                results[step_id] = {"error": str(exc)}
 
         return results

@@ -3,8 +3,9 @@
 import asyncio
 import os
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+from pathlib import Path
 
 from .agents.agent_network import AgentNetwork
 from .agents.nlu_agent import NLUAgent
@@ -16,6 +17,11 @@ from .services.calendar_service import CalendarService
 from .ai_clients import AIClientFactory
 from .logger import JarvisLogger
 from .agents.message import Message
+from .protocols.registry import ProtocolRegistry
+from .protocols.executor import ProtocolExecutor
+from .protocols.voice_trigger import VoiceTriggerMatcher
+from .protocols import Protocol
+from typing import List
 
 
 class JarvisSystem:
@@ -32,6 +38,11 @@ class JarvisSystem:
         self.calendar_service: CalendarService = None
         self.lights_agent: PhillipsHueAgent = None
         self.protocal_agent: ProtocalAgent = None  # type: ignore
+
+        # Protocol system components
+        self.protocol_registry = ProtocolRegistry()
+        self.protocol_executor = None  # Will be initialized after network is ready
+        self.voice_matcher = None  # Will be initialized after protocols are loaded
 
     async def initialize(self):
         """Initialize all agents and start the network"""
@@ -61,7 +72,7 @@ class JarvisSystem:
 
         # 4) ProtocolAgent (for managing protocols)
         self.protocal_agent = ProtocolAgent(self.logger)
-        
+
         # 5) LightsAgent (for smart home control)
         load_dotenv()
         BRIDGE_IP = os.getenv("HUE_BRIDGE_IP")
@@ -71,21 +82,78 @@ class JarvisSystem:
         # Register protocol agent after other providers so capability map exists
         self.network.register_agent(self.protocal_agent)
 
+        # Initialize protocol system components
+        self.protocol_executor = ProtocolExecutor(self.network, self.logger)
+
+        # Load protocols from definitions directory
+        protocols_dir = Path(__file__).parent / "protocols" / "definitions"
+        if protocols_dir.exists():
+            self._load_protocols_from_directory(protocols_dir)
+
+        # Initialize voice matcher with loaded protocols
+        self.voice_matcher = VoiceTriggerMatcher(self.protocol_registry.protocols)
+
         # Start the message processing loop
         await self.network.start()
 
         self.logger.log(
             "INFO",
             "Jarvis system initialized",
-            f"Active agents: {list(self.network.agents.keys())}",
+            f"Active agents: {list(self.network.agents.keys())}, Loaded protocols: {len(self.protocol_registry.protocols)}",
         )
 
+    def _load_protocols_from_directory(self, directory: Path):
+        """Load all protocol definitions from JSON files in the directory"""
+        for json_file in directory.glob("*.json"):
+            try:
+                protocol = Protocol.from_file(json_file)
+                self.protocol_registry.register(protocol)
+                self.logger.log(
+                    "INFO",
+                    f"Loaded protocol: {protocol.name}",
+                    f"Triggers: {protocol.trigger_phrases}",
+                )
+            except Exception as e:
+                self.logger.log(
+                    "ERROR", f"Failed to load protocol from {json_file}", str(e)
+                )
+
     async def process_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
-        """Process a user request through the network via NLU routing."""
+        """Process a user request through the network via voice trigger or NLU routing."""
         if not self.nlu_agent:
             raise RuntimeError("System not initialized")
 
-        # 1) Ask NLUAgent to classify the intent
+        # 1) First check for protocol matches (fast path)
+        if self.voice_matcher:
+            matched_protocol = self.voice_matcher.match_command(user_input)
+            if matched_protocol:
+                self.logger.log(
+                    "INFO",
+                    "Voice trigger matched",
+                    f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+                )
+
+                try:
+                    # Execute the protocol directly
+                    results = await self.protocol_executor.execute(matched_protocol)
+
+                    # Format the response in Jarvis style
+                    response = self._format_protocol_response(matched_protocol, results)
+
+                    return {
+                        "response": response,
+                        "protocol_executed": matched_protocol.name,
+                        "execution_time": "fast",
+                    }
+                except Exception as e:
+                    self.logger.log(
+                        "ERROR",
+                        f"Protocol execution failed for '{matched_protocol.name}'",
+                        str(e),
+                    )
+                    # Fall through to NLU on error
+
+        # 2) No protocol match or protocol failed - use NLU agent
         request_id = str(uuid.uuid4())
         await self.network.request_capability(
             from_agent=self.nlu_agent.name,
@@ -94,7 +162,7 @@ class JarvisSystem:
             request_id=request_id,
         )
 
-        # 2) Wait for the classification result
+        # 3) Wait for the classification result
         classification = await self.network.wait_for_response(request_id)
         intent = classification["intent"]
         target = classification["target_agent"]
@@ -108,7 +176,7 @@ class JarvisSystem:
             f"intent={intent}, target={target}, cap={cap}, proto={proto}, args={args}",
         )
 
-        # 3) Route to the appropriate agent
+        # 4) Route to the appropriate agent
         if intent == "perform_capability" and cap:
             request_id = str(uuid.uuid4())
             payload = {"command": user_input}
@@ -166,6 +234,61 @@ class JarvisSystem:
         # fallback
         return {"response": "Sorry, I didn't understand that."}
 
+    def _format_protocol_response(
+        self, protocol: Protocol, results: Dict[str, Any]
+    ) -> str:
+        """Format protocol execution results in Jarvis style"""
+        # Check if any step had an error
+        errors = []
+        successes = []
+
+        for step_id, result in results.items():
+            if isinstance(result, dict) and "error" in result:
+                errors.append(result["error"])
+            else:
+                successes.append(step_id)
+
+        if errors:
+            return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
+
+        # Create response based on protocol name and results
+        protocol_responses = {
+            "blue_lights_on": "Blue lights activated, sir.",
+            "blue_lights_off": "Blue lights deactivated, sir.",
+            "red_alert": "Red alert mode engaged. All systems on high alert, sir.",
+            "all_lights_off": "All lights have been turned off, sir.",
+            "dim_lights": "Lights dimmed to comfortable levels, sir.",
+            "bright_lights": "Lights set to maximum brightness, sir.",
+            "check_today_schedule": self._format_calendar_response(results),
+            "morning_routine": "Good morning, sir. Your morning routine has been initiated.",
+            "goodnight": "Goodnight, sir. Sleep mode activated.",
+        }
+
+        # Return specific response or generic success
+        return protocol_responses.get(
+            protocol.name,
+            f"{protocol.description or 'Command'} completed successfully, sir.",
+        )
+
+    def _format_calendar_response(self, results: Dict[str, Any]) -> str:
+        """Format calendar-specific responses"""
+        # Extract calendar data from results
+        for step_id, result in results.items():
+            if isinstance(result, dict) and "response" in result:
+                return result["response"]
+        return "Calendar information retrieved, sir."
+
+    def get_available_commands(self) -> Dict[str, List[str]]:
+        """Get all available voice trigger commands organized by protocol"""
+        if not self.voice_matcher:
+            return {}
+
+        commands = {}
+        for protocol in self.protocol_registry.protocols.values():
+            commands[protocol.name] = protocol.trigger_phrases
+
+        return commands
+
     async def shutdown(self):
         """Shutdown the system"""
         await self.network.stop()
@@ -189,10 +312,25 @@ async def demo():
 
     from tzlocal import get_localzone_name
 
-    user_input = "What's on my calendar tomorrow?"
-    print(f"User: {user_input}\n" + "-" * 60)
+    # Demo voice trigger
+    print("\n=== Testing Voice Trigger ===")
+    user_input = "blue lights"
+    print(f"User: {user_input}")
     result = await jarvis.process_request(user_input, get_localzone_name())
     print(f"Jarvis: {result['response']}")
+    if "protocol_executed" in result:
+        print(f"(Executed via protocol: {result['protocol_executed']})")
+
+    print("\n=== Testing NLU Routing ===")
+    user_input = "What's on my calendar tomorrow?"
+    print(f"User: {user_input}")
+    result = await jarvis.process_request(user_input, get_localzone_name())
+    print(f"Jarvis: {result['response']}")
+
+    print("\n=== Available Voice Commands ===")
+    commands = jarvis.get_available_commands()
+    for protocol, triggers in commands.items():
+        print(f"{protocol}: {', '.join(triggers)}")
 
     await jarvis.shutdown()
 
