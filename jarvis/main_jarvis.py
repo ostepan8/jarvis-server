@@ -131,34 +131,39 @@ class JarvisSystem:
             raise RuntimeError("System not initialized")
 
         # 1) First check for protocol matches (fast path)
+        matched_protocol = None
         if self.voice_matcher:
             matched_protocol = self.voice_matcher.match_command(user_input)
-            if matched_protocol:
+
+        if not matched_protocol:
+            matched_protocol = self.protocol_registry.find_matching_protocol(user_input)
+
+        if matched_protocol:
+            self.logger.log(
+                "INFO",
+                "Trigger matched",
+                f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+            )
+
+            try:
+                # Execute the protocol directly
+                results = await self.protocol_executor.run_protocol(matched_protocol)
+
+                # Format the response in Jarvis style
+                response = self._format_protocol_response(matched_protocol, results)
+
+                return {
+                    "response": response,
+                    "protocol_executed": matched_protocol.name,
+                    "execution_time": "fast",
+                }
+            except Exception as e:
                 self.logger.log(
-                    "INFO",
-                    "Voice trigger matched",
-                    f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+                    "ERROR",
+                    f"Protocol execution failed for '{matched_protocol.name}'",
+                    str(e),
                 )
-
-                try:
-                    # Execute the protocol directly
-                    results = await self.protocol_executor.execute(matched_protocol)
-
-                    # Format the response in Jarvis style
-                    response = self._format_protocol_response(matched_protocol, results)
-
-                    return {
-                        "response": response,
-                        "protocol_executed": matched_protocol.name,
-                        "execution_time": "fast",
-                    }
-                except Exception as e:
-                    self.logger.log(
-                        "ERROR",
-                        f"Protocol execution failed for '{matched_protocol.name}'",
-                        str(e),
-                    )
-                    # Fall through to NLU on error
+                # Fall through to NLU on error
 
         # 2) No protocol match or protocol failed - use NLU agent
         request_id = str(uuid.uuid4())
