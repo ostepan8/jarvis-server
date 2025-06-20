@@ -45,15 +45,9 @@ class NLUAgent(NetworkAgent):
         user_input = message.content["data"]["input"]
         self.logger.log("INFO", "NLU received input", user_input)
 
-        known_protocols = getattr(self.network, "protocol_registry", [])
         known_capabilities = list(self.network.capability_registry.keys())
-        self.logger.log(
-            "DEBUG", "NLU knowables", f"{known_protocols}, {known_capabilities}"
-        )
 
-        classification = await self.classify(
-            user_input, known_protocols, known_capabilities
-        )
+        classification = await self.classify(user_input, known_capabilities)
 
         # AUTO-ASSIGN TARGET AGENTS: For each capability, assign the first available provider
         if classification.get("intent") == "perform_capability":
@@ -96,11 +90,10 @@ class NLUAgent(NetworkAgent):
     async def classify(
         self,
         user_input: str,
-        protocols: List[str],
         capabilities: List[str],
     ) -> Dict[str, Any]:
         """Invoke the LLM to classify the user_input into a routing JSON."""
-        prompt = self.build_prompt(user_input, protocols, capabilities)
+        prompt = self.build_prompt(user_input, capabilities)
         self.logger.log("DEBUG", "NLU prompt built", prompt)
 
         response = await self.ai_client.chat(
@@ -154,10 +147,8 @@ class NLUAgent(NetworkAgent):
     def build_prompt(
         self,
         user_input: str,
-        protocols: List[str],
         capabilities: List[str],
     ) -> str:
-        proto_list = ", ".join(protocols) if protocols else "none"
         cap_list = ", ".join(capabilities) if capabilities else "none"
 
         prompt = f"""
@@ -174,14 +165,12 @@ Your job is to read the exact **User Input** below and return **only** a JSON ob
 **User Input**  
 \"\"\"{user_input}\"\"\"
 
-**Available Protocols:** {proto_list}  
 **Available Capabilities:** {cap_list}
 
 #### Analysis Process:
 1. Check if the user's request directly matches ONE of the available capabilities
 2. If yes, use intent "perform_capability" with that exact capability name
 3. If the request needs multiple capabilities or doesn't match any single one, use "orchestrate_tasks"
-4. For protocols, use "run_protocol", "ask_about_protocol", or "define_protocol"
 
 #### JSON Schema (return ONLY this JSON, no other text):
 ```json

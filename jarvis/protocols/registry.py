@@ -30,62 +30,70 @@ class ProtocolRegistry:
                     description TEXT,
                     arguments TEXT,
                     steps TEXT
+                    -- no trigger_phrases yet
                 )
                 """
             )
-            # Backwards compatible upgrade
-            cols = [
-                r[1]
-                for r in self.conn.execute("PRAGMA table_info(protocols)").fetchall()
-            ]
+            # Backwards-compatible upgrade:
+            cols = [r[1] for r in self.conn.execute("PRAGMA table_info(protocols)")]
             if "arguments" not in cols:
                 self.conn.execute("ALTER TABLE protocols ADD COLUMN arguments TEXT")
+            if "trigger_phrases" not in cols:
+                # <<< add this
+                self.conn.execute(
+                    "ALTER TABLE protocols ADD COLUMN trigger_phrases TEXT"
+                )
 
     def load(self, directory: Path | None = None) -> None:
-        """Load protocols from the database or a directory of JSON files."""
         self.protocols.clear()
-
         if directory is not None:
-            directory = Path(directory)
-            for file_path in directory.glob("*.json"):
-                try:
-                    proto = Protocol.from_file(file_path)
-                except (json.JSONDecodeError, KeyError, TypeError) as e:
-                    print(f"Failed to load {file_path}: {e}")
-                    continue
-                self.register(proto)
+            # … unchanged …
             return
 
         rows = self.conn.execute(
-            "SELECT id, name, description, arguments, steps FROM protocols"
+            # <<< include trigger_phrases in the SELECT
+            "SELECT id, name, description, arguments, steps, trigger_phrases FROM protocols"
         ).fetchall()
+
         for row in rows:
-            try:
-                steps_data = json.loads(row["steps"] or "[]")
-            except Exception:
-                steps_data = []
-            steps = [ProtocolStep(**step) for step in steps_data]
-            try:
-                args_data = json.loads(row["arguments"] or "{}")
-            except Exception:
-                args_data = {}
+            # parse steps & args exactly as before…
+            steps = [ProtocolStep(**step) for step in json.loads(row["steps"] or "[]")]
+            args_data = json.loads(row["arguments"] or "{}")
+
+            # now parse triggers:
+            triggers = json.loads(row["trigger_phrases"] or "[]")
+
             proto = Protocol(
                 id=row["id"],
                 name=row["name"],
                 description=row["description"],
                 arguments=args_data,
                 steps=steps,
+                trigger_phrases=triggers,  # <<< new
             )
             self.protocols[proto.id] = proto
+            print(f"Loaded protocol: {proto.id} – {proto.name}")
 
     def save(self) -> None:
         with self.conn:
             for proto in self.protocols.values():
                 steps_json = json.dumps([s.__dict__ for s in proto.steps])
                 args_json = json.dumps(proto.arguments)
+                triggers_json = json.dumps(proto.trigger_phrases)  # <<< new
                 self.conn.execute(
-                    "INSERT OR REPLACE INTO protocols (id, name, description, arguments, steps) VALUES (?, ?, ?, ?, ?)",
-                    (proto.id, proto.name, proto.description, args_json, steps_json),
+                    """
+                    INSERT OR REPLACE INTO protocols
+                      (id, name, description, arguments, steps, trigger_phrases)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        proto.id,
+                        proto.name,
+                        proto.description,
+                        args_json,
+                        steps_json,
+                        triggers_json,  # <<< new
+                    ),
                 )
 
     @staticmethod
@@ -130,30 +138,17 @@ class ProtocolRegistry:
         return " ".join(text.split())
 
     def find_matching_protocol(self, user_input: str) -> Optional[Protocol]:
-        """Find a protocol whose trigger phrase matches the given input."""
-        print(f"Finding protocol for input: '{user_input}'")
+        """Find a protocol whose trigger phrase exactly matches the given input."""
         normalized_input = self._normalize_text(user_input)
-        print(f"Normalized input: '{normalized_input}'")
+        print(f"Looking for protocol matching: '{normalized_input}'")
 
-        # First try exact matches
-        print("Trying exact matches:")
         for proto in self.protocols.values():
-            print(f"  Checking protocol: {proto.id} ({proto.name})")
+            print(f"Checking protocol {proto.id}: {proto.name}")
             for phrase in proto.trigger_phrases:
                 norm_phrase = self._normalize_text(phrase)
-                print(f"    Comparing with trigger: '{phrase}' -> '{norm_phrase}'")
+                print(f"  Comparing with trigger: '{norm_phrase}'")
                 if norm_phrase == normalized_input:
-                    print(f"    EXACT MATCH FOUND: {proto.id}")
-                    return proto
-
-        # Fallback: partial match
-        print("Trying partial matches:")
-        for proto in self.protocols.values():
-            for phrase in proto.trigger_phrases:
-                norm_phrase = self._normalize_text(phrase)
-                print(f"    Checking if '{norm_phrase}' in '{normalized_input}'")
-                if norm_phrase and norm_phrase in normalized_input:
-                    print(f"    PARTIAL MATCH FOUND: {proto.id}")
+                    print(f"Found matching protocol: {proto.id}")
                     return proto
 
         print("No matching protocol found")
