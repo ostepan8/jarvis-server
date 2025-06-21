@@ -19,6 +19,7 @@ from .logger import JarvisLogger
 from .agents.message import Message
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
+from .protocols.mongo_logger import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
 from .protocols import Protocol
 from typing import List
@@ -43,6 +44,7 @@ class JarvisSystem:
         self.protocol_registry = ProtocolRegistry()
         self.protocol_executor = None  # Will be initialized after network is ready
         self.voice_matcher = None  # Will be initialized after protocols are loaded
+        self.usage_logger = ProtocolUsageLogger()
 
     async def initialize(self):
         """Initialize all agents and start the network"""
@@ -83,7 +85,11 @@ class JarvisSystem:
         self.network.register_agent(self.protocol_agent)
 
         # Initialize protocol system components
-        self.protocol_executor = ProtocolExecutor(self.network, self.logger)
+        self.protocol_executor = ProtocolExecutor(
+            self.network,
+            self.logger,
+            usage_logger=self.usage_logger,
+        )
 
         # Load protocols from definitions directory
         protocols_dir = Path(__file__).parent / "protocols" / "definitions"
@@ -125,7 +131,12 @@ class JarvisSystem:
                     "ERROR", f"Failed to load protocol from {json_file}", str(e)
                 )
 
-    async def process_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
+    async def process_request(
+        self,
+        user_input: str,
+        tz_name: str,
+        metadata: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
         if not self.nlu_agent:
             raise RuntimeError("System not initialized")
@@ -147,7 +158,11 @@ class JarvisSystem:
 
             try:
                 # Execute the protocol directly
-                results = await self.protocol_executor.run_protocol(matched_protocol)
+                results = await self.protocol_executor.run_protocol(
+                    matched_protocol,
+                    trigger_phrase=user_input,
+                    metadata=metadata,
+                )
 
                 # Format the response in Jarvis style
                 response = self._format_protocol_response(matched_protocol, results)
@@ -328,7 +343,7 @@ async def demo():
     print("\n=== Testing Voice Trigger ===")
     user_input = "blue lights"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name())
+    result = await jarvis.process_request(user_input, get_localzone_name(), {})
     print(f"Jarvis: {result['response']}")
     if "protocol_executed" in result:
         print(f"(Executed via protocol: {result['protocol_executed']})")
@@ -336,7 +351,7 @@ async def demo():
     print("\n=== Testing NLU Routing ===")
     user_input = "What's on my calendar tomorrow?"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name())
+    result = await jarvis.process_request(user_input, get_localzone_name(), {})
     print(f"Jarvis: {result['response']}")
 
     print("\n=== Available Voice Commands ===")

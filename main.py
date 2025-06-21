@@ -23,6 +23,7 @@ async def demo() -> None:
     result = await jarvis.process_request(
         user_command,
         get_localzone_name(),
+        {},
     )
     response_data = result.get("response", "")
 
@@ -65,7 +66,7 @@ async def demo() -> None:
 
 async def calendar_ai(command: str, api_key: Optional[str] = None) -> str:
     jarvis = await create_collaborative_jarvis(api_key or os.getenv("OPENAI_API_KEY"))
-    result = await jarvis.process_request(command, get_localzone_name())
+    result = await jarvis.process_request(command, get_localzone_name(), {})
     await jarvis.shutdown()
     return result["response"]
 

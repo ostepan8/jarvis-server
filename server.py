@@ -59,7 +59,13 @@ async def jarvis(
 ):
     """Execute a command using the agent network."""
     tz_name = detect_timezone(request)
-    return await jarvis_system.process_request(req.command, tz_name)
+    metadata = {
+        "device": request.headers.get("X-Device"),
+        "location": request.headers.get("X-Location"),
+        "user": request.headers.get("X-User"),
+        "source": request.headers.get("X-Source", "text"),
+    }
+    return await jarvis_system.process_request(req.command, tz_name, metadata)
 
 
 def run():
