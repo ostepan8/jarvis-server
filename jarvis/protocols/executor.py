@@ -4,30 +4,48 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import asyncio
 from functools import partial
+import time
 
 from ..logger import JarvisLogger
 from ..agents.agent_network import AgentNetwork
 from . import Protocol
+from .mongo_logger import ProtocolUsageLogger, generate_protocol_log
 
 
 class ProtocolExecutor:
     """Executes Protocol steps directly without AI reasoning."""
 
-    def __init__(self, network: AgentNetwork, logger: JarvisLogger) -> None:
+    def __init__(
+        self,
+        network: AgentNetwork,
+        logger: JarvisLogger,
+        usage_logger: ProtocolUsageLogger | None = None,
+    ) -> None:
         self.network = network
         self.logger = logger
+        self.usage_logger = usage_logger
 
     async def run_protocol(
-        self, protocol: Protocol, arguments: Dict[str, Any] | None = None
+        self,
+        protocol: Protocol,
+        arguments: Dict[str, Any] | None = None,
+        *,
+        trigger_phrase: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Public helper to execute a protocol."""
-        return await self.execute(protocol, arguments)
+        return await self.execute(protocol, arguments, trigger_phrase, metadata)
 
     async def execute(
-        self, protocol: Protocol, context: Dict[str, Any] | None = None
+        self,
+        protocol: Protocol,
+        context: Dict[str, Any] | None = None,
+        trigger_phrase: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Execute each step in protocol directly."""
 
+        start = time.monotonic()
         results: Dict[str, Any] = {}
         context = context or {}
 
@@ -91,5 +109,27 @@ class ProtocolExecutor:
                     str(exc),
                 )
                 results[step_id] = {"error": str(exc)}
+
+        # Determine overall execution result
+        errors = [r for r in results.values() if isinstance(r, dict) and "error" in r]
+        if errors:
+            execution_result = "partial" if len(errors) < len(protocol.steps) else "failure"
+        else:
+            execution_result = "success"
+
+        latency_ms = int((time.monotonic() - start) * 1000)
+
+        if self.usage_logger:
+            log_doc = generate_protocol_log(
+                protocol,
+                context,
+                trigger_phrase,
+                {
+                    **(metadata or {}),
+                    "execution_result": execution_result,
+                    "latency_ms": latency_ms,
+                },
+            )
+            await self.usage_logger.log_usage(log_doc)
 
         return results

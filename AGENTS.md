@@ -16,6 +16,7 @@ Additional Python packages used by the project:
 - `anthropic`
 - `pytest`
 - `pytest-asyncio`
+- `pymongo`
 
 ## Overview
 - **Language**: Python 3.11+
