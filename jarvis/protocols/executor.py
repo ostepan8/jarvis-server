@@ -9,7 +9,7 @@ import time
 from ..logger import JarvisLogger
 from ..agents.agent_network import AgentNetwork
 from . import Protocol
-from .mongo_logger import ProtocolUsageLogger, generate_protocol_log
+from .loggers import ProtocolUsageLogger, generate_protocol_log
 
 
 class ProtocolExecutor:

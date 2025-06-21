@@ -1,7 +1,4 @@
-"""Protocol system package"""
-
-from .models import Protocol, ProtocolStep
-from .loggers import (
+from .mongo_logger import (
     ProtocolUsageLogger,
     ExecutionMetadata,
     ProtocolLogEntry,
@@ -10,8 +7,6 @@ from .loggers import (
 )
 
 __all__ = [
-    "Protocol",
-    "ProtocolStep",
     "ProtocolUsageLogger",
     "ExecutionMetadata",
     "ProtocolLogEntry",

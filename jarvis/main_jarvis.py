@@ -20,7 +20,7 @@ from .logger import JarvisLogger
 from .agents.message import Message
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
-from .protocols.mongo_logger import ProtocolUsageLogger
+from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
 from .protocols import Protocol
 from typing import List
