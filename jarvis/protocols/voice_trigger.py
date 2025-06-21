@@ -2,7 +2,7 @@
 """Simple voice trigger detection for protocols"""
 
 from typing import Dict, Optional
-from . import Protocol
+from .models import Protocol
 
 
 class VoiceTriggerMatcher:
