@@ -6,7 +6,7 @@ from pathlib import Path
 import argparse
 import asyncio
 
-from .. import Protocol
+from ..models import Protocol
 from ..registry import ProtocolRegistry
 from ..executor import ProtocolExecutor
 from ...main_jarvis import create_collaborative_jarvis

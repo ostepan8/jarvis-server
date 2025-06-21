@@ -5,7 +5,7 @@ import json
 import uuid
 from pathlib import Path
 
-from . import Protocol, ProtocolStep
+from .models import Protocol, ProtocolStep
 from .registry import ProtocolRegistry
 
 

@@ -7,7 +7,7 @@ from typing import Dict, Iterable, Optional, List
 import re
 
 from ..logger import JarvisLogger
-from . import Protocol, ProtocolStep
+from .models import Protocol, ProtocolStep
 
 
 class ProtocolRegistry:
