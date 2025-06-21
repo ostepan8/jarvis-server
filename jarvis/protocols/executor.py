@@ -113,7 +113,9 @@ class ProtocolExecutor:
         # Determine overall execution result
         errors = [r for r in results.values() if isinstance(r, dict) and "error" in r]
         if errors:
-            execution_result = "partial" if len(errors) < len(protocol.steps) else "failure"
+            execution_result = (
+                "partial" if len(errors) < len(protocol.steps) else "failure"
+            )
         else:
             execution_result = "success"
 
@@ -130,6 +132,6 @@ class ProtocolExecutor:
                     "latency_ms": latency_ms,
                 },
             )
-            await self.usage_logger.log_usage(log_doc)
+            await self.usage_logger.log_usage(log_doc)  # <- Use log_usage_raw
 
         return results

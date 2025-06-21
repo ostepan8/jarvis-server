@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from os import getenv
 import uuid
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
@@ -44,7 +45,10 @@ class JarvisSystem:
         self.protocol_registry = ProtocolRegistry()
         self.protocol_executor = None  # Will be initialized after network is ready
         self.voice_matcher = None  # Will be initialized after protocols are loaded
-        self.usage_logger = ProtocolUsageLogger()
+        self.usage_logger = ProtocolUsageLogger(
+            mongo_uri=getenv("MONGO_URI", "mongodb://localhost:27017/"),
+            db_name="protocals",
+        )
 
     async def initialize(self):
         """Initialize all agents and start the network"""
@@ -53,6 +57,7 @@ class JarvisSystem:
         ai_client = AIClientFactory.create(
             self.config.get("ai_provider", "openai"), api_key=self.config.get("api_key")
         )
+        await self.usage_logger.connect()
 
         # 1) NLUAgent (must be registered so network.request_capability works)
         self.nlu_agent = NLUAgent(ai_client, self.logger)
