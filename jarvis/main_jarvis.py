@@ -16,6 +16,7 @@ from .agents.software_engineering_agent import SoftwareEngineeringAgent
 from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .services.calendar_service import CalendarService
+from .agents.chat_agent import ChatAgent
 from .ai_clients import AIClientFactory
 from .logger import JarvisLogger
 from .agents.message import Message
@@ -40,6 +41,7 @@ class JarvisSystem:
         self.orchestrator: OrchestratorAgent = None
         self.calendar_service: CalendarService = None
         self.lights_agent: PhillipsHueAgent = None
+        self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
         self.software_agent: SoftwareEngineeringAgent | None = None
 
@@ -79,16 +81,20 @@ class JarvisSystem:
         )
         self.network.register_agent(calendar_agent)
 
-        # 4) ProtocolAgent (for managing protocols)
+        # 4) ChatAgent (for handling chat interactions)
+        self.chat_agent = ChatAgent(ai_client, self.logger)
+        self.network.register_agent(self.chat_agent)
+
+        # 5) ProtocolAgent (for protocol management)
         self.protocol_agent = ProtocolAgent(self.logger)
 
-        # 5) LightsAgent (for smart home control)
+        # 6) LightsAgent (for smart home control)
         load_dotenv()
         BRIDGE_IP = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=BRIDGE_IP)
         self.network.register_agent(self.lights_agent)
 
-        # 6) SoftwareEngineeringAgent (developer tools)
+        # 7) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.get("repo_path", ".")
         self.software_agent = SoftwareEngineeringAgent(
             ai_client=ai_client,
@@ -271,8 +277,16 @@ class JarvisSystem:
             return {"response": result}
 
         if intent == "chat":
-            # placeholder for PersonaAgent.chat()
-            return {"response": "[Chit‐chat response]"}
+            define_id = str(uuid.uuid4())
+            await self.network.request_capability(
+                from_agent=self.nlu_agent.name,
+                capability="define_protocol",
+                data=args,
+                request_id=define_id,
+            )
+            result = await self.network.wait_for_response(define_id)
+
+            return {"response": result}
 
         # fallback
         return {"response": "Sorry, I didn't understand that."}

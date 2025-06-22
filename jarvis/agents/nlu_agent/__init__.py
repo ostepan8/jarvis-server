@@ -130,7 +130,14 @@ class NLUAgent(NetworkAgent):
             }
             return classification
 
-        # CAPABILITY VALIDATION: Ensure only real capabilities are used
+        # CHAT INTENT: Route to ChatAgent
+        if classification.get("intent") == "chat":
+            classification["target_agent"] = "ChatAgent"
+            self.logger.log(
+                "INFO",
+                "Routing to ChatAgent for chat intent",
+                classification,
+            )
         if classification.get("intent") == "perform_capability":
             requested_capability = classification.get("capability")
             if requested_capability not in capabilities:
@@ -171,6 +178,7 @@ Your job is to read the exact **User Input** below and return **only** a JSON ob
 5. If no single capability matches OR multiple different agent types needed, use intent "orchestrate_tasks"
 6. **SOFTWARE TASKS**: All coding/development work uses capability "aider_software_agent_command" with intent "perform_capability"
 7. **MULTI-AGENT TASKS**: Use intent "orchestrate_tasks" only when you need multiple DIFFERENT types of agents (code + calendar, lights + code, etc.)
+8. Even if the intent is "chat" you still must return a capability (if it exists in the list, otherwise just put "chat" as capability)
 
 **User Input**  
 \"\"\"{user_input}\"\"\"

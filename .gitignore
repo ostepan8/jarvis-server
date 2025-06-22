@@ -42,3 +42,4 @@ htmlcov/
 dist/
 build/
 *.egg
+.aider*

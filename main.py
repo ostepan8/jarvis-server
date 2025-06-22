@@ -26,7 +26,7 @@ async def demo() -> None:
         {},
     )
     response_data = result.get("response", "")
-
+    print(response_data, "RESPONSE DATA")
     if isinstance(response_data, dict):
         print(Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL)
         if "response" in response_data:
