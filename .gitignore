@@ -1,6 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+*.pyd
+
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+aider-env/
+
+# Environment & secrets
 .env*
 *.db
+*.sqlite3
 
+# Logs & caches
+*.log
+*.pot
+*.cache/
+.cache/
+.pytest_cache/
+coverage.*
+htmlcov/
 
-__pycache__/
-*.pyc
+# VSCode & IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+
+# Build
+dist/
+build/
+*.egg
