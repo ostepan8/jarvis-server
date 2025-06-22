@@ -1,4 +1,6 @@
+from typing import Optional
 from ..base import NetworkAgent
+from ...loggers.jarvis_logger import JarvisLogger
 
 class NightAgent(NetworkAgent):
     """Agent responsible for running background processes during off-hours."""
