@@ -9,15 +9,11 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...logger import JarvisLogger
 from ...ai_clients.base import BaseAIClient
-from ...services.aider_service import AiderService, create_aider_service
-from .tools import (
-    code_tools,
-    testing_tools,
-    git_tools,
-    github_tools,
-    filesystem_tools,
-    memory_tools,
+from ...services.aider_service.aider_service import (
+    AiderService,
+    create_aider_service,
 )
+from .tools import code, testing, git, github, filesystem, memory
 
 
 class SoftwareEngineeringAgent(NetworkAgent):
@@ -38,12 +34,12 @@ class SoftwareEngineeringAgent(NetworkAgent):
 
         # Aggregate all tool schemas
         self.tools: List[Dict[str, Any]] = (
-            code_tools
-            + testing_tools
-            + git_tools
-            + github_tools
-            + filesystem_tools
-            + memory_tools
+            code.tools
+            + testing.tools
+            + git.tools
+            + github.tools
+            + filesystem.tools
+            + memory.tools
         )
 
         self.system_prompt = (
@@ -52,25 +48,51 @@ class SoftwareEngineeringAgent(NetworkAgent):
             "Use only the tools provided. Keep responses concise."
         )
 
-        # Map tool names to bound methods for execution
+        # Map tool names to bound functions for execution
         self.intent_map = {
-            "generate_function": self.generate_function,
-            "refactor_code": self.refactor_code,
-            "add_documentation": self.add_documentation,
-            "explain_code": self.explain_code,
-            "write_tests": self.write_tests,
-            "run_tests": self.run_tests,
-            "check_coverage": self.check_coverage,
-            "git_diff": self.git_diff,
-            "git_commit": self.git_commit,
-            "git_push": self.git_push,
-            "create_pull_request": self.create_pull_request,
-            "merge_pull_request": self.merge_pull_request,
-            "read_file": self.read_file,
-            "write_file": self.write_file,
-            "list_directory": self.list_directory,
-            "create_todo": self.create_todo,
-            "snapshot_memory": self.snapshot_memory,
+            "generate_function": functools.partial(
+                code.generate_function, self.service, self.repo_path
+            ),
+            "refactor_code": functools.partial(
+                code.refactor_code, self.service, self.repo_path
+            ),
+            "add_documentation": functools.partial(
+                code.add_documentation, self.service, self.repo_path
+            ),
+            "explain_code": functools.partial(
+                code.explain_code, self.service, self.repo_path
+            ),
+            "write_tests": functools.partial(
+                testing.write_tests, self.service, self.repo_path
+            ),
+            "run_tests": functools.partial(
+                testing.run_tests, self.service, self.repo_path
+            ),
+            "check_coverage": functools.partial(
+                testing.check_coverage, self.service, self.repo_path
+            ),
+            "git_diff": functools.partial(git.git_diff, self.service, self.repo_path),
+            "git_commit": functools.partial(
+                git.git_commit, self.service, self.repo_path
+            ),
+            "git_push": functools.partial(git.git_push, self.service, self.repo_path),
+            "create_pull_request": functools.partial(
+                github.create_pull_request, self.service, self.repo_path
+            ),
+            "merge_pull_request": functools.partial(
+                github.merge_pull_request, self.service, self.repo_path
+            ),
+            "read_file": functools.partial(
+                filesystem.read_file, self.service, self.repo_path
+            ),
+            "write_file": functools.partial(
+                filesystem.write_file, self.service, self.repo_path
+            ),
+            "list_directory": functools.partial(
+                filesystem.list_directory, self.service, self.repo_path
+            ),
+            "create_todo": functools.partial(memory.create_todo, self.todos),
+            "snapshot_memory": functools.partial(memory.snapshot_memory, self.todos),
         }
 
     @property
@@ -147,135 +169,6 @@ class SoftwareEngineeringAgent(NetworkAgent):
         response_text = getattr(message, "content", "")
         return {"response": response_text, "actions": actions}
 
-    async def _run_service(self, func: Any, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        """Run a blocking service method in an executor and return dict output."""
-        loop = asyncio.get_running_loop()
-
-        def call() -> Dict[str, Any]:
-            result = func(*args, **kwargs)
-            if hasattr(result, "to_dict"):
-                return result.to_dict()
-            return result
-
-        return await loop.run_in_executor(None, call)
-
-    # === Tool method implementations ===
-    async def generate_function(self, spec: str, file_path: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.aider.send_message,
-            repo_path=self.repo_path,
-            message=spec,
-            files=[file_path],
-        )
-
-    async def refactor_code(self, file_path: str, instructions: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.aider.refactor_code,
-            repo_path=self.repo_path,
-            file_path=file_path,
-            refactor_description=instructions,
-        )
-
-    async def add_documentation(self, file_path: str, target: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.aider.document_code,
-            repo_path=self.repo_path,
-            file_path=file_path,
-        )
-
-    async def explain_code(self, file_path: str, target: Optional[str] = None) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.aider.explain_code,
-            repo_path=self.repo_path,
-            file_path=file_path,
-            function_or_class_name=target,
-        )
-
-    async def write_tests(self, source_file: str, test_file: Optional[str] = None) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.aider.write_tests,
-            repo_path=self.repo_path,
-            source_file=source_file,
-            test_file=test_file,
-        )
-
-    async def run_tests(self, test_command: Optional[str] = None) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.testing.run_tests,
-            repo_path=self.repo_path,
-            test_command=test_command,
-        )
-
-    async def check_coverage(self) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.testing.run_coverage,
-            repo_path=self.repo_path,
-        )
-
-    async def git_diff(self) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.git.diff,
-            repo_path=self.repo_path,
-        )
-
-    async def git_commit(self, message: Optional[str] = None) -> Dict[str, Any]:
-        commit_msg = message or "Auto commit"
-        return await self._run_service(
-            self.service.git.commit,
-            repo_path=self.repo_path,
-            message=commit_msg,
-        )
-
-    async def git_push(self) -> Dict[str, Any]:
-        return await self._run_service(self.service.git.push, repo_path=self.repo_path)
-
-    async def create_pull_request(self, title: str, body: str) -> Dict[str, Any]:
-        if not self.service.is_github_available:
-            return {"error": "GitHub operations not available"}
-        return await self._run_service(
-            self.service.github.create_pr,
-            repo_path=self.repo_path,
-            title=title,
-            body=body,
-        )
-
-    async def merge_pull_request(self, pr_number: int) -> Dict[str, Any]:
-        if not self.service.is_github_available:
-            return {"error": "GitHub operations not available"}
-        return await self._run_service(
-            self.service.github.merge_pr,
-            repo_path=self.repo_path,
-            pr_number=pr_number,
-        )
-
-    async def read_file(self, path: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.files.read_file,
-            repo_path=self.repo_path,
-            file_path=path,
-        )
-
-    async def write_file(self, path: str, contents: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.files.write_file,
-            repo_path=self.repo_path,
-            file_path=path,
-            content=contents,
-        )
-
-    async def list_directory(self, path: str) -> Dict[str, Any]:
-        return await self._run_service(
-            self.service.files.list_directory,
-            repo_path=self.repo_path,
-            dir_path=path,
-        )
-
-    async def create_todo(self, text: str) -> Dict[str, Any]:
-        self.todos.append(text)
-        return {"todo": text}
-
-    async def snapshot_memory(self) -> Dict[str, Any]:
-        return {"todos": list(self.todos)}
 
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")

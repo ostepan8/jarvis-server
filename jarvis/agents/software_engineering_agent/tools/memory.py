@@ -1,4 +1,4 @@
-"""Memory and logging tool stubs."""
+"""Memory and logging tool implementations."""
 from typing import Any, Dict, List
 
 
@@ -26,9 +26,12 @@ tools: List[Dict[str, Any]] = [
 ]
 
 
-async def create_todo(*args, **kwargs) -> str:
-    raise NotImplementedError
+async def create_todo(todos: List[str], text: str) -> Dict[str, Any]:
+    """Add a todo item to the in-memory list."""
+    todos.append(text)
+    return {"todo": text}
 
 
-async def snapshot_memory(*args, **kwargs) -> str:
-    raise NotImplementedError
+async def snapshot_memory(todos: List[str]) -> Dict[str, Any]:
+    """Return a snapshot of stored todo items."""
+    return {"todos": list(todos)}
