@@ -278,10 +278,11 @@ class JarvisSystem:
 
         if intent == "chat":
             define_id = str(uuid.uuid4())
+            payload = {"command": user_input}
             await self.network.request_capability(
                 from_agent=self.nlu_agent.name,
-                capability="define_protocol",
-                data=args,
+                capability=cap,
+                data=payload,
                 request_id=define_id,
             )
             result = await self.network.wait_for_response(define_id)
