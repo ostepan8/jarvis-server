@@ -1,4 +1,4 @@
-# This file will manage the task backlog for the NightAgent
+from .backlog_task import BacklogTask
 
 class TaskBacklog:
     """Manages a list of tasks for the NightAgent."""
@@ -6,11 +6,11 @@ class TaskBacklog:
     def __init__(self):
         self.tasks = []
 
-    def add_task(self, task: str) -> None:
+    def add_task(self, task: BacklogTask) -> None:
         """Add a task to the backlog."""
         self.tasks.append(task)
 
-    def get_tasks(self) -> list:
+    def get_tasks(self) -> list[BacklogTask]:
         """Retrieve all tasks."""
         return self.tasks
 
