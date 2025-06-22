@@ -18,7 +18,12 @@ class ChatAgent(NetworkAgent):
     def description(self) -> str:
         return "Agent for handling chat interactions with users."
 
-    def handle_request(self, capability: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    @property
+    def capabilities(self) -> Dict[str, Any]:
+        return {
+            "greet": self._greet_user,
+            "echo": self._echo_message,
+        }
         if capability in self.capabilities:
             return self.capabilities[capability](**data)
         else:
