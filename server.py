@@ -28,6 +28,7 @@ async def startup_event() -> None:
         "ai_provider": "openai",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "calendar_api_url": os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
+        "repo_path": os.getenv("REPO_PATH", "."),
     }
     jarvis_system = JarvisSystem(config)
     await jarvis_system.initialize()
