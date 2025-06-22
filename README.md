@@ -17,6 +17,7 @@ Create a `.env` file or export the following variables before running the server
 - `OPENAI_API_KEY` – API key for OpenAI based clients
 - `ANTHROPIC_API_KEY` – key for Anthropic clients (optional)
 - `CALENDAR_API_URL` – base URL of the calendar API (defaults to `http://localhost:8080`)
+- `REPO_PATH` – path to the repository used by the SoftwareEngineeringAgent (defaults to `.`)
 
 ## Running the server
 Start the FastAPI application on port 8000:

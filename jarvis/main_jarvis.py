@@ -12,6 +12,7 @@ from .agents.agent_network import AgentNetwork
 from .agents.nlu_agent import NLUAgent
 from .agents.protocol_agent import ProtocolAgent
 from .agents.lights_agent import PhillipsHueAgent
+from .agents.software_engineering_agent import SoftwareEngineeringAgent
 from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .services.calendar_service import CalendarService
@@ -40,6 +41,7 @@ class JarvisSystem:
         self.calendar_service: CalendarService = None
         self.lights_agent: PhillipsHueAgent = None
         self.protocol_agent: ProtocolAgent | None = None
+        self.software_agent: SoftwareEngineeringAgent | None = None
 
         # Protocol system components
         self.protocol_registry = ProtocolRegistry()
@@ -85,6 +87,15 @@ class JarvisSystem:
         BRIDGE_IP = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=BRIDGE_IP)
         self.network.register_agent(self.lights_agent)
+
+        # 6) SoftwareEngineeringAgent (developer tools)
+        repo_path = self.config.get("repo_path", ".")
+        self.software_agent = SoftwareEngineeringAgent(
+            ai_client=ai_client,
+            repo_path=repo_path,
+            logger=self.logger,
+        )
+        self.network.register_agent(self.software_agent)
 
         # Register protocol agent after other providers so capability map exists
         self.network.register_agent(self.protocol_agent)
@@ -368,7 +379,7 @@ async def demo():
 
 
 # Simple interface for your existing code
-async def create_collaborative_jarvis(api_key: str = None):
+async def create_collaborative_jarvis(api_key: str = None, repo_path: str = "."):
     """Create a collaborative Jarvis instance"""
     if api_key is None:
         load_dotenv()
@@ -378,6 +389,7 @@ async def create_collaborative_jarvis(api_key: str = None):
         "api_key": api_key,
         "calendar_api_url": "http://localhost:8080",
         "response_timeout": 60.0,
+        "repo_path": repo_path,
     }
 
     jarvis = JarvisSystem(config)
