@@ -163,10 +163,14 @@ Your job is to read the exact **User Input** below and return **only** a JSON ob
 
 **CRITICAL RULES:**
 1. You can ONLY use capabilities that exist in the "Available Capabilities" list below
-2. DO NOT invent or hallucinate capability names
-3. If the user's request matches an available capability, use "perform_capability" intent
-4. If no single capability matches, use "orchestrate_tasks" intent for complex multi-step requests
-5. DO NOT specify target_agent names - the system will auto-assign the first available provider
+2. DO NOT invent or hallucinate capability names or intents
+3. **INTENT vs CAPABILITY**: 
+   - INTENT = what type of action ("perform_capability", "orchestrate_tasks", etc.)
+   - CAPABILITY = specific skill from the list ("aider_software_agent_command", "schedule_appointment", etc.)
+4. If the user's request matches ONE available capability, use intent "perform_capability" 
+5. If no single capability matches OR multiple different agent types needed, use intent "orchestrate_tasks"
+6. **SOFTWARE TASKS**: All coding/development work uses capability "aider_software_agent_command" with intent "perform_capability"
+7. **MULTI-AGENT TASKS**: Use intent "orchestrate_tasks" only when you need multiple DIFFERENT types of agents (code + calendar, lights + code, etc.)
 
 **User Input**  
 \"\"\"{user_input}\"\"\"
@@ -174,26 +178,19 @@ Your job is to read the exact **User Input** below and return **only** a JSON ob
 **Available Capabilities:** {cap_list}
 
 #### Analysis Process:
-1. Check if the user's request directly matches ONE of the available capabilities
-2. If yes, use intent "perform_capability" with that exact capability name
-3. If the request needs multiple capabilities or doesn't match any single one, use "orchestrate_tasks"
+1. Is this a software/coding task? → intent: "perform_capability", capability: "aider_software_agent_command"
+2. Does this match ONE other capability? → intent: "perform_capability", capability: "that_capability" 
+3. Does this need multiple different agent types? → intent: "orchestrate_tasks", capability: null
+4. Otherwise → intent: "chat"
 
 #### JSON Schema (return ONLY this JSON, no other text):
 ```json
 {{
-"intent":       "<one of: run_protocol, ask_about_protocol, define_protocol, perform_capability, orchestrate_tasks, chat>",
-"target_agent": "<leave empty - will be auto-assigned>",
-"protocol_name":"<protocol name if intent is run/ask/define, else null>",
-"capability":   "<EXACT capability name from Available Capabilities list if intent is perform_capability, else null>",
-"args":         {{}}
+"intent": "<perform_capability OR orchestrate_tasks OR run_protocol OR ask_about_protocol OR define_protocol OR chat>",
+"target_agent": "",
+"protocol_name": null,
+"capability": "<exact capability name from list above OR null>",
+"args": {{}}
 }}
-```
-
-**Examples:**
-- "Turn on the lights" + capability "hue_command" exists → {{"intent": "perform_capability", "target_agent": "", "capability": "hue_command", ...}}
-- "Schedule a meeting" + capability "schedule_appointment" exists → {{"intent": "perform_capability", "target_agent": "", "capability": "schedule_appointment", ...}}
-- "Complex multi-step request" → {{"intent": "orchestrate_tasks", "target_agent": "", "capability": null, ...}}
-
-REMEMBER: Only use capability names that appear in the Available Capabilities list above!
 """
         return prompt
