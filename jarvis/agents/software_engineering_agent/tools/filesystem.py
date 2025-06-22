@@ -1,5 +1,8 @@
-"""Filesystem tool stubs."""
+"""Filesystem tool implementations."""
 from typing import Any, Dict, List
+
+from ....services.aider_service.aider_service import AiderService
+from .helpers import run_service
 
 
 tools: List[Dict[str, Any]] = [
@@ -45,13 +48,35 @@ tools: List[Dict[str, Any]] = [
 ]
 
 
-async def read_file(*args, **kwargs) -> str:
-    raise NotImplementedError
+async def read_file(
+    service: AiderService, repo_path: str, path: str
+) -> Dict[str, Any]:
+    """Read file contents."""
+    return await run_service(
+        service.files.read_file,
+        repo_path=repo_path,
+        file_path=path,
+    )
 
 
-async def write_file(*args, **kwargs) -> str:
-    raise NotImplementedError
+async def write_file(
+    service: AiderService, repo_path: str, path: str, contents: str
+) -> Dict[str, Any]:
+    """Write data to ``path``."""
+    return await run_service(
+        service.files.write_file,
+        repo_path=repo_path,
+        file_path=path,
+        content=contents,
+    )
 
 
-async def list_directory(*args, **kwargs) -> str:
-    raise NotImplementedError
+async def list_directory(
+    service: AiderService, repo_path: str, path: str
+) -> Dict[str, Any]:
+    """List directory entries."""
+    return await run_service(
+        service.files.list_directory,
+        repo_path=repo_path,
+        dir_path=path,
+    )
