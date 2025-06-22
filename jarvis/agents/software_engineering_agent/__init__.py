@@ -128,11 +128,10 @@ class SoftwareEngineeringAgent(NetworkAgent):
         if not func:
             return {"error": f"Unknown tool {name}"}
 
-        loop = asyncio.get_running_loop()
         try:
-            call = functools.partial(func, **args)
-            result = await loop.run_in_executor(None, call)
-        except Exception as exc:  # pragma: no cover - placeholder
+            # Since your tool functions are already async, just await them directly
+            result = await func(**args)
+        except Exception as exc:
             result = {"error": str(exc)}
         return result
 
@@ -169,7 +168,6 @@ class SoftwareEngineeringAgent(NetworkAgent):
         response_text = getattr(message, "content", "")
         return {"response": response_text, "actions": actions}
 
-
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
         data = message.content.get("data", {})
@@ -177,7 +175,9 @@ class SoftwareEngineeringAgent(NetworkAgent):
         if capability == "software_command":
             command = data.get("command")
             if not isinstance(command, str):
-                await self.send_error(message.from_agent, "Invalid command", message.request_id)
+                await self.send_error(
+                    message.from_agent, "Invalid command", message.request_id
+                )
                 return
             result = await self._process_dev_command(command)
         elif capability in self.intent_map:
