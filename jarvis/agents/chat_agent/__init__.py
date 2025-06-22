@@ -18,17 +18,15 @@ class ChatAgent(NetworkAgent):
     def description(self) -> str:
         return "Agent for handling chat interactions with users."
 
-    def __init__(
-        self,
-        ai_client: BaseAIClient,
-        logger: Optional[JarvisLogger] = None,
-    ) -> None:
-        super().__init__(name="ChatAgent", logger=logger)
-        self.ai_client = ai_client
-        self.capabilities = {
-            "greet": self._greet_user,
-            "echo": self._echo_message,
-        }
+    def handle_request(self, capability: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        if capability in self.capabilities:
+            return self.capabilities[capability](**data)
+        else:
+            return {"error": f"Capability {capability} not supported."}
+
+    def handle_response(self, response: Dict[str, Any]) -> None:
+        # Process the response from another agent
+        pass
 
     async def _execute_function(self, function_name: str, arguments: Dict[str, Any]) -> Any:
         if function_name in self.capabilities:
