@@ -352,6 +352,8 @@ class JarvisSystem:
         await self.network.stop()
         if self.calendar_service:
             await self.calendar_service.close()
+        if self.usage_logger:
+            await self.usage_logger.close()
         self.logger.log("INFO", "Jarvis system shutdown complete")
         self.logger.close()
 
