@@ -24,10 +24,6 @@ class ChatAgent(NetworkAgent):
             "greet": self._greet_user,
             "echo": self._echo_message,
         }
-        if capability in self.capabilities:
-            return self.capabilities[capability](**data)
-        else:
-            return {"error": f"Capability {capability} not supported."}
 
     def handle_response(self, response: Dict[str, Any]) -> None:
         # Process the response from another agent
