@@ -2,6 +2,7 @@
 
 from .services.calendar_service import CalendarService
 from .logger import JarvisLogger
+from .config import JarvisConfig
 from .log_viewer import LogViewer
 from .ai_clients import (
     AIClientFactory,
@@ -32,6 +33,7 @@ __all__ = [
     "CollaborativeCalendarAgent",
     "JarvisSystem",
     "create_collaborative_jarvis",
+    "JarvisConfig",
     "Protocol",
     "ProtocolStep",
     "ProtocolRegistry",

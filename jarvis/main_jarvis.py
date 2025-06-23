@@ -4,7 +4,7 @@ import asyncio
 import os
 from os import getenv
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from .services.calendar_service import CalendarService
 from .agents.chat_agent import ChatAgent
 from .ai_clients import AIClientFactory
 from .logger import JarvisLogger
+from .config import JarvisConfig
 from .agents.message import Message
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
@@ -29,10 +30,15 @@ from typing import List
 
 
 class JarvisSystem:
-    """Main Jarvis system that manages the agent network"""
+    """Main Jarvis system that manages the agent network."""
 
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
+    def __init__(self, config: JarvisConfig | Dict[str, Any]):
+        """Create a new Jarvis system."""
+
+        if isinstance(config, dict):
+            self.config = JarvisConfig(**config)
+        else:
+            self.config = config
         self.logger = JarvisLogger()
         self.network = AgentNetwork(self.logger)
 
@@ -59,7 +65,7 @@ class JarvisSystem:
 
         # Create AI client
         ai_client = AIClientFactory.create(
-            self.config.get("ai_provider", "openai"), api_key=self.config.get("api_key")
+            self.config.ai_provider, api_key=self.config.api_key
         )
         await self.usage_logger.connect()
 
@@ -68,14 +74,14 @@ class JarvisSystem:
         self.network.register_agent(self.nlu_agent)
 
         # 2) OrchestratorAgent (dynamic multi-step planning)
-        timeout = self.config.get("response_timeout", 15.0)
+        timeout = self.config.response_timeout
         self.orchestrator = OrchestratorAgent(
             ai_client, self.logger, response_timeout=timeout
         )
         self.network.register_agent(self.orchestrator)
 
         # 3) CalendarAgent
-        self.calendar_service = CalendarService(self.config.get("calendar_api_url"))
+        self.calendar_service = CalendarService(self.config.calendar_api_url)
         calendar_agent = CollaborativeCalendarAgent(
             ai_client, self.calendar_service, self.logger
         )
@@ -95,7 +101,7 @@ class JarvisSystem:
         self.network.register_agent(self.lights_agent)
 
         # 7) SoftwareEngineeringAgent (developer tools)
-        repo_path = self.config.get("repo_path", ".")
+        repo_path = self.config.repo_path
         self.software_agent = SoftwareEngineeringAgent(
             ai_client=ai_client,
             repo_path=repo_path,
@@ -396,18 +402,19 @@ async def demo():
 
 
 # Simple interface for your existing code
-async def create_collaborative_jarvis(api_key: str = None, repo_path: str = "."):
-    """Create a collaborative Jarvis instance"""
+async def create_collaborative_jarvis(api_key: str | None = None, repo_path: str = ".") -> "JarvisSystem":
+    """Helper for demos and tests to create a ready-to-use system."""
     if api_key is None:
         load_dotenv()
         api_key = os.getenv("OPENAI_API_KEY")
-    config = {
-        "ai_provider": "openai",
-        "api_key": api_key,
-        "calendar_api_url": "http://localhost:8080",
-        "response_timeout": 60.0,
-        "repo_path": repo_path,
-    }
+
+    config = JarvisConfig(
+        ai_provider="openai",
+        api_key=api_key,
+        calendar_api_url="http://localhost:8080",
+        response_timeout=60.0,
+        repo_path=repo_path,
+    )
 
     jarvis = JarvisSystem(config)
     await jarvis.initialize()

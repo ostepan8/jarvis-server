@@ -7,8 +7,10 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from jarvis import JarvisLogger, JarvisSystem
+from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.utils import detect_timezone
+
+DEFAULT_PORT = 8000
 
 app = FastAPI(title="Jarvis API")
 
@@ -24,12 +26,13 @@ async def startup_event() -> None:
     level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
     app.state.logger = JarvisLogger(log_level=level)
-    config = {
-        "ai_provider": "openai",
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "calendar_api_url": os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
-        "repo_path": os.getenv("REPO_PATH", "."),
-    }
+    config = JarvisConfig(
+        ai_provider="openai",
+        api_key=os.getenv("OPENAI_API_KEY"),
+        calendar_api_url=os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
+        repo_path=os.getenv("REPO_PATH", "."),
+        response_timeout=float(os.getenv("JARVIS_RESPONSE_TIMEOUT", 15.0)),
+    )
     jarvis_system = JarvisSystem(config)
     await jarvis_system.initialize()
     app.state.jarvis_system = jarvis_system
@@ -71,7 +74,7 @@ async def jarvis(
 
 def run():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=DEFAULT_PORT)
 
 
 if __name__ == "__main__":
