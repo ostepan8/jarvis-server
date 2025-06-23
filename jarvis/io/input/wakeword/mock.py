@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from .wake_word import WakeWordListener
-from .text_to_speech import TextToSpeechEngine
+from .base import WakeWordListener
 
 
 class MockWakeWordListener(WakeWordListener):
@@ -16,13 +15,3 @@ class MockWakeWordListener(WakeWordListener):
     async def wait_for_wake_word(self) -> None:
         await asyncio.sleep(self.delay)
         self.triggered = True
-
-
-class MockTTSEngine(TextToSpeechEngine):
-    """Mock TTS engine that records spoken text."""
-
-    def __init__(self) -> None:
-        self.spoken: list[str] = []
-
-    async def speak(self, text: str) -> None:
-        self.spoken.append(text)

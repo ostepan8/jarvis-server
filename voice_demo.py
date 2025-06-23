@@ -4,11 +4,10 @@ import asyncio
 import os
 from dotenv import load_dotenv
 
-from jarvis.voice import (
-    VoiceInputSystem,
-    PicovoiceWakeWordListener,
-    ElevenLabsTTSEngine,
-)
+from jarvis.io.input import VoiceInputSystem
+from jarvis.io.input.wakeword import PicovoiceWakeWordListener
+from jarvis.io.input.transcription import OpenAISTTEngine
+from jarvis.io.output.tts import ElevenLabsTTSEngine
 
 load_dotenv()
 
@@ -20,10 +19,11 @@ async def main() -> None:
         if os.getenv("PICOVOICE_KEYWORD_PATHS")
         else None,
     )
+    stt_engine = OpenAISTTEngine(api_key=os.getenv("OPENAI_API_KEY"))
     tts_engine = ElevenLabsTTSEngine(
         default_voice=os.getenv("ELEVEN_VOICE_ID", "ErXwobaYiN019PkySvjV")
     )
-    system = VoiceInputSystem(wake_listener, tts_engine)
+    system = VoiceInputSystem(wake_listener, stt_engine, tts_engine)
     await system.listen_and_respond()
 
 
