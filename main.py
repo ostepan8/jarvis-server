@@ -14,11 +14,9 @@ from jarvis.io import (
     ConsoleOutput,
 )
 from jarvis.io.elevenlabs_output import ElevenLabsOutput
-from jarvis.voice import (
-    VoiceInputSystem,
-    PicovoiceWakeWordListener,
-    ElevenLabsTTSEngine,
-)
+from jarvis.voice.picovoice_listener import PicovoiceWakeWordListener
+from jarvis.voice.voice_input_system import VoiceInputSystem
+from jarvis.voice.elevenlabs_tts import ElevenLabsTTSEngine
 
 # Load environment variables from .env file
 load_dotenv()
@@ -99,33 +97,47 @@ async def run_console() -> None:
 
 
 async def run_voice() -> None:
-    """Run the demo using wake word detection and ElevenLabs TTS."""
+    """Run the demo using wake word detection, speech recognition, and TTS."""
 
     jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
     tz_name = get_localzone_name()
 
+    # Initialize components
     wake_listener = PicovoiceWakeWordListener(
         access_key=os.getenv("PICOVOICE_ACCESS_KEY"),
-        keyword_paths=os.getenv("PICOVOICE_KEYWORD_PATHS", "").split(os.pathsep)
-        if os.getenv("PICOVOICE_KEYWORD_PATHS")
-        else None,
+        keyword_paths=(
+            os.getenv("PICOVOICE_KEYWORD_PATHS", "").split(os.pathsep)
+            if os.getenv("PICOVOICE_KEYWORD_PATHS")
+            else None
+        ),
     )
+
+    # Add speech recognition
+    from jarvis.voice.openai_stt import OpenAISTTEngine
+
+    stt_engine = OpenAISTTEngine(api_key=os.getenv("OPENAI_API_KEY"))
+
     tts_engine = ElevenLabsTTSEngine(
         default_voice=os.getenv("ELEVEN_VOICE_ID", "ErXwobaYiN019PkySvjV")
     )
-    system = VoiceInputSystem(wake_listener, tts_engine)
+
+    # Create the voice system with STT
+    system = VoiceInputSystem(wake_listener, stt_engine, tts_engine)
 
     async def handler(text: str) -> str:
-        if text.strip().lower() in {"exit", "quit"}:
+        if text.strip().lower() in {"exit", "quit", "goodbye"}:
             system.stop()
-            return "Goodbye"
+            return "Goodbye, sir."
+
         result = await jarvis.process_request(text, tz_name, {})
         await _display_result(result, ConsoleOutput())
+
         resp = result.get("response", "")
         if isinstance(resp, dict):
-            return resp.get("response", "")
-        return str(resp)
+            return resp.get("response", "Command completed, sir.")
+        return str(resp) if resp else "Command completed, sir."
 
+    print("Voice system ready. Say 'Jarvis' to activate...")
     await system.run_forever(handler)
     await jarvis.shutdown()
 

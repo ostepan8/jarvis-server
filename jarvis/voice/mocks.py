@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from ..interfaces import WakeWordListener, TextToSpeechEngine
+from .wake_word import WakeWordListener
+from .text_to_speech import TextToSpeechEngine
 
 
 class MockWakeWordListener(WakeWordListener):
@@ -25,4 +26,3 @@ class MockTTSEngine(TextToSpeechEngine):
 
     async def speak(self, text: str) -> None:
         self.spoken.append(text)
-

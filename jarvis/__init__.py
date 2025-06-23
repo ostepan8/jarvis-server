@@ -12,6 +12,7 @@ from .ai_clients import (
 )
 from .agents.agent_network import AgentNetwork
 from .agents.calendar_agent import CollaborativeCalendarAgent
+
 try:  # Optional import to avoid heavy dependencies during module import
     from .main_jarvis import JarvisSystem, create_collaborative_jarvis
 except Exception:  # pragma: no cover - optional dependency may be missing

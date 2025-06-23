@@ -2,6 +2,8 @@
 
 from .voice_input_system import VoiceInputSystem
 from .mocks import MockWakeWordListener, MockTTSEngine
+from ..voice.wake_word import WakeWordListener
+from ..voice.text_to_speech import TextToSpeechEngine
 
 try:  # optional heavy deps
     from .picovoice_listener import PicovoiceWakeWordListener
@@ -19,5 +21,6 @@ __all__ = [
     "VoiceInputSystem",
     "MockWakeWordListener",
     "MockTTSEngine",
+    "WakeWordListener",
+    "TextToSpeechEngine",
 ]
-

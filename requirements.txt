@@ -130,3 +130,4 @@ yarl
 zipp
 phue
 colorama
+pvporcupine

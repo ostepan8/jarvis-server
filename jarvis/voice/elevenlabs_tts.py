@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..interfaces import TextToSpeechEngine
+from .text_to_speech import TextToSpeechEngine
 from ..io.elevenlabs_output import ElevenLabsOutput
 
 
