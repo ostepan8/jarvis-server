@@ -27,11 +27,14 @@ python server.py
 The `/jarvis` endpoint accepts a JSON body with a `command` field describing the calendar request.
 
 ## Demo script
-To try the collaborative Jarvis system from the command line:
+Run the interactive demo from the command line:
 ```bash
 python -m asyncio run main.py
 ```
-The script prompts for a natural language command and prints the agent response.
+The demo now supports multiple commands in a single session. Type your request
+and Jarvis will respond until you enter `exit`.
+Input and output handling is implemented via pluggable classes in
+`jarvis.io`, allowing future integrations with custom interfaces.
 
 ## Viewing logs
 Agent activity is stored in `jarvis_logs.db`. Launch the interactive viewer with:
