@@ -417,7 +417,7 @@ Make sure the result enables deterministic scheduling and coordination between a
             {"role": "user", "content": user_input},
         ]
 
-        response = await self.ai_client.chat(messages, [])
+        response = await self.ai_client.strong_chat(messages, [])
         self.logger.log(
             "DEBUG",
             "Analysis raw response",
@@ -482,5 +482,5 @@ RESPONSE STYLE:
             },
         ]
 
-        result = await self.ai_client.chat(messages, [])
+        result = await self.ai_client.strong_chat(messages, [])
         return result[0].content

@@ -6,13 +6,19 @@ from jarvis.agents.orchestrator_agent import OrchestratorAgent
 from jarvis.agents.base import NetworkAgent
 from jarvis.ai_clients.base import BaseAIClient
 
+
 class DummyAIClient(BaseAIClient):
     def __init__(self, responses):
         self.responses = list(responses)
 
-    async def chat(self, messages, tools):
+    async def strong_chat(self, messages, tools=None):
         content = self.responses.pop(0)
         return (type("Msg", (), {"content": content}), None)
+
+    async def weak_chat(self, messages, tools=None):
+        content = self.responses.pop(0)
+        return (type("Msg", (), {"content": content}), None)
+
 
 class ProviderAgent(NetworkAgent):
     def __init__(self):
@@ -25,14 +31,19 @@ class ProviderAgent(NetworkAgent):
 
     async def _handle_capability_request(self, message):
         await self.received.put(message)
-        await self.send_capability_response(message.from_agent, {"done": True}, message.request_id, message.id)
+        await self.send_capability_response(
+            message.from_agent, {"done": True}, message.request_id, message.id
+        )
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_sequence():
-    ai = DummyAIClient([
-        '{"intent":"test","capabilities_needed":["dummy_cap"],"dependencies":{}}',
-        "All done"
-    ])
+    ai = DummyAIClient(
+        [
+            '{"intent":"test","capabilities_needed":["dummy_cap"],"dependencies":{}}',
+            "All done",
+        ]
+    )
     network = AgentNetwork()
     orch = OrchestratorAgent(ai, response_timeout=1.0)
     provider = ProviderAgent()

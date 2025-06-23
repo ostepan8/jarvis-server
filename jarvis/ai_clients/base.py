@@ -8,6 +8,15 @@ class BaseAIClient(ABC):
     """Abstract base class defining the interface for chat-based AI models."""
 
     @abstractmethod
-    async def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Tuple[Any, Any]:
-        """Send chat messages with optional tools and return response and tool calls."""
+    async def strong_chat(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]] | None = None
+    ) -> Tuple[Any, Any]:
+        """High quality chat using more capable (and expensive) models."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def weak_chat(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]] | None = None
+    ) -> Tuple[Any, Any]:
+        """Lower quality chat for lightweight tasks."""
         raise NotImplementedError

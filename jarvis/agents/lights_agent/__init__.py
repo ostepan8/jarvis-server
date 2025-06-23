@@ -938,7 +938,7 @@ class PhillipsHueAgent(NetworkAgent):
                 "INFO", f"=== ITERATION {iterations + 1} ===", "Sending request to AI"
             )
 
-            message, tool_calls = await self.ai_client.chat(messages, self.tools)
+            message, tool_calls = await self.ai_client.strong_chat(messages, self.tools)
 
             self.logger.log(
                 "INFO",

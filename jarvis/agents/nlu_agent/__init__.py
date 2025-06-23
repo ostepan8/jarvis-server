@@ -102,7 +102,7 @@ class NLUAgent(NetworkAgent):
         prompt = self.build_prompt(user_input, capabilities)
         self.logger.log("DEBUG", "NLU prompt built", prompt)
 
-        response = await self.ai_client.chat(
+        response = await self.ai_client.weak_chat(
             [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_input},
