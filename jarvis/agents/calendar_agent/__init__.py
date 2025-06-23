@@ -207,7 +207,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
         MAX_ITERATIONS = 10  # Increased for complex operations
         tool_calls = None
         while iterations < MAX_ITERATIONS:
-            message, tool_calls = await self.ai_client.chat(messages, self.tools)
+            message, tool_calls = await self.ai_client.strong_chat(messages, self.tools)
             self.logger.log(
                 "INFO", "AI response", getattr(message, "content", str(message))
             )

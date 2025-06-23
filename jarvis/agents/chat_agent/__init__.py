@@ -139,7 +139,7 @@ class ChatAgent(NetworkAgent):
                 {"role": "user", "content": user_message},
             ]
 
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             # Add response to history
             self.conversation_history[-1]["assistant"] = response.content
@@ -162,7 +162,7 @@ class ChatAgent(NetworkAgent):
             Format: Just return the joke, nothing else."""
 
             messages = [{"role": "user", "content": joke_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": f"Here's one for you: {response.content}"}
 
@@ -185,7 +185,7 @@ class ChatAgent(NetworkAgent):
             Make it engaging and end with a question to continue the story if they want."""
 
             messages = [{"role": "user", "content": story_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": response.content}
 
@@ -247,7 +247,7 @@ class ChatAgent(NetworkAgent):
             Be supportive, wise, and actionable. Consider multiple perspectives and be encouraging."""
 
             messages = [{"role": "user", "content": advice_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": response.content}
 
@@ -265,7 +265,7 @@ class ChatAgent(NetworkAgent):
             Make it interesting and engaging, like something JARVIS would find noteworthy."""
 
             messages = [{"role": "user", "content": fact_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": f"Here's something interesting: {response.content}"}
 
@@ -286,7 +286,7 @@ class ChatAgent(NetworkAgent):
             Format: Present the riddle and ask them to guess. Don't give the answer yet."""
 
             messages = [{"role": "user", "content": riddle_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": response.content}
 
@@ -320,7 +320,7 @@ class ChatAgent(NetworkAgent):
                 Be uplifting, practical, and inspiring. Focus on their potential and next steps."""
 
                 messages = [{"role": "user", "content": motivate_prompt}]
-                response, _ = await self.ai_client.chat(messages, [])
+                response, _ = await self.ai_client.strong_chat(messages, [])
 
                 return {"response": response.content}
             else:
@@ -426,7 +426,7 @@ class ChatAgent(NetworkAgent):
             Format: Question followed by multiple choice options (A, B, C, D). Don't give the answer yet."""
 
             messages = [{"role": "user", "content": trivia_prompt}]
-            response, _ = await self.ai_client.chat(messages, [])
+            response, _ = await self.ai_client.strong_chat(messages, [])
 
             return {"response": response.content}
 
