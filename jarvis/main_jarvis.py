@@ -206,7 +206,9 @@ class JarvisSystem:
                 )
 
                 try:
-                    async with tracker.timer("protocol_execution"):
+                    async with tracker.timer(
+                        "protocol_execution", metadata={"protocol": matched_protocol.name}
+                    ):
                         results = await self.protocol_executor.run_protocol(
                             matched_protocol,
                             trigger_phrase=user_input,
@@ -255,64 +257,78 @@ class JarvisSystem:
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
                 payload = {"command": user_input}
-                providers = await self.network.request_capability(
-                    from_agent=None,
-                    capability=cap,
-                    data=payload,
-                    request_id=request_id,
-                )
-                self.logger.log("DEBUG", f"Requested '{cap}' from {providers}", payload)
-
-                result = await self.network.wait_for_response(request_id)
+                async with tracker.timer("agent_response", metadata={"agent": target or cap}):
+                    providers = await self.network.request_capability(
+                        from_agent=None,
+                        capability=cap,
+                        data=payload,
+                        request_id=request_id,
+                    )
+                    self.logger.log(
+                        "DEBUG", f"Requested '{cap}' from {providers}", payload
+                    )
+                    result = await self.network.wait_for_response(request_id)
                 return {"response": result}
 
             if intent == "orchestrate_tasks":
-                async with tracker.timer("orchestrator"):
+                async with tracker.timer(
+                    "agent_response", metadata={"agent": "orchestrator"}
+                ):
                     return await self.orchestrator.process_user_request(user_input, tz_name)
 
             if intent == "run_protocol":
                 run_id = str(uuid.uuid4())
-                await self.network.request_capability(
-                    from_agent=self.nlu_agent.name,
-                    capability="run_protocol",
-                    data={"protocol_name": proto, "args": args},
-                    request_id=run_id,
-                )
-                result = await self.network.wait_for_response(run_id)
+                async with tracker.timer(
+                    "protocol_execution", metadata={"protocol": proto}
+                ):
+                    await self.network.request_capability(
+                        from_agent=self.nlu_agent.name,
+                        capability="run_protocol",
+                        data={"protocol_name": proto, "args": args},
+                        request_id=run_id,
+                    )
+                    result = await self.network.wait_for_response(run_id)
                 return {"response": result}
 
             if intent == "define_protocol":
                 define_id = str(uuid.uuid4())
-                await self.network.request_capability(
-                    from_agent=self.nlu_agent.name,
-                    capability="define_protocol",
-                    data=args,
-                    request_id=define_id,
-                )
-                result = await self.network.wait_for_response(define_id)
+                async with tracker.timer(
+                    "agent_response", metadata={"agent": "nlu_define"}
+                ):
+                    await self.network.request_capability(
+                        from_agent=self.nlu_agent.name,
+                        capability="define_protocol",
+                        data=args,
+                        request_id=define_id,
+                    )
+                    result = await self.network.wait_for_response(define_id)
                 return {"response": result}
 
             if intent == "ask_about_protocol":
                 desc_id = str(uuid.uuid4())
-                await self.network.request_capability(
-                    from_agent=self.nlu_agent.name,
-                    capability="describe_protocol",
-                    data={"protocol_name": proto},
-                    request_id=desc_id,
-                )
-                result = await self.network.wait_for_response(desc_id)
+                async with tracker.timer(
+                    "agent_response", metadata={"agent": "nlu_describe"}
+                ):
+                    await self.network.request_capability(
+                        from_agent=self.nlu_agent.name,
+                        capability="describe_protocol",
+                        data={"protocol_name": proto},
+                        request_id=desc_id,
+                    )
+                    result = await self.network.wait_for_response(desc_id)
                 return {"response": result}
 
             if intent == "chat":
                 define_id = str(uuid.uuid4())
                 payload = {"command": user_input}
-                await self.network.request_capability(
-                    from_agent=None,
-                    capability=cap,
-                    data=payload,
-                    request_id=define_id,
-                )
-                result = await self.network.wait_for_response(define_id)
+                async with tracker.timer("agent_response", metadata={"agent": target or "chat"}):
+                    await self.network.request_capability(
+                        from_agent=None,
+                        capability=cap,
+                        data=payload,
+                        request_id=define_id,
+                    )
+                    result = await self.network.wait_for_response(define_id)
 
                 return {"response": result}
 
