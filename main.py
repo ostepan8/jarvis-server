@@ -17,24 +17,36 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
     if isinstance(response_data, dict):
         await output.send_output(Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL)
         if "response" in response_data:
-            await output.send_output(Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL)
+            await output.send_output(
+                Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL
+            )
 
         if "actions" in response_data:
-            await output.send_output(Fore.YELLOW + "\n🔍 Actions performed:" + Style.RESET_ALL)
+            await output.send_output(
+                Fore.YELLOW + "\n🔍 Actions performed:" + Style.RESET_ALL
+            )
             for action in response_data["actions"]:
-                await output.send_output(Fore.BLUE + f"  • {action['function']}" + Style.RESET_ALL)
+                await output.send_output(
+                    Fore.BLUE + f"  • {action['function']}" + Style.RESET_ALL
+                )
                 result_value = action.get("result")
                 if result_value is None:
                     continue
 
                 if isinstance(result_value, dict):
                     for key, value in result_value.items():
-                        await output.send_output(f"    - {key}: {Fore.MAGENTA}{value}{Style.RESET_ALL}")
+                        await output.send_output(
+                            f"    - {key}: {Fore.MAGENTA}{value}{Style.RESET_ALL}"
+                        )
                 elif isinstance(result_value, list):
                     for item in result_value:
-                        await output.send_output(f"    - {Fore.MAGENTA}{item}{Style.RESET_ALL}")
+                        await output.send_output(
+                            f"    - {Fore.MAGENTA}{item}{Style.RESET_ALL}"
+                        )
                 else:
-                    await output.send_output(f"    - {Fore.MAGENTA}{result_value}{Style.RESET_ALL}")
+                    await output.send_output(
+                        f"    - {Fore.MAGENTA}{result_value}{Style.RESET_ALL}"
+                    )
     else:
         if result.get("success"):
             await output.send_output(Fore.CYAN + str(response_data) + Style.RESET_ALL)
@@ -43,12 +55,10 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
 
 
 async def demo(
-    input_handler: InputHandler | None = None,
-    output_handler: OutputHandler | None = None,
+    input_handler: InputHandler | None = ConsoleInput(),
+    output_handler: OutputHandler | None = ConsoleOutput(),
 ) -> None:
     colorama_init(autoreset=True)
-    input_handler = input_handler or ConsoleInput()
-    output_handler = output_handler or ConsoleOutput()
 
     jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
     tz_name = get_localzone_name()

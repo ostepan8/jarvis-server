@@ -38,6 +38,10 @@ class NLUAgent(NetworkAgent):
         # This agent provides a single "intent_matching" capability
         return {"intent_matching"}
 
+    async def _handle_capability_response(self, message):
+        self.logger.log("INFO", "NLUAgent received capability response", message)
+        return
+
     async def _handle_capability_request(self, message: Message) -> None:
         if message.content.get("capability") != "intent_matching":
             return
