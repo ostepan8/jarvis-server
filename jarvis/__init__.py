@@ -27,6 +27,19 @@ from .constants import (
     PROTOCOL_RESPONSES,
     ExecutionResult,
 )
+
+try:
+    from .voice import (
+        PicovoiceWakeWordListener,
+        OpenAITTSEngine,
+        ElevenLabsTTSEngine,
+        VoiceInputSystem,
+    )
+except Exception:  # pragma: no cover - optional deps
+    PicovoiceWakeWordListener = None
+    OpenAITTSEngine = None
+    ElevenLabsTTSEngine = None
+    VoiceInputSystem = None
 __all__ = [
     "CalendarService",
     "AIClientFactory",
@@ -47,6 +60,10 @@ __all__ = [
     "create_from_file",
     "DEFAULT_PORT",
     "LOG_DB_PATH",
+    "PicovoiceWakeWordListener",
+    "OpenAITTSEngine",
+    "ElevenLabsTTSEngine",
+    "VoiceInputSystem",
     "PROTOCOL_RESPONSES",
     "ExecutionResult",
 ]
