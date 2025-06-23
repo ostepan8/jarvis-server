@@ -78,7 +78,9 @@ class JarvisSystem:
 
     def _create_ai_client(self) -> BaseAIClient:
         """Instantiate the configured AI client."""
-        return AIClientFactory.create(self.config.ai_provider, api_key=self.config.api_key)
+        return AIClientFactory.create(
+            self.config.ai_provider, api_key=self.config.api_key
+        )
 
     async def _connect_usage_logger(self) -> None:
         await self.usage_logger.connect()
@@ -92,12 +94,16 @@ class JarvisSystem:
 
         # 2) OrchestratorAgent (dynamic multi-step planning)
         timeout = self.config.response_timeout
-        self.orchestrator = OrchestratorAgent(ai_client, self.logger, response_timeout=timeout)
+        self.orchestrator = OrchestratorAgent(
+            ai_client, self.logger, response_timeout=timeout
+        )
         self.network.register_agent(self.orchestrator)
 
         # 3) CalendarAgent
         self.calendar_service = CalendarService(self.config.calendar_api_url)
-        calendar_agent = CollaborativeCalendarAgent(ai_client, self.calendar_service, self.logger)
+        calendar_agent = CollaborativeCalendarAgent(
+            ai_client, self.calendar_service, self.logger
+        )
         self.network.register_agent(calendar_agent)
 
         # 4) ChatAgent (for handling chat interactions)
@@ -115,7 +121,9 @@ class JarvisSystem:
 
         # 7) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.repo_path
-        self.software_agent = SoftwareEngineeringAgent(ai_client=ai_client, repo_path=repo_path, logger=self.logger)
+        self.software_agent = SoftwareEngineeringAgent(
+            ai_client=ai_client, repo_path=repo_path, logger=self.logger
+        )
         self.network.register_agent(self.software_agent)
 
         # Register protocol agent after other providers so capability map exists
@@ -123,7 +131,9 @@ class JarvisSystem:
 
     def _setup_protocol_system(self) -> None:
         """Initialize protocol executor and load protocol definitions."""
-        self.protocol_executor = ProtocolExecutor(self.network, self.logger, usage_logger=self.usage_logger)
+        self.protocol_executor = ProtocolExecutor(
+            self.network, self.logger, usage_logger=self.usage_logger
+        )
 
         protocols_dir = Path(__file__).parent / "protocols" / "definitions"
         if protocols_dir.exists():
@@ -234,7 +244,7 @@ class JarvisSystem:
             request_id = str(uuid.uuid4())
             payload = {"command": user_input}
             providers = await self.network.request_capability(
-                from_agent=self.nlu_agent.name,
+                from_agent=None,
                 capability=cap,
                 data=payload,
                 request_id=request_id,
@@ -315,7 +325,9 @@ class JarvisSystem:
 
         # Create response based on protocol name and results
         protocol_responses = dict(PROTOCOL_RESPONSES)
-        protocol_responses["check_today_schedule"] = self._format_calendar_response(results)
+        protocol_responses["check_today_schedule"] = self._format_calendar_response(
+            results
+        )
 
         # Return specific response or generic success
         return protocol_responses.get(
@@ -391,7 +403,9 @@ async def demo():
 
 
 # Simple interface for your existing code
-async def create_collaborative_jarvis(api_key: str | None = None, repo_path: str = ".") -> "JarvisSystem":
+async def create_collaborative_jarvis(
+    api_key: str | None = None, repo_path: str = "."
+) -> "JarvisSystem":
     """Helper for demos and tests to create a ready-to-use system."""
     if api_key is None:
         load_dotenv()
