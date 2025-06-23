@@ -1,14 +1,16 @@
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any, Optional
 import json
+
+from ..constants import LOG_DB_PATH
 
 
 class JarvisLogger:
     """Simple logger that writes to stdout and a SQLite database."""
 
-    def __init__(self, db_path: str = "jarvis_logs.db", log_level: int = logging.INFO) -> None:
+    def __init__(self, db_path: str = LOG_DB_PATH, log_level: int = logging.INFO) -> None:
         self.db_path = db_path
         self.conn: Optional[sqlite3.Connection] = None
         self.log_level = log_level
