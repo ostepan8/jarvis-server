@@ -28,7 +28,7 @@ from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
 from .protocols import Protocol
 from .constants import PROTOCOL_RESPONSES
-from .performance import PerfTracker
+from .performance import PerfTracker, get_tracker
 
 
 class JarvisSystem:
@@ -177,8 +177,12 @@ class JarvisSystem:
         metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
-        tracker = PerfTracker(enabled=self.perf_enabled)
-        tracker.start()
+        tracker = get_tracker()
+        new_tracker = False
+        if tracker is None:
+            tracker = PerfTracker(enabled=self.perf_enabled)
+            tracker.start()
+            new_tracker = True
         try:
             if "did you know my middle name is henry" in user_input.lower():
                 return {"response": "Yes, I know your middle name is Henry, sir."}
@@ -315,9 +319,10 @@ class JarvisSystem:
             # fallback
             return {"response": "Sorry, I didn't understand that."}
         finally:
-            tracker.stop()
-            tracker.save()
-            self.logger.log("INFO", "Performance summary", tracker.summary())
+            if new_tracker:
+                tracker.stop()
+                tracker.save()
+                self.logger.log("INFO", "Performance summary", tracker.summary())
 
     def _format_protocol_response(
         self, protocol: Protocol, results: Dict[str, Any]
