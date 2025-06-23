@@ -84,9 +84,13 @@ class ChatAgent(NetworkAgent):
         try:
             if capability in self.function_map:
                 user_input = data.get("message", data.get("command", ""))
-                return await self.function_map[capability](user_input)
+                result = await self.function_map[capability](user_input)
             else:
-                return await self._handle_chat(data.get("command", ""))
+                result = await self._handle_chat(data.get("command", ""))
+
+            await self.send_capability_response(
+                message.from_agent, result, message.request_id, message.id
+            )
 
         except Exception as exc:
             self.logger.log("ERROR", f"ChatAgent error handling {capability}", str(exc))
