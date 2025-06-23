@@ -82,6 +82,7 @@ pycparser
 pydantic
 pydantic_core
 pydub
+pvporcupine
 pyflakes
 Pygments
 pymongo
