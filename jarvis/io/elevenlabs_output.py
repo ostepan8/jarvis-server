@@ -56,6 +56,7 @@ class ElevenLabsOutput(OutputHandler):
 
 
 if __name__ == "__main__":  # pragma: no cover - manual demonstration
+
     async def _demo() -> None:
         output = ElevenLabsOutput(default_voice="ErXwobaYiN019PkySvjV")
         await output.speak("Hello from Eleven Labs")
@@ -63,4 +64,3 @@ if __name__ == "__main__":  # pragma: no cover - manual demonstration
         await output.close()
 
     asyncio.run(_demo())
-

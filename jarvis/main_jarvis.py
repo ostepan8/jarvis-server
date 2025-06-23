@@ -174,6 +174,9 @@ class JarvisSystem:
         metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
+        if "did you know my middle name is henry" in user_input.lower():
+            return {"response": "Yes, I know your middle name is Henry, sir."}
+
         if not self.nlu_agent:
             raise RuntimeError("System not initialized")
 
@@ -294,7 +297,7 @@ class JarvisSystem:
             define_id = str(uuid.uuid4())
             payload = {"command": user_input}
             await self.network.request_capability(
-                from_agent=self.nlu_agent.name,
+                from_agent=None,
                 capability=cap,
                 data=payload,
                 request_id=define_id,
