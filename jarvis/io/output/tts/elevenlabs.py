@@ -9,7 +9,7 @@ import httpx
 from ...utils.audio import play_audio_bytes
 from ....logger import JarvisLogger
 from .base import TextToSpeechEngine
-from ....performance import track_async
+from ....performance import get_tracker
 
 
 class ElevenLabsTTSEngine(TextToSpeechEngine):
@@ -27,16 +27,27 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
         """Close the underlying HTTP client."""
         await self.client.aclose()
 
-    @track_async("tts_synthesis")
     async def speak(self, text: str, voice_id: Optional[str] = None) -> None:  # noqa: D401
         """Convert ``text`` to speech and play it."""
         voice = voice_id or self.default_voice
         headers = {"xi-api-key": self.api_key, "Content-Type": "application/json"}
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}"
+        tracker = get_tracker()
         try:
-            response = await self.client.post(url, headers=headers, json={"text": text})
-            response.raise_for_status()
-            audio_bytes = response.content
-            await asyncio.to_thread(play_audio_bytes, audio_bytes)
+            if tracker and tracker.enabled:
+                async with tracker.timer("tts_synthesis"):
+                    response = await self.client.post(url, headers=headers, json={"text": text})
+                    response.raise_for_status()
+                    audio_bytes = response.content
+            else:
+                response = await self.client.post(url, headers=headers, json={"text": text})
+                response.raise_for_status()
+                audio_bytes = response.content
+
+            if tracker and tracker.enabled:
+                async with tracker.timer("audio_playback"):
+                    await asyncio.to_thread(play_audio_bytes, audio_bytes)
+            else:
+                await asyncio.to_thread(play_audio_bytes, audio_bytes)
         except Exception as exc:  # pragma: no cover - network / playback errors
             self.logger.log("ERROR", "ElevenLabs TTS error", str(exc))

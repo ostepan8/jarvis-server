@@ -9,7 +9,10 @@ from typing import Any, Dict, List, Optional
 import contextvars
 
 
-PERF_TRACKING_ENV = os.getenv("PERF_TRACKING", "false").lower() == "true"
+# PERF_TRACE takes precedence over PERF_TRACKING for backwards compatibility
+PERF_TRACKING_ENV = os.getenv(
+    "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
+).lower() == "true"
 _current_tracker: contextvars.ContextVar["PerfTracker | None"] = contextvars.ContextVar(
     "current_perf_tracker", default=None
 )
@@ -21,6 +24,8 @@ class PerfEvent:
     start: float
     end: float
     duration: float
+    start_time: str
+    end_time: str
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -52,20 +57,32 @@ class PerfTracker:
             yield
             return
         start = time.perf_counter()
+        start_time = datetime.utcnow().isoformat() + "Z"
         try:
             yield
         finally:
             end = time.perf_counter()
+            end_time = datetime.utcnow().isoformat() + "Z"
             self.events.append(
-                PerfEvent(name=name, start=start, end=end, duration=end - start, metadata=metadata)
+                PerfEvent(
+                    name=name,
+                    start=start,
+                    end=end,
+                    duration=end - start,
+                    start_time=start_time,
+                    end_time=end_time,
+                    metadata=metadata,
+                )
             )
 
     def summary(self) -> Dict[str, Any]:
         timings = {ev.name: round(ev.duration, 4) for ev in self.events}
         ordered = dict(sorted(timings.items(), key=lambda i: i[1], reverse=True))
+        events = [asdict(ev) for ev in self.events]
         return {
             "interaction_id": self.interaction_id,
             "timings": ordered,
+            "events": events,
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
