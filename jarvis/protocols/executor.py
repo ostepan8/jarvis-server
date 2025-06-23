@@ -8,6 +8,7 @@ import time
 
 from ..logger import JarvisLogger
 from ..agents.agent_network import AgentNetwork
+from ..constants import ExecutionResult
 from . import Protocol
 from .loggers import ProtocolUsageLogger, generate_protocol_log
 
@@ -114,10 +115,12 @@ class ProtocolExecutor:
         errors = [r for r in results.values() if isinstance(r, dict) and "error" in r]
         if errors:
             execution_result = (
-                "partial" if len(errors) < len(protocol.steps) else "failure"
+                ExecutionResult.PARTIAL
+                if len(errors) < len(protocol.steps)
+                else ExecutionResult.FAILURE
             )
         else:
-            execution_result = "success"
+            execution_result = ExecutionResult.SUCCESS
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
@@ -128,7 +131,7 @@ class ProtocolExecutor:
                 trigger_phrase,
                 {
                     **(metadata or {}),
-                    "execution_result": execution_result,
+                    "execution_result": execution_result.value,
                     "latency_ms": latency_ms,
                 },
             )

@@ -21,6 +21,12 @@ from .protocols import Protocol, ProtocolStep
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
 from .protocols.builder import create_from_file
+from .constants import (
+    DEFAULT_PORT,
+    LOG_DB_PATH,
+    PROTOCOL_RESPONSES,
+    ExecutionResult,
+)
 __all__ = [
     "CalendarService",
     "AIClientFactory",
@@ -39,4 +45,8 @@ __all__ = [
     "ProtocolRegistry",
     "ProtocolExecutor",
     "create_from_file",
+    "DEFAULT_PORT",
+    "LOG_DB_PATH",
+    "PROTOCOL_RESPONSES",
+    "ExecutionResult",
 ]

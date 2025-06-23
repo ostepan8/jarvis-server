@@ -8,9 +8,8 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
+from jarvis.constants import DEFAULT_PORT
 from jarvis.utils import detect_timezone
-
-DEFAULT_PORT = 8000
 
 app = FastAPI(title="Jarvis API")
 

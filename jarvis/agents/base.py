@@ -62,10 +62,14 @@ class NetworkAgent:
         self.logger.log("DEBUG", f"{self.name} unknown message", message.message_type)
 
     async def _handle_capability_request(self, message: Message) -> None:
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _handle_capability_request"
+        )
 
     async def _handle_capability_response(self, message: Message) -> None:
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _handle_capability_response"
+        )
 
     async def _handle_error(self, message: Message) -> None:
         self.logger.log("ERROR", f"Error from {message.from_agent}", message.content)
