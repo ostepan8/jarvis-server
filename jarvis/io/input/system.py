@@ -27,6 +27,10 @@ class VoiceInputSystem:
         handler: Optional[Callable[[str], Awaitable[str]]] = None,
     ) -> None:
         """Wait for the wake word, then listen for speech and respond."""
+        from ...performance import PerfTracker
+
+        tracker = PerfTracker()
+        tracker.start()
         try:
             await self.wake_listener.wait_for_wake_word()
             print("Wake word detected! Listening...")
@@ -51,6 +55,16 @@ class VoiceInputSystem:
                 await self.tts_engine.speak("I'm having technical difficulties, sir.")
             except Exception:
                 pass
+        finally:
+            tracker.stop()
+            tracker.save()
+            logger = getattr(self.stt_engine, "logger", None) or getattr(
+                self.tts_engine, "logger", None
+            )
+            if logger:
+                logger.log("INFO", "Performance summary", tracker.summary())
+            else:
+                print("Performance summary:", tracker.summary())
 
     async def run_forever(
         self,
