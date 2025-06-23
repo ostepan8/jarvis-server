@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+import os
 
 
 @dataclass
@@ -13,3 +14,4 @@ class JarvisConfig:
     calendar_api_url: str = "http://localhost:8080"
     repo_path: str = "."
     response_timeout: float = 15.0
+    perf_tracking: bool = os.getenv("PERF_TRACKING", "false").lower() == "true"

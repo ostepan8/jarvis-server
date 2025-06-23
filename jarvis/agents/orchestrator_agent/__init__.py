@@ -13,6 +13,7 @@ from ..task import Task
 from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 from ...utils import extract_json_from_text
+from ...performance import track_async
 
 
 class OrchestratorAgent(NetworkAgent):
@@ -369,6 +370,7 @@ class OrchestratorAgent(NetworkAgent):
 
         return {"success": True, "response": final_text, "request_id": request_id}
 
+    @track_async("orchestrator_analysis")
     async def _analyze_request(self, user_input: str, tz_name: str) -> Dict[str, Any]:
         """Use AI to analyze the user request and determine needed tasks."""
         self.logger.log("DEBUG", "Analyzing request", user_input)
@@ -432,6 +434,7 @@ Make sure the result enables deterministic scheduling and coordination between a
         self.logger.log("DEBUG", "Analysis result", json.dumps(analysis))
         return analysis
 
+    @track_async("orchestrator_response")
     async def _format_response(
         self,
         request_id: str,

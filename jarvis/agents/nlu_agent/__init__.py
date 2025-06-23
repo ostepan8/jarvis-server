@@ -10,6 +10,7 @@ from ..message import Message
 from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 from ...utils import extract_json_from_text
+from ...performance import track_async
 
 
 class NLUAgent(NetworkAgent):
@@ -97,6 +98,7 @@ class NLUAgent(NetworkAgent):
             original_message_id=message.id,
         )
 
+    @track_async("nlu_reasoning")
     async def classify(
         self,
         user_input: str,

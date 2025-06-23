@@ -28,6 +28,7 @@ from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
 from .protocols import Protocol
 from .constants import PROTOCOL_RESPONSES
+from .performance import PerfTracker
 
 
 class JarvisSystem:
@@ -42,6 +43,8 @@ class JarvisSystem:
             self.config = config
         self.logger = JarvisLogger()
         self.network = AgentNetwork(self.logger)
+        self.perf_enabled = self.config.perf_tracking
+        self._tracker: PerfTracker | None = None
 
         # Placeholders for your agents
         self.nlu_agent: NLUAgent = None
@@ -174,140 +177,147 @@ class JarvisSystem:
         metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
-        if "did you know my middle name is henry" in user_input.lower():
-            return {"response": "Yes, I know your middle name is Henry, sir."}
+        tracker = PerfTracker(enabled=self.perf_enabled)
+        tracker.start()
+        try:
+            if "did you know my middle name is henry" in user_input.lower():
+                return {"response": "Yes, I know your middle name is Henry, sir."}
 
-        if not self.nlu_agent:
-            raise RuntimeError("System not initialized")
+            if not self.nlu_agent:
+                raise RuntimeError("System not initialized")
 
-        # 1) First check for protocol matches (fast path)
-        matched_protocol = None
-        if self.voice_matcher:
-            matched_protocol = self.voice_matcher.match_command(user_input)
+            # 1) First check for protocol matches (fast path)
+            matched_protocol = None
+            if self.voice_matcher:
+                matched_protocol = self.voice_matcher.match_command(user_input)
 
-        if not matched_protocol:
-            matched_protocol = self.protocol_registry.find_matching_protocol(user_input)
+            if not matched_protocol:
+                matched_protocol = self.protocol_registry.find_matching_protocol(user_input)
 
-        if matched_protocol:
+            if matched_protocol:
+                self.logger.log(
+                    "INFO",
+                    "Trigger matched",
+                    f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+                )
+
+                try:
+                    async with tracker.timer("protocol_execution"):
+                        results = await self.protocol_executor.run_protocol(
+                            matched_protocol,
+                            trigger_phrase=user_input,
+                            metadata=metadata,
+                        )
+
+                    response = self._format_protocol_response(matched_protocol, results)
+
+                    return {
+                        "response": response,
+                        "protocol_executed": matched_protocol.name,
+                        "execution_time": "fast",
+                    }
+                except Exception as e:
+                    self.logger.log(
+                        "ERROR",
+                        f"Protocol execution failed for '{matched_protocol.name}'",
+                        str(e),
+                    )
+                    # Fall through to NLU on error
+
+            # 2) No protocol match or protocol failed - use NLU agent
+            request_id = str(uuid.uuid4())
+            async with tracker.timer("nlu_classification"):
+                await self.network.request_capability(
+                    from_agent=self.nlu_agent.name,
+                    capability="intent_matching",
+                    data={"input": user_input},
+                    request_id=request_id,
+                )
+
+                classification = await self.network.wait_for_response(request_id)
+            intent = classification["intent"]
+            target = classification["target_agent"]
+            proto = classification.get("protocol_name")
+            cap = classification.get("capability")
+            args = classification.get("args", {})
+
             self.logger.log(
                 "INFO",
-                "Trigger matched",
-                f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+                "Routing after NLU",
+                f"intent={intent}, target={target}, cap={cap}, proto={proto}, args={args}",
             )
 
-            try:
-                # Execute the protocol directly
-                results = await self.protocol_executor.run_protocol(
-                    matched_protocol,
-                    trigger_phrase=user_input,
-                    metadata=metadata,
+            # 4) Route to the appropriate agent
+            if intent == "perform_capability" and cap:
+                request_id = str(uuid.uuid4())
+                payload = {"command": user_input}
+                providers = await self.network.request_capability(
+                    from_agent=None,
+                    capability=cap,
+                    data=payload,
+                    request_id=request_id,
                 )
+                self.logger.log("DEBUG", f"Requested '{cap}' from {providers}", payload)
 
-                # Format the response in Jarvis style
-                response = self._format_protocol_response(matched_protocol, results)
+                result = await self.network.wait_for_response(request_id)
+                return {"response": result}
 
-                return {
-                    "response": response,
-                    "protocol_executed": matched_protocol.name,
-                    "execution_time": "fast",
-                }
-            except Exception as e:
-                self.logger.log(
-                    "ERROR",
-                    f"Protocol execution failed for '{matched_protocol.name}'",
-                    str(e),
+            if intent == "orchestrate_tasks":
+                async with tracker.timer("orchestrator"):
+                    return await self.orchestrator.process_user_request(user_input, tz_name)
+
+            if intent == "run_protocol":
+                run_id = str(uuid.uuid4())
+                await self.network.request_capability(
+                    from_agent=self.nlu_agent.name,
+                    capability="run_protocol",
+                    data={"protocol_name": proto, "args": args},
+                    request_id=run_id,
                 )
-                # Fall through to NLU on error
+                result = await self.network.wait_for_response(run_id)
+                return {"response": result}
 
-        # 2) No protocol match or protocol failed - use NLU agent
-        request_id = str(uuid.uuid4())
-        await self.network.request_capability(
-            from_agent=self.nlu_agent.name,
-            capability="intent_matching",
-            data={"input": user_input},
-            request_id=request_id,
-        )
+            if intent == "define_protocol":
+                define_id = str(uuid.uuid4())
+                await self.network.request_capability(
+                    from_agent=self.nlu_agent.name,
+                    capability="define_protocol",
+                    data=args,
+                    request_id=define_id,
+                )
+                result = await self.network.wait_for_response(define_id)
+                return {"response": result}
 
-        # 3) Wait for the classification result
-        classification = await self.network.wait_for_response(request_id)
-        intent = classification["intent"]
-        target = classification["target_agent"]
-        proto = classification.get("protocol_name")
-        cap = classification.get("capability")
-        args = classification.get("args", {})
+            if intent == "ask_about_protocol":
+                desc_id = str(uuid.uuid4())
+                await self.network.request_capability(
+                    from_agent=self.nlu_agent.name,
+                    capability="describe_protocol",
+                    data={"protocol_name": proto},
+                    request_id=desc_id,
+                )
+                result = await self.network.wait_for_response(desc_id)
+                return {"response": result}
 
-        self.logger.log(
-            "INFO",
-            "Routing after NLU",
-            f"intent={intent}, target={target}, cap={cap}, proto={proto}, args={args}",
-        )
+            if intent == "chat":
+                define_id = str(uuid.uuid4())
+                payload = {"command": user_input}
+                await self.network.request_capability(
+                    from_agent=None,
+                    capability=cap,
+                    data=payload,
+                    request_id=define_id,
+                )
+                result = await self.network.wait_for_response(define_id)
 
-        # 4) Route to the appropriate agent
-        if intent == "perform_capability" and cap:
-            request_id = str(uuid.uuid4())
-            payload = {"command": user_input}
-            providers = await self.network.request_capability(
-                from_agent=None,
-                capability=cap,
-                data=payload,
-                request_id=request_id,
-            )
-            self.logger.log("DEBUG", f"Requested '{cap}' from {providers}", payload)
+                return {"response": result}
 
-            result = await self.network.wait_for_response(request_id)
-            return {"response": result}
-
-        if intent == "orchestrate_tasks":
-            return await self.orchestrator.process_user_request(user_input, tz_name)
-
-        if intent == "run_protocol":
-            run_id = str(uuid.uuid4())
-            await self.network.request_capability(
-                from_agent=self.nlu_agent.name,
-                capability="run_protocol",
-                data={"protocol_name": proto, "args": args},
-                request_id=run_id,
-            )
-            result = await self.network.wait_for_response(run_id)
-            return {"response": result}
-
-        if intent == "define_protocol":
-            define_id = str(uuid.uuid4())
-            await self.network.request_capability(
-                from_agent=self.nlu_agent.name,
-                capability="define_protocol",
-                data=args,
-                request_id=define_id,
-            )
-            result = await self.network.wait_for_response(define_id)
-            return {"response": result}
-
-        if intent == "ask_about_protocol":
-            desc_id = str(uuid.uuid4())
-            await self.network.request_capability(
-                from_agent=self.nlu_agent.name,
-                capability="describe_protocol",
-                data={"protocol_name": proto},
-                request_id=desc_id,
-            )
-            result = await self.network.wait_for_response(desc_id)
-            return {"response": result}
-
-        if intent == "chat":
-            define_id = str(uuid.uuid4())
-            payload = {"command": user_input}
-            await self.network.request_capability(
-                from_agent=None,
-                capability=cap,
-                data=payload,
-                request_id=define_id,
-            )
-            result = await self.network.wait_for_response(define_id)
-
-            return {"response": result}
-
-        # fallback
-        return {"response": "Sorry, I didn't understand that."}
+            # fallback
+            return {"response": "Sorry, I didn't understand that."}
+        finally:
+            tracker.stop()
+            tracker.save()
+            self.logger.log("INFO", "Performance summary", tracker.summary())
 
     def _format_protocol_response(
         self, protocol: Protocol, results: Dict[str, Any]

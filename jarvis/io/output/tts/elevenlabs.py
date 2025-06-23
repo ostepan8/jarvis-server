@@ -9,6 +9,7 @@ import httpx
 from ...utils.audio import play_audio_bytes
 from ....logger import JarvisLogger
 from .base import TextToSpeechEngine
+from ....performance import track_async
 
 
 class ElevenLabsTTSEngine(TextToSpeechEngine):
@@ -26,6 +27,7 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
         """Close the underlying HTTP client."""
         await self.client.aclose()
 
+    @track_async("tts_synthesis")
     async def speak(self, text: str, voice_id: Optional[str] = None) -> None:  # noqa: D401
         """Convert ``text`` to speech and play it."""
         voice = voice_id or self.default_voice
