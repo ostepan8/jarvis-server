@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 from openai import AsyncOpenAI
 
 from .base import BaseAIClient
+from ..performance import track_async
 
 
 class OpenAIClient(BaseAIClient):
@@ -21,6 +22,7 @@ class OpenAIClient(BaseAIClient):
         self.strong_model = strong_model
         self.weak_model = weak_model
 
+    @track_async("llm_reasoning")
     async def _chat(
         self,
         messages: List[Dict[str, Any]],

@@ -13,6 +13,7 @@ import openai
 
 from ....logger import JarvisLogger
 from .base import SpeechToTextEngine
+from ....performance import track_async
 
 
 class OpenAISTTEngine(SpeechToTextEngine):
@@ -38,6 +39,7 @@ class OpenAISTTEngine(SpeechToTextEngine):
         self.silence_threshold = silence_threshold
         self.silence_duration = silence_duration
 
+    @track_async("speech_transcription")
     async def listen_for_speech(self, timeout: float = 10.0) -> str:
         """Listen for speech and return transcribed text."""
         try:

@@ -8,6 +8,7 @@ import openai
 from ...utils.audio import play_audio_bytes
 from ....logger import JarvisLogger
 from .base import TextToSpeechEngine
+from ....performance import track_async
 
 
 class OpenAITTSEngine(TextToSpeechEngine):
@@ -29,6 +30,7 @@ class OpenAITTSEngine(TextToSpeechEngine):
         self.voice = voice
         self.client = openai.AsyncOpenAI(api_key=self.api_key)
 
+    @track_async("tts_synthesis")
     async def speak(self, text: str) -> None:  # noqa: D401 - interface impl
         """Convert ``text`` to speech and play it asynchronously."""
         try:

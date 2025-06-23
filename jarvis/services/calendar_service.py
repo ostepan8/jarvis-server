@@ -7,6 +7,7 @@ import types
 import httpx
 
 from ..logger import JarvisLogger
+from ..performance import track_async
 
 
 class CalendarService:
@@ -64,6 +65,7 @@ class CalendarService:
         """Format datetime for API consumption."""
         return dt.strftime("%Y-%m-%d %H:%M")
 
+    @track_async("calendar_api")
     async def _request(
         self,
         method: str,

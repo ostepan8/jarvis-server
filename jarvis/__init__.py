@@ -28,6 +28,7 @@ from .constants import (
     PROTOCOL_RESPONSES,
     ExecutionResult,
 )
+from .performance import PerfTracker, track_async
 
 PicovoiceWakeWordListener = None
 OpenAITTSEngine = None
@@ -55,4 +56,6 @@ __all__ = [
     "LOG_DB_PATH",
     "PROTOCOL_RESPONSES",
     "ExecutionResult",
+    "PerfTracker",
+    "track_async",
 ]
