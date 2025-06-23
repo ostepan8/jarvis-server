@@ -1,10 +1,5 @@
-from .base import InputHandler, OutputHandler, ConsoleInput, ConsoleOutput
-from .elevenlabs_output import ElevenLabsOutput
+"""I/O subsystem for Jarvis."""
 
-__all__ = [
-    "InputHandler",
-    "OutputHandler",
-    "ConsoleInput",
-    "ConsoleOutput",
-    "ElevenLabsOutput",
-]
+from .base import InputHandler, OutputHandler, ConsoleInput, ConsoleOutput
+
+__all__ = ["InputHandler", "OutputHandler", "ConsoleInput", "ConsoleOutput"]

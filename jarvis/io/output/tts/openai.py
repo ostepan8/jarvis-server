@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import os
 
-import sounddevice as sd
-import soundfile as sf
 import openai
 
-from ..logger import JarvisLogger
-from ..interfaces import TextToSpeechEngine
+from ...utils.audio import play_audio_bytes
+from ....logger import JarvisLogger
+from .base import TextToSpeechEngine
 
 
 class OpenAITTSEngine(TextToSpeechEngine):
-    """Text to speech engine using OpenAI's TTS API."""
+    """Text-to-speech engine using OpenAI's TTS API."""
 
     def __init__(
         self,
@@ -33,18 +31,11 @@ class OpenAITTSEngine(TextToSpeechEngine):
 
     async def speak(self, text: str) -> None:  # noqa: D401 - interface impl
         """Convert ``text`` to speech and play it asynchronously."""
-
         try:
             response = await self.client.audio.speech.create(
                 model=self.model, voice=self.voice, input=text
             )
             audio_bytes = await response.read()
-            await asyncio.to_thread(self._play_audio, audio_bytes)
+            await asyncio.to_thread(play_audio_bytes, audio_bytes)
         except Exception as exc:  # pragma: no cover - network errors
             self.logger.log("ERROR", "OpenAI TTS error", str(exc))
-
-    def _play_audio(self, audio_bytes: bytes) -> None:
-        with sf.SoundFile(io.BytesIO(audio_bytes)) as f:
-            data = f.read(dtype="float32")
-            sd.play(data, f.samplerate, blocking=False)
-

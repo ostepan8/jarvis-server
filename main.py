@@ -13,10 +13,9 @@ from jarvis.io import (
     ConsoleInput,
     ConsoleOutput,
 )
-from jarvis.io.elevenlabs_output import ElevenLabsOutput
-from jarvis.voice.picovoice_listener import PicovoiceWakeWordListener
-from jarvis.voice.voice_input_system import VoiceInputSystem
-from jarvis.voice.elevenlabs_tts import ElevenLabsTTSEngine
+from jarvis.io.input.wakeword import PicovoiceWakeWordListener
+from jarvis.io.input import VoiceInputSystem
+from jarvis.io.output.tts import ElevenLabsTTSEngine
 
 # Load environment variables from .env file
 load_dotenv()
@@ -113,7 +112,7 @@ async def run_voice() -> None:
     )
 
     # Add speech recognition
-    from jarvis.voice.openai_stt import OpenAISTTEngine
+    from jarvis.io.input.transcription import OpenAISTTEngine
 
     stt_engine = OpenAISTTEngine(api_key=os.getenv("OPENAI_API_KEY"))
 
