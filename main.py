@@ -6,60 +6,62 @@ from dotenv import load_dotenv
 from jarvis.main_jarvis import create_collaborative_jarvis
 from tzlocal import get_localzone_name
 from colorama import Fore, Style, init as colorama_init
+from jarvis.io import InputHandler, OutputHandler, ConsoleInput, ConsoleOutput
 
 # Load environment variables from .env file
 load_dotenv()
 
 
-async def demo() -> None:
-    colorama_init(autoreset=True)
-    jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
-
-    # Get user input for the calendar command
-    user_command = input(
-        "Enter your command for Jarvis (e.g., 'schedule a meeting', 'check my calendar'): "
-    )
-
-    result = await jarvis.process_request(
-        user_command,
-        get_localzone_name(),
-        {},
-    )
+async def _display_result(result: dict, output: OutputHandler) -> None:
     response_data = result.get("response", "")
-    print(response_data, "RESPONSE DATA")
     if isinstance(response_data, dict):
-        print(Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL)
+        await output.send_output(Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL)
         if "response" in response_data:
-            print(Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL)
+            await output.send_output(Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL)
 
         if "actions" in response_data:
-            print(Fore.YELLOW + "\n🔍 Actions performed:" + Style.RESET_ALL)
+            await output.send_output(Fore.YELLOW + "\n🔍 Actions performed:" + Style.RESET_ALL)
             for action in response_data["actions"]:
-                print(Fore.BLUE + f"  • {action['function']}" + Style.RESET_ALL)
-                result = action.get("result")
-                if result is None:
+                await output.send_output(Fore.BLUE + f"  • {action['function']}" + Style.RESET_ALL)
+                result_value = action.get("result")
+                if result_value is None:
                     continue
 
-                # Handle dict results
-                if isinstance(result, dict):
-                    for key, value in result.items():
-                        print(f"    - {key}: {Fore.MAGENTA}{value}{Style.RESET_ALL}")
-
-                # Handle list results
-                elif isinstance(result, list):
-                    for item in result:
-                        print(f"    - {Fore.MAGENTA}{item}{Style.RESET_ALL}")
-
-                # Fallback for other types
+                if isinstance(result_value, dict):
+                    for key, value in result_value.items():
+                        await output.send_output(f"    - {key}: {Fore.MAGENTA}{value}{Style.RESET_ALL}")
+                elif isinstance(result_value, list):
+                    for item in result_value:
+                        await output.send_output(f"    - {Fore.MAGENTA}{item}{Style.RESET_ALL}")
                 else:
-                    print(f"    - {Fore.MAGENTA}{result}{Style.RESET_ALL}")
-
+                    await output.send_output(f"    - {Fore.MAGENTA}{result_value}{Style.RESET_ALL}")
     else:
-        # Handle string or error responses
         if result.get("success"):
-            print(Fore.CYAN + str(response_data) + Style.RESET_ALL)
+            await output.send_output(Fore.CYAN + str(response_data) + Style.RESET_ALL)
         else:
-            print(Fore.RED + str(response_data) + Style.RESET_ALL)
+            await output.send_output(Fore.RED + str(response_data) + Style.RESET_ALL)
+
+
+async def demo(
+    input_handler: InputHandler | None = None,
+    output_handler: OutputHandler | None = None,
+) -> None:
+    colorama_init(autoreset=True)
+    input_handler = input_handler or ConsoleInput()
+    output_handler = output_handler or ConsoleOutput()
+
+    jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
+    tz_name = get_localzone_name()
+
+    await output_handler.send_output("Type 'exit' to quit.")
+
+    while True:
+        user_command = await input_handler.get_input("Jarvis> ")
+        if user_command.strip().lower() in {"exit", "quit"}:
+            break
+
+        result = await jarvis.process_request(user_command, tz_name, {})
+        await _display_result(result, output_handler)
 
     await jarvis.shutdown()
 
