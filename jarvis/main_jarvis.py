@@ -4,9 +4,10 @@ import asyncio
 import os
 from os import getenv
 import uuid
-from typing import Any, Dict, Optional
-from dotenv import load_dotenv
+from typing import Any, Dict, List, Optional
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from .agents.agent_network import AgentNetwork
 from .agents.nlu_agent import NLUAgent
@@ -17,7 +18,7 @@ from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .services.calendar_service import CalendarService
 from .agents.chat_agent import ChatAgent
-from .ai_clients import AIClientFactory
+from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
 from .agents.message import Message
@@ -26,7 +27,18 @@ from .protocols.executor import ProtocolExecutor
 from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
 from .protocols import Protocol
-from typing import List
+
+# Pre-defined phrases used when summarizing protocol execution results.
+PROTOCOL_RESPONSES: Dict[str, str] = {
+    "blue_lights_on": "Blue lights activated, sir.",
+    "blue_lights_off": "Blue lights deactivated, sir.",
+    "red_alert": "Red alert mode engaged. All systems on high alert, sir.",
+    "all_lights_off": "All lights have been turned off, sir.",
+    "dim_lights": "Lights dimmed to comfortable levels, sir.",
+    "bright_lights": "Lights set to maximum brightness, sir.",
+    "morning_routine": "Good morning, sir. Your morning routine has been initiated.",
+    "goodnight": "Goodnight, sir. Sleep mode activated.",
+}
 
 
 class JarvisSystem:
@@ -60,14 +72,30 @@ class JarvisSystem:
             db_name="protocals",
         )
 
-    async def initialize(self):
-        """Initialize all agents and start the network"""
+    async def initialize(self) -> None:
+        """Initialize all agents and start the network."""
 
-        # Create AI client
-        ai_client = AIClientFactory.create(
-            self.config.ai_provider, api_key=self.config.api_key
+        ai_client = self._create_ai_client()
+        await self._connect_usage_logger()
+        self._register_agents(ai_client)
+        self._setup_protocol_system()
+        await self._start_network()
+
+        self.logger.log(
+            "INFO",
+            "Jarvis system initialized",
+            f"Active agents: {list(self.network.agents.keys())}, Loaded protocols: {len(self.protocol_registry.protocols)}",
         )
+
+    def _create_ai_client(self) -> BaseAIClient:
+        """Instantiate the configured AI client."""
+        return AIClientFactory.create(self.config.ai_provider, api_key=self.config.api_key)
+
+    async def _connect_usage_logger(self) -> None:
         await self.usage_logger.connect()
+
+    def _register_agents(self, ai_client: BaseAIClient) -> None:
+        """Create and register all agents with the network."""
 
         # 1) NLUAgent (must be registered so network.request_capability works)
         self.nlu_agent = NLUAgent(ai_client, self.logger)
@@ -75,16 +103,12 @@ class JarvisSystem:
 
         # 2) OrchestratorAgent (dynamic multi-step planning)
         timeout = self.config.response_timeout
-        self.orchestrator = OrchestratorAgent(
-            ai_client, self.logger, response_timeout=timeout
-        )
+        self.orchestrator = OrchestratorAgent(ai_client, self.logger, response_timeout=timeout)
         self.network.register_agent(self.orchestrator)
 
         # 3) CalendarAgent
         self.calendar_service = CalendarService(self.config.calendar_api_url)
-        calendar_agent = CollaborativeCalendarAgent(
-            ai_client, self.calendar_service, self.logger
-        )
+        calendar_agent = CollaborativeCalendarAgent(ai_client, self.calendar_service, self.logger)
         self.network.register_agent(calendar_agent)
 
         # 4) ChatAgent (for handling chat interactions)
@@ -96,45 +120,30 @@ class JarvisSystem:
 
         # 6) LightsAgent (for smart home control)
         load_dotenv()
-        BRIDGE_IP = os.getenv("HUE_BRIDGE_IP")
-        self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=BRIDGE_IP)
+        bridge_ip = os.getenv("HUE_BRIDGE_IP")
+        self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
         self.network.register_agent(self.lights_agent)
 
         # 7) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.repo_path
-        self.software_agent = SoftwareEngineeringAgent(
-            ai_client=ai_client,
-            repo_path=repo_path,
-            logger=self.logger,
-        )
+        self.software_agent = SoftwareEngineeringAgent(ai_client=ai_client, repo_path=repo_path, logger=self.logger)
         self.network.register_agent(self.software_agent)
 
         # Register protocol agent after other providers so capability map exists
         self.network.register_agent(self.protocol_agent)
 
-        # Initialize protocol system components
-        self.protocol_executor = ProtocolExecutor(
-            self.network,
-            self.logger,
-            usage_logger=self.usage_logger,
-        )
+    def _setup_protocol_system(self) -> None:
+        """Initialize protocol executor and load protocol definitions."""
+        self.protocol_executor = ProtocolExecutor(self.network, self.logger, usage_logger=self.usage_logger)
 
-        # Load protocols from definitions directory
         protocols_dir = Path(__file__).parent / "protocols" / "definitions"
         if protocols_dir.exists():
             self._load_protocols_from_directory(protocols_dir)
 
-        # Initialize voice matcher with loaded protocols
         self.voice_matcher = VoiceTriggerMatcher(self.protocol_registry.protocols)
 
-        # Start the message processing loop
+    async def _start_network(self) -> None:
         await self.network.start()
-
-        self.logger.log(
-            "INFO",
-            "Jarvis system initialized",
-            f"Active agents: {list(self.network.agents.keys())}, Loaded protocols: {len(self.protocol_registry.protocols)}",
-        )
 
     def _load_protocols_from_directory(self, directory: Path):
         """Load all protocol definitions from JSON files in the directory"""
@@ -316,17 +325,8 @@ class JarvisSystem:
             return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
 
         # Create response based on protocol name and results
-        protocol_responses = {
-            "blue_lights_on": "Blue lights activated, sir.",
-            "blue_lights_off": "Blue lights deactivated, sir.",
-            "red_alert": "Red alert mode engaged. All systems on high alert, sir.",
-            "all_lights_off": "All lights have been turned off, sir.",
-            "dim_lights": "Lights dimmed to comfortable levels, sir.",
-            "bright_lights": "Lights set to maximum brightness, sir.",
-            "check_today_schedule": self._format_calendar_response(results),
-            "morning_routine": "Good morning, sir. Your morning routine has been initiated.",
-            "goodnight": "Goodnight, sir. Sleep mode activated.",
-        }
+        protocol_responses = dict(PROTOCOL_RESPONSES)
+        protocol_responses["check_today_schedule"] = self._format_calendar_response(results)
 
         # Return specific response or generic success
         return protocol_responses.get(
