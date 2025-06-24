@@ -135,7 +135,7 @@ class OpenAISTTEngine(SpeechToTextEngine):
 
                 try:
                     audio_1d = indata.flatten()
-                    volume_norm = np.sqrt(np.mean(audio_1d ** 2))
+                    volume_norm = np.sqrt(np.mean(audio_1d**2))
                 except (ValueError, FloatingPointError) as e:
                     self.logger.log("WARNING", "RMS calculation error", str(e))
                     volume_norm = 0.0
@@ -143,7 +143,7 @@ class OpenAISTTEngine(SpeechToTextEngine):
                 if volume_norm > self.silence_threshold:
                     if not recording_started:
                         self.logger.log(
-                            "DEBUG",
+                            "INFO",
                             "Started recording speech",
                             f"Volume: {volume_norm:.4f}",
                         )
@@ -155,8 +155,13 @@ class OpenAISTTEngine(SpeechToTextEngine):
                         audio_data.extend(indata.copy())
                         if silence_start is None:
                             silence_start = time.inputBufferAdcTime
-                        elif time.inputBufferAdcTime - silence_start > self.silence_duration:
-                            self.logger.log("DEBUG", "Silence detected, stopping recording")
+                        elif (
+                            time.inputBufferAdcTime - silence_start
+                            > self.silence_duration
+                        ):
+                            self.logger.log(
+                                "INFO", "Silence detected, stopping recording"
+                            )
                             raise sd.CallbackStop()
 
             except sd.CallbackStop:

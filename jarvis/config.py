@@ -14,6 +14,7 @@ class JarvisConfig:
     calendar_api_url: str = "http://localhost:8080"
     repo_path: str = "."
     response_timeout: float = 15.0
-    perf_tracking: bool = os.getenv(
-        "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
-    ).lower() == "true"
+    perf_tracking: bool = True
+    # perf_tracking: bool = os.getenv(
+    #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
+    # ).lower() == "true"

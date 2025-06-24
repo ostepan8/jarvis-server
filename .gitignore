@@ -19,6 +19,7 @@ aider-env/
 
 # Logs & caches
 *.log
+jarvis_log*
 *.pot
 *.cache/
 .cache/
