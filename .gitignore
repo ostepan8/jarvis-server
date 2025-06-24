@@ -26,6 +26,7 @@ jarvis_log*
 .pytest_cache/
 coverage.*
 htmlcov/
+perf_logs*
 
 # VSCode & IDEs
 .vscode/
