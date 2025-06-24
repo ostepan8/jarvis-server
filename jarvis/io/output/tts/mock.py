@@ -10,4 +10,14 @@ class MockTTSEngine(TextToSpeechEngine):
         self.spoken: list[str] = []
 
     async def speak(self, text: str) -> None:
-        self.spoken.append(text)
+        from ....performance import get_tracker
+
+        tracker = get_tracker()
+        if tracker and tracker.enabled:
+            async with tracker.timer(
+                "tts_synthesis", metadata={"engine": "mock_tts"}
+            ):
+                # simply record the text without real synthesis
+                self.spoken.append(text)
+        else:
+            self.spoken.append(text)
