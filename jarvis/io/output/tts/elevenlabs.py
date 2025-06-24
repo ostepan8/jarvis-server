@@ -35,8 +35,13 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
         tracker = get_tracker()
         try:
             if tracker and tracker.enabled:
-                async with tracker.timer("tts_synthesis"):
-                    response = await self.client.post(url, headers=headers, json={"text": text})
+                async with tracker.timer(
+                    "tts_synthesis",
+                    metadata={"engine": "elevenlabs_tts", "voice": voice},
+                ):
+                    response = await self.client.post(
+                        url, headers=headers, json={"text": text}
+                    )
                     response.raise_for_status()
                     audio_bytes = response.content
             else:
@@ -45,7 +50,9 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
                 audio_bytes = response.content
 
             if tracker and tracker.enabled:
-                async with tracker.timer("audio_playback"):
+                async with tracker.timer(
+                    "audio_playback", metadata={"engine": "elevenlabs_tts"}
+                ):
                     await asyncio.to_thread(play_audio_bytes, audio_bytes)
             else:
                 await asyncio.to_thread(play_audio_bytes, audio_bytes)

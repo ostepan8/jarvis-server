@@ -32,14 +32,22 @@ class VoiceInputSystem:
         tracker = PerfTracker()
         tracker.start()
         try:
-            async with tracker.timer("wake_word_to_stt"):
+            async with tracker.timer(
+                "wake_word_to_stt",
+                metadata={"listener": type(self.wake_listener).__name__},
+            ):
                 await self.wake_listener.wait_for_wake_word()
             print("Wake word detected! Listening...")
 
-            async with tracker.timer("stt"):
+            async with tracker.timer(
+                "stt",
+                metadata={"engine": type(self.stt_engine).__name__},
+            ):
                 text = await self.stt_engine.listen_for_speech(timeout=10.0)
             if not text:
-                async with tracker.timer("tts"):
+                async with tracker.timer(
+                    "tts", metadata={"engine": type(self.tts_engine).__name__}
+                ):
                     await self.tts_engine.speak("I didn't catch that, sir.")
                 return
 
@@ -51,7 +59,9 @@ class VoiceInputSystem:
             else:
                 response = f"I heard: {text}"
 
-            async with tracker.timer("tts"):
+            async with tracker.timer(
+                "tts", metadata={"engine": type(self.tts_engine).__name__}
+            ):
                 await self.tts_engine.speak(response)
 
         except Exception as exc:
