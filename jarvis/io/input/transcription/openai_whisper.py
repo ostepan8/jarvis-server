@@ -13,7 +13,7 @@ import openai
 
 from ....logger import JarvisLogger
 from .base import SpeechToTextEngine
-from ....performance import track_async
+from ....performance import get_tracker
 
 
 class OpenAISTTEngine(SpeechToTextEngine):
@@ -39,34 +39,44 @@ class OpenAISTTEngine(SpeechToTextEngine):
         self.silence_threshold = silence_threshold
         self.silence_duration = silence_duration
 
-    @track_async("stt")
     async def listen_for_speech(self, timeout: float = 10.0) -> str:
         """Listen for speech and return transcribed text."""
-        try:
-            audio_data = await self._record_audio_with_silence_detection(timeout)
 
-            if len(audio_data) == 0:
+        async def _run() -> str:
+            try:
+                audio_data = await self._record_audio_with_silence_detection(timeout)
+
+                if len(audio_data) == 0:
+                    return ""
+
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                    self._save_wav(audio_data, temp_file.name)
+
+                    with open(temp_file.name, "rb") as audio_file:
+                        transcript = await self.client.audio.transcriptions.create(
+                            model=self.model,
+                            file=audio_file,
+                            language="en",
+                        )
+
+                    os.unlink(temp_file.name)
+
+                    result = transcript.text.strip()
+                    self.logger.log("INFO", "Speech transcribed", f"'{result}'")
+                    return result
+
+            except Exception as exc:  # pragma: no cover - network/IO errors
+                self.logger.log("ERROR", "Speech recognition error", str(exc))
                 return ""
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                self._save_wav(audio_data, temp_file.name)
-
-                with open(temp_file.name, "rb") as audio_file:
-                    transcript = await self.client.audio.transcriptions.create(
-                        model=self.model,
-                        file=audio_file,
-                        language="en",
-                    )
-
-                os.unlink(temp_file.name)
-
-                result = transcript.text.strip()
-                self.logger.log("INFO", "Speech transcribed", f"'{result}'")
-                return result
-
-        except Exception as exc:  # pragma: no cover - network/IO errors
-            self.logger.log("ERROR", "Speech recognition error", str(exc))
-            return ""
+        tracker = get_tracker()
+        if tracker and tracker.enabled:
+            async with tracker.timer(
+                "stt",
+                metadata={"engine": "openai_whisper", "model": self.model},
+            ):
+                return await _run()
+        return await _run()
 
     async def _record_audio_with_silence_detection(self, timeout: float) -> np.ndarray:
         """Record audio until silence is detected or timeout."""

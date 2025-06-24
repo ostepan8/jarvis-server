@@ -35,7 +35,10 @@ class OpenAITTSEngine(TextToSpeechEngine):
         tracker = get_tracker()
         try:
             if tracker and tracker.enabled:
-                async with tracker.timer("tts_synthesis"):
+                async with tracker.timer(
+                    "tts_synthesis",
+                    metadata={"engine": "openai_tts", "model": self.model, "voice": self.voice},
+                ):
                     response = await self.client.audio.speech.create(
                         model=self.model, voice=self.voice, input=text
                     )
@@ -47,7 +50,9 @@ class OpenAITTSEngine(TextToSpeechEngine):
                 audio_bytes = await response.read()
 
             if tracker and tracker.enabled:
-                async with tracker.timer("audio_playback"):
+                async with tracker.timer(
+                    "audio_playback", metadata={"engine": "openai_tts"}
+                ):
                     await asyncio.to_thread(play_audio_bytes, audio_bytes)
             else:
                 await asyncio.to_thread(play_audio_bytes, audio_bytes)
