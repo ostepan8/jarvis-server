@@ -131,3 +131,4 @@ zipp
 phue
 colorama
 pvporcupine
+vosk
