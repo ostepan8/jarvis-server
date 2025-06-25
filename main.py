@@ -112,9 +112,12 @@ async def run_voice() -> None:
     )
 
     # Add speech recognition
-    from jarvis.io.input.transcription import OpenAISTTEngine
+    from jarvis.io.input.transcription import VoskSmallEnglishSTTEngine
 
-    stt_engine = OpenAISTTEngine(api_key=os.getenv("OPENAI_API_KEY"))
+    stt_engine = VoskSmallEnglishSTTEngine(
+        model_path=os.getenv("VOSK_MODEL_PATH", "vosk-model-small-en-us-0.15"),
+        debug=os.getenv("VOSK_DEBUG", "false").lower() == "true",
+    )
 
     tts_engine = ElevenLabsTTSEngine(
         default_voice=os.getenv("ELEVEN_VOICE_ID", "ErXwobaYiN019PkySvjV")
