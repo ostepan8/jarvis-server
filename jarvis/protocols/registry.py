@@ -5,6 +5,8 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, Iterable, Optional, List
 import re
+from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 
 from ..logger import JarvisLogger
 from . import Protocol, ProtocolStep
@@ -180,35 +182,55 @@ class ProtocolRegistry:
         text = re.sub(r"[\W_]+", " ", text)
         return " ".join(text.split())
 
-    def find_matching_protocol(self, user_input: str) -> Optional[Protocol]:
-        """Find a protocol whose trigger phrase exactly matches the given input."""
-        normalized_input = self._normalize_text(user_input)
-        self.logger.log(
-            "DEBUG",
-            "Looking for protocol matching",
-            normalized_input,
-        )
+    def find_matching_protocol(
+        self,
+        user_input: str,
+        *,
+        timeout: float | None = None,
+    ) -> Optional[Protocol]:
+        """Find the first protocol whose trigger phrase matches the input.
 
-        for proto in self.protocols.values():
-            self.logger.log(
-                "DEBUG",
-                "Checking protocol",
-                f"{proto.id}: {proto.name}",
-            )
+        The check for each protocol is executed concurrently using a
+        :class:`~concurrent.futures.ThreadPoolExecutor`. This speeds up
+        matching when many protocols are registered.
+
+        Args:
+            user_input: Raw text from the user.
+            timeout: Optional maximum number of seconds to wait for all
+                checks to finish. Remaining tasks will be cancelled on timeout.
+
+        Returns:
+            ``Protocol`` if a match is found, otherwise ``None``.
+        """
+
+        normalized_input = self._normalize_text(user_input)
+        self.logger.log("DEBUG", "Looking for protocol matching", normalized_input)
+
+        def check_protocol(proto: Protocol) -> Optional[Protocol]:
+            """Return the protocol if any trigger matches the input."""
+            self.logger.log("DEBUG", "Checking protocol", f"{proto.id}: {proto.name}")
             for phrase in proto.trigger_phrases:
                 norm_phrase = self._normalize_text(phrase)
-                self.logger.log(
-                    "DEBUG",
-                    "Comparing with trigger",
-                    norm_phrase,
-                )
+                self.logger.log("DEBUG", "Comparing with trigger", norm_phrase)
                 if norm_phrase == normalized_input:
-                    self.logger.log(
-                        "DEBUG",
-                        "Found matching protocol",
-                        proto.id,
-                    )
+                    self.logger.log("DEBUG", "Found matching protocol", proto.id)
                     return proto
+            return None
+
+        with ThreadPoolExecutor(max_workers=len(self.protocols) or 1) as executor:
+            futures = [executor.submit(check_protocol, p) for p in self.protocols.values()]
+
+            for future in concurrent.futures.as_completed(futures, timeout=timeout):
+                proto = future.result()
+                if proto:
+                    # Cancel remaining checks as soon as a match is found
+                    for f in futures:
+                        if f is not future:
+                            f.cancel()
+                    return proto
+
+            for f in futures:
+                f.cancel()
 
         self.logger.log("DEBUG", "No matching protocol found")
         return None
