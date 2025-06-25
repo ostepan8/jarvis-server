@@ -18,6 +18,7 @@ Additional Python packages used by the project:
 - `pytest-asyncio`
 - `pymongo`
 - `pvporcupine`
+- `vosk`
 
 ## Overview
 - **Language**: Python 3.11+
