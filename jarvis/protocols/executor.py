@@ -45,6 +45,7 @@ class ProtocolExecutor:
         metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Execute a protocol using the result from enhanced voice matcher."""
+        print("Running protocol with match result:", match_result)
         protocol = match_result["protocol"]
         extracted_args = match_result["arguments"]
         matched_phrase = match_result["matched_phrase"]
