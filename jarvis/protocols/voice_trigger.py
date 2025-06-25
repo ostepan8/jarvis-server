@@ -65,7 +65,7 @@ class ParameterizedProtocol:
         normalized_input = user_input.strip()
 
         for pattern, placeholders, original_phrase in self.patterns:
-            match = pattern.search(normalized_input)
+            match = pattern.fullmatch(normalized_input)
             if match:
                 # Extract arguments
                 arguments = {}
@@ -170,14 +170,7 @@ class VoiceTriggerMatcher:
                 "matched_phrase": normalized,
             }
 
-        # Try partial matches for simple triggers
-        for trigger, protocol in self.simple_triggers.items():
-            if trigger in normalized:
-                return {
-                    "protocol": protocol,
-                    "arguments": {},
-                    "matched_phrase": trigger,
-                }
+        # Partial matching is disabled to avoid accidental activations
 
         return None
 
