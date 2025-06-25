@@ -49,8 +49,18 @@ class ProtocolExecutor:
         extracted_args = match_result["arguments"]
         matched_phrase = match_result["matched_phrase"]
 
+        # Enhanced metadata to include match information
+        enhanced_metadata = {
+            **(metadata or {}),
+            "matched_phrase": matched_phrase,
+            "extracted_arguments": extracted_args,
+        }
+
         return await self.execute(
-            protocol, extracted_args, trigger_phrase or matched_phrase, metadata
+            protocol,
+            extracted_args,
+            trigger_phrase or matched_phrase,
+            enhanced_metadata,
         )
 
     async def execute(

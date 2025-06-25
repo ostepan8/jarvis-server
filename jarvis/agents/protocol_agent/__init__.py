@@ -32,7 +32,12 @@ class ProtocolAgent(NetworkAgent):
 
     @property
     def capabilities(self) -> Set[str]:
-        return {"define_protocol", "list_protocols", "describe_protocol", "run_protocol"}
+        return {
+            "define_protocol",
+            "list_protocols",
+            "describe_protocol",
+            "run_protocol",
+        }
 
     def _sync_registry(self) -> None:
         if self.network:
@@ -57,10 +62,15 @@ class ProtocolAgent(NetworkAgent):
         raw_steps = data.get("steps", [])
         arguments = data.get("arguments", {}) or {}
         if not name or not isinstance(raw_steps, list):
-            await self.send_error(message.from_agent, "Invalid protocol definition", message.request_id)
+            await self.send_error(
+                message.from_agent, "Invalid protocol definition", message.request_id
+            )
             return
 
-        steps = [ProtocolStep(intent=s.get("intent"), parameters=s.get("parameters", {})) for s in raw_steps]
+        steps = [
+            ProtocolStep(intent=s.get("intent"), parameters=s.get("parameters", {}))
+            for s in raw_steps
+        ]
         proto = Protocol(
             id=str(uuid.uuid4()),
             name=name,
@@ -89,7 +99,9 @@ class ProtocolAgent(NetworkAgent):
         ident = data.get("protocol_name")
         proto = self.registry.get(ident)
         if not proto:
-            await self.send_error(message.from_agent, f"Unknown protocol '{ident}'", message.request_id)
+            await self.send_error(
+                message.from_agent, f"Unknown protocol '{ident}'", message.request_id
+            )
             return
 
         await self.send_capability_response(
@@ -110,7 +122,9 @@ class ProtocolAgent(NetworkAgent):
         args = data.get("args", {}) or {}
         proto = self.registry.get(ident)
         if not proto or not self.executor:
-            await self.send_error(message.from_agent, f"Unknown protocol '{ident}'", message.request_id)
+            await self.send_error(
+                message.from_agent, f"Unknown protocol '{ident}'", message.request_id
+            )
             return
 
         results = await self.executor.execute(proto, args)

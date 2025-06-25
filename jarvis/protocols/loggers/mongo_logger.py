@@ -171,14 +171,19 @@ class ProtocolLogEntry(BaseModel):
     protocol_name: str
     protocol_id: str
     arguments: Dict[str, Any] = Field(default_factory=dict)
-    steps: List[Dict[str, Any]] = Field(
+    extracted_arguments: Dict[str, Any] = Field(
+        default_factory=dict
+    )  # NEW: from voice matching
+    steps: List[Dict[str, Any]] = Field(default_factory=list)
+    argument_definitions: List[Dict[str, Any]] = Field(
         default_factory=list
-    )  # Store as dicts for MongoDB
-    timestamp_utc: datetime  # UTC timestamp
-    time_zone: str  # IANA format timezone, e.g., "America/New_York"
+    )  # NEW: store arg defs
+    timestamp_utc: datetime
+    time_zone: str
     device: Optional[str] = None
     location: Optional[str] = None
     trigger_phrase_used: Optional[str] = None
+    matched_phrase: Optional[str] = None  # NEW: the actual phrase pattern that matched
     user: Optional[str] = None
     source: Optional[str] = None
     execution_result: Optional[Union[str, Dict[str, Any]]] = None
@@ -260,9 +265,11 @@ class ProtocolUsageLogger:
             ("time_zone", 1),
             ("user", 1),
             ("device", 1),
+            ("matched_phrase", 1),  # NEW: for analyzing phrase patterns
             ([("protocol_name", 1), ("timestamp_utc", -1)], None),
             ([("user", 1), ("timestamp_utc", -1)], None),
             ([("time_zone", 1), ("timestamp_utc", -1)], None),
+            ([("matched_phrase", 1), ("timestamp_utc", -1)], None),  # NEW
         ]
 
         for index in indexes:
@@ -284,6 +291,8 @@ class ProtocolUsageLogger:
         arguments: Dict[str, Any],
         trigger_phrase: Optional[str] = None,
         metadata: Optional[ExecutionMetadata] = None,
+        extracted_arguments: Optional[Dict[str, Any]] = None,  # NEW
+        matched_phrase: Optional[str] = None,  # NEW
     ) -> ProtocolLogEntry:
         """
         Generate a clean log entry for protocol execution.
@@ -293,6 +302,8 @@ class ProtocolUsageLogger:
             arguments: Arguments passed to the protocol
             trigger_phrase: Optional trigger phrase that initiated execution
             metadata: Optional execution metadata
+            extracted_arguments: Arguments extracted from voice command
+            matched_phrase: The actual phrase pattern that matched
 
         Returns:
             ProtocolLogEntry: Clean log entry ready for storage
@@ -316,17 +327,34 @@ class ProtocolUsageLogger:
             for step in protocol.steps
         ]
 
-        # Create clean log entry with timezone
+        # Convert ArgumentDefinition objects to dicts for storage
+        arg_defs_as_dicts = [
+            {
+                "name": arg_def.name,
+                "type": arg_def.type.value,
+                "choices": arg_def.choices,
+                "min_val": arg_def.min_val,
+                "max_val": arg_def.max_val,
+                "required": arg_def.required,
+                "description": arg_def.description,
+            }
+            for arg_def in protocol.argument_definitions
+        ]
+
+        # Create clean log entry with timezone and new fields
         return ProtocolLogEntry(
             protocol_name=protocol.name,
             protocol_id=protocol.id,
             arguments=arguments or {},
+            extracted_arguments=extracted_arguments or {},  # NEW
             steps=steps_as_dicts,
+            argument_definitions=arg_defs_as_dicts,  # NEW
             timestamp_utc=now_utc,
-            time_zone=system_timezone,  # Automatically detected
+            time_zone=system_timezone,
             device=metadata.device,
             location=metadata.location,
             trigger_phrase_used=trigger_phrase,
+            matched_phrase=matched_phrase,  # NEW
             user=metadata.user,
             source=metadata.source,
             execution_result=metadata.execution_result,
@@ -370,6 +398,8 @@ class ProtocolUsageLogger:
         arguments: Dict[str, Any],
         trigger_phrase: Optional[str] = None,
         metadata: Optional[Union[ExecutionMetadata, Dict[str, Any]]] = None,
+        extracted_arguments: Optional[Dict[str, Any]] = None,  # NEW
+        matched_phrase: Optional[str] = None,  # NEW
     ) -> str:
         """
         Log protocol usage with structured parameters.
@@ -379,6 +409,8 @@ class ProtocolUsageLogger:
             arguments: Arguments passed to the protocol
             trigger_phrase: Optional trigger phrase that initiated execution
             metadata: Optional execution metadata
+            extracted_arguments: Arguments extracted from voice command
+            matched_phrase: The actual phrase pattern that matched
 
         Returns:
             str: The inserted document ID
@@ -388,7 +420,12 @@ class ProtocolUsageLogger:
             metadata = ExecutionMetadata(**metadata)
 
         log_entry = self.generate_log_entry(
-            protocol, arguments, trigger_phrase, metadata
+            protocol,
+            arguments,
+            trigger_phrase,
+            metadata,
+            extracted_arguments,
+            matched_phrase,
         )
         return await self.log_usage(log_entry.dict())
 
@@ -559,10 +596,12 @@ def generate_protocol_log(
     arguments: Dict[str, Any],
     trigger_phrase: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    extracted_arguments: Optional[Dict[str, Any]] = None,  # NEW
+    matched_phrase: Optional[str] = None,  # NEW
 ) -> Dict[str, Any]:
     """
     Legacy function for generating protocol logs.
-    Updated to use clean schema with timezone.
+    Updated to use clean schema with timezone and argument extraction.
     """
     # Convert metadata dict to ExecutionMetadata object
     exec_metadata = None
@@ -572,7 +611,12 @@ def generate_protocol_log(
     # Create a temporary logger instance just for generation
     logger = ProtocolUsageLogger()
     log_entry = logger.generate_log_entry(
-        protocol, arguments, trigger_phrase, exec_metadata
+        protocol,
+        arguments,
+        trigger_phrase,
+        exec_metadata,
+        extracted_arguments,
+        matched_phrase,
     )
 
     # Convert back to dict for backwards compatibility
