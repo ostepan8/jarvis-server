@@ -28,12 +28,13 @@ class ProtocolRegistry:
         """Ensure the SQLite table for protocols exists.
 
         Columns:
-            id              TEXT PRIMARY KEY
-            name            TEXT
-            description     TEXT
-            arguments       TEXT  -- JSON mapping of argument definitions
-            steps           TEXT  -- JSON list of ProtocolStep definitions
-            trigger_phrases TEXT  -- JSON list of phrases that activate the protocol
+            id                   TEXT PRIMARY KEY
+            name                 TEXT
+            description          TEXT
+            arguments            TEXT  -- JSON mapping of argument definitions
+            steps                TEXT  -- JSON list of ProtocolStep definitions
+            trigger_phrases      TEXT  -- JSON list of phrases that activate the protocol
+            argument_definitions TEXT  -- JSON list of ArgumentDefinition objects
         """
 
         with self.conn:
@@ -45,7 +46,8 @@ class ProtocolRegistry:
                     description TEXT,
                     arguments TEXT,
                     steps TEXT,
-                    trigger_phrases TEXT
+                    trigger_phrases TEXT,
+                    argument_definitions TEXT
                 )
                 """
             )
@@ -54,12 +56,17 @@ class ProtocolRegistry:
             if "arguments" not in cols:
                 self.conn.execute("ALTER TABLE protocols ADD COLUMN arguments TEXT")
             if "trigger_phrases" not in cols:
-                # <<< add this
                 self.conn.execute(
                     "ALTER TABLE protocols ADD COLUMN trigger_phrases TEXT"
                 )
+            if "argument_definitions" not in cols:  # NEW
+                self.conn.execute(
+                    "ALTER TABLE protocols ADD COLUMN argument_definitions TEXT"
+                )
 
     def load(self, directory: Path | None = None) -> None:
+        from .models import ArgumentDefinition  # Import here to avoid circular imports
+
         self.protocols.clear()
         if directory is not None:
             directory = Path(directory)
@@ -76,17 +83,18 @@ class ProtocolRegistry:
             return
 
         rows = self.conn.execute(
-            # <<< include trigger_phrases in the SELECT
-            "SELECT id, name, description, arguments, steps, trigger_phrases FROM protocols"
+            "SELECT id, name, description, arguments, steps, trigger_phrases, argument_definitions FROM protocols"
         ).fetchall()
 
         for row in rows:
             # parse steps & args exactly as before…
             steps = [ProtocolStep(**step) for step in json.loads(row["steps"] or "[]")]
             args_data = json.loads(row["arguments"] or "{}")
-
-            # now parse triggers:
             triggers = json.loads(row["trigger_phrases"] or "[]")
+
+            # NEW: parse argument definitions
+            arg_defs_data = json.loads(row["argument_definitions"] or "[]")
+            arg_defs = [ArgumentDefinition.from_dict(ad) for ad in arg_defs_data]
 
             proto = Protocol(
                 id=row["id"],
@@ -94,7 +102,8 @@ class ProtocolRegistry:
                 description=row["description"],
                 arguments=args_data,
                 steps=steps,
-                trigger_phrases=triggers,  # <<< new
+                trigger_phrases=triggers,
+                argument_definitions=arg_defs,  # NEW
             )
             self.protocols[proto.id] = proto
             self.logger.log(
@@ -108,12 +117,16 @@ class ProtocolRegistry:
             for proto in self.protocols.values():
                 steps_json = json.dumps([s.__dict__ for s in proto.steps])
                 args_json = json.dumps(proto.arguments)
-                triggers_json = json.dumps(proto.trigger_phrases)  # <<< new
+                triggers_json = json.dumps(proto.trigger_phrases)
+                arg_defs_json = json.dumps(
+                    [ad.to_dict() for ad in proto.argument_definitions]
+                )  # NEW
+
                 self.conn.execute(
                     """
                     INSERT OR REPLACE INTO protocols
-                      (id, name, description, arguments, steps, trigger_phrases)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (id, name, description, arguments, steps, trigger_phrases, argument_definitions)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         proto.id,
@@ -121,7 +134,8 @@ class ProtocolRegistry:
                         proto.description,
                         args_json,
                         steps_json,
-                        triggers_json,  # <<< new
+                        triggers_json,
+                        arg_defs_json,  # NEW
                     ),
                 )
 

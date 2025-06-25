@@ -112,10 +112,10 @@ async def run_voice() -> None:
     )
 
     # Add speech recognition
-    from jarvis.io.input.transcription import VoskSmallEnglishSTTEngine
+    from jarvis.io.input.transcription.vosk import VoskSmallEnglishSTTEngine
 
     stt_engine = VoskSmallEnglishSTTEngine(
-        model_path=os.getenv("VOSK_MODEL_PATH", "vosk-model-small-en-us-0.15"),
+        model_path=os.getenv("VOSK_MODEL_PATH", "models/vosk-model-en-us-0.22-lgraph"),
         debug=os.getenv("VOSK_DEBUG", "false").lower() == "true",
     )
 

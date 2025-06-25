@@ -138,7 +138,7 @@ class JarvisSystem:
             self.network, self.logger, usage_logger=self.usage_logger
         )
 
-        protocols_dir = Path(__file__).parent / "protocols" / "definitions"
+        protocols_dir = Path(__file__).parent / "protocols" / "defaults" / "definitions"
         if protocols_dir.exists():
             self._load_protocols_from_directory(protocols_dir)
 
@@ -188,44 +188,54 @@ class JarvisSystem:
                 raise RuntimeError("System not initialized")
 
             # 1) First check for protocol matches (fast path)
-            matched_protocol = None
+            match_result = None
             if self.voice_matcher:
-                matched_protocol = self.voice_matcher.match_command(user_input)
+                match_result = self.voice_matcher.match_command(user_input)
 
-            if not matched_protocol:
+            if not match_result:
+                # Fallback to registry for simple matching
                 matched_protocol = self.protocol_registry.find_matching_protocol(
                     user_input
                 )
+                if matched_protocol:
+                    match_result = {
+                        "protocol": matched_protocol,
+                        "arguments": {},
+                        "matched_phrase": user_input,
+                    }
 
-            if matched_protocol:
+            if match_result:
+                protocol = match_result["protocol"]
+                arguments = match_result["arguments"]
+
                 self.logger.log(
                     "INFO",
                     "Trigger matched",
-                    f"Command: '{user_input}' -> Protocol: '{matched_protocol.name}'",
+                    f"Command: '{user_input}' -> Protocol: '{protocol.name}', Args: {arguments}",
                 )
 
                 try:
                     async with tracker.timer(
                         "protocol_execution",
-                        metadata={"protocol": matched_protocol.name},
+                        metadata={"protocol": protocol.name},
                     ):
-                        results = await self.protocol_executor.run_protocol(
-                            matched_protocol,
+                        results = await self.protocol_executor.run_protocol_with_match(
+                            match_result,
                             trigger_phrase=user_input,
                             metadata=metadata,
                         )
 
-                    response = self._format_protocol_response(matched_protocol, results)
+                    response = self._format_protocol_response(protocol, results)
 
                     return {
                         "response": response,
-                        "protocol_executed": matched_protocol.name,
+                        "protocol_executed": protocol.name,
                         "execution_time": "fast",
                     }
                 except Exception as e:
                     self.logger.log(
                         "ERROR",
-                        f"Protocol execution failed for '{matched_protocol.name}'",
+                        f"Protocol execution failed for '{protocol.name}'",
                         str(e),
                     )
                     # Fall through to NLU on error

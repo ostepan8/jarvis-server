@@ -45,3 +45,6 @@ dist/
 build/
 *.egg
 .aider*
+
+# vosk model files
+models/*

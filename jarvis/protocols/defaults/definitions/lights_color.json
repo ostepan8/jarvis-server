@@ -1,0 +1,29 @@
+{
+  "name": "Light Color Control",
+  "description": "Control smart lights with voice commands for colors",
+  "argument_definitions": [
+    {
+      "name": "color",
+      "type": "choice",
+      "choices": ["red", "blue", "green", "yellow", "white", "purple", "orange", "pink"],
+      "required": true,
+      "description": "Color to set the lights"
+    }
+  ],
+  "trigger_phrases": [
+    "change the lights to {color}",
+    "set lights {color}",
+    "make lights {color}",
+    "lights {color}"
+  ],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "set_all_color",
+      "parameters": {},
+      "parameter_mappings": {
+        "color_name": "$color"
+      }
+    }
+  ]
+}

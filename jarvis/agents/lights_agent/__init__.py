@@ -142,6 +142,7 @@ class PhillipsHueAgent(NetworkAgent):
             "turn_on_all_lights": self._turn_on_all_lights,
             "turn_off_all_lights": self._turn_off_all_lights,
             "set_all_brightness": self._set_all_brightness,
+            "set_all_color": self._set_all_color,
             # Scene Management
             "list_scenes": self._list_scenes,
             "activate_scene": self._activate_scene,
@@ -590,6 +591,29 @@ class PhillipsHueAgent(NetworkAgent):
             return f"Set brightness of all {count} lights to {brightness}"
         except Exception as e:
             return f"Failed to set all brightness: {str(e)}"
+
+    def _set_all_color(self, color_name: str) -> str:
+        """Set color for all lights in the system."""
+        try:
+            color_name = color_name.lower()
+            if color_name not in self.color_map:
+                available_colors = ", ".join(self.color_map.keys())
+                return f"Unknown color '{color_name}'. Available colors: {available_colors}"
+
+            color_data = self.color_map[color_name]
+            lights = self.bridge.get_light()  # Get all lights by ID
+            count = 0
+
+            for light_id in lights.keys():
+                light_id_int = int(light_id)
+                self.bridge.set_light(light_id_int, "on", True)
+                self.bridge.set_light(light_id_int, "hue", color_data["hue"])
+                self.bridge.set_light(light_id_int, "sat", color_data["sat"])
+                count += 1
+
+            return f"Set all {count} lights to {color_name}"
+        except Exception as e:
+            return f"Failed to set all lights color: {str(e)}"
 
     # ==================== SCENE MANAGEMENT ====================
 

@@ -37,6 +37,22 @@ class ProtocolExecutor:
         """Public helper to execute a protocol."""
         return await self.execute(protocol, arguments, trigger_phrase, metadata)
 
+    async def run_protocol_with_match(
+        self,
+        match_result: Dict[str, Any],
+        *,
+        trigger_phrase: str | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """Execute a protocol using the result from enhanced voice matcher."""
+        protocol = match_result["protocol"]
+        extracted_args = match_result["arguments"]
+        matched_phrase = match_result["matched_phrase"]
+
+        return await self.execute(
+            protocol, extracted_args, trigger_phrase or matched_phrase, metadata
+        )
+
     async def execute(
         self,
         protocol: Protocol,
@@ -49,6 +65,14 @@ class ProtocolExecutor:
         start = time.monotonic()
         results: Dict[str, Any] = {}
         context = context or {}
+
+        # Log the extracted arguments
+        if context:
+            self.logger.log(
+                "INFO",
+                f"Executing protocol '{protocol.name}' with arguments",
+                str(context),
+            )
 
         for i, step in enumerate(protocol.steps):
             step_id = f"step_{i}_{step.function}"
@@ -78,15 +102,34 @@ class ProtocolExecutor:
             # Prepare parameters
             params = dict(step.parameters)
 
-            # Apply parameter mappings (use results from previous steps)
+            # Apply parameter mappings (enhanced to handle extracted arguments)
             for param_name, mapping in step.parameter_mappings.items():
                 if mapping.startswith("$"):
-                    # Reference to previous result
+                    # Reference to previous result or extracted argument
                     ref = mapping[1:]  # Remove $
-                    if ref in results:
-                        params[param_name] = results[ref]
-                    elif ref in context:
+
+                    # First check extracted arguments (from voice command)
+                    if ref in context:
                         params[param_name] = context[ref]
+                        self.logger.log(
+                            "DEBUG",
+                            f"Mapped parameter '{param_name}' from extracted argument",
+                            f"{ref} -> {context[ref]}",
+                        )
+                    # Then check previous step results
+                    elif ref in results:
+                        params[param_name] = results[ref]
+                        self.logger.log(
+                            "DEBUG",
+                            f"Mapped parameter '{param_name}' from previous result",
+                            f"{ref} -> {results[ref]}",
+                        )
+                    else:
+                        self.logger.log(
+                            "WARNING",
+                            f"Parameter mapping reference '{ref}' not found",
+                            f"Available context: {list(context.keys())}, results: {list(results.keys())}",
+                        )
 
             # Execute the function
             try:
@@ -133,8 +176,9 @@ class ProtocolExecutor:
                     **(metadata or {}),
                     "execution_result": execution_result.value,
                     "latency_ms": latency_ms,
+                    "extracted_arguments": context,  # Log the extracted arguments
                 },
             )
-            await self.usage_logger.log_usage(log_doc)  # <- Use log_usage_raw
+            await self.usage_logger.log_usage(log_doc)
 
         return results
