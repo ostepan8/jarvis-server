@@ -49,3 +49,5 @@ def test_find_matching_protocol(tmp_path):
     no_match = registry.find_matching_protocol("unknown command")
     assert no_match is None
     registry.close()
+
+
