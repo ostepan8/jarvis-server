@@ -15,7 +15,6 @@ from jarvis.io import (
 )
 from jarvis.io.input.wakeword import PicovoiceWakeWordListener
 from jarvis.io.input import VoiceInputSystem
-from jarvis.io.hello_world import HelloWorld
 from jarvis.io.output.tts import ElevenLabsTTSEngine
 
 # Load environment variables from .env file
@@ -74,11 +73,8 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
 async def demo(
     input_handler: InputHandler | None = ConsoleInput(),
     output_handler: OutputHandler | None = ConsoleOutput(),
-    hello_world: HelloWorld = HelloWorld(),
 ) -> None:
     colorama_init(autoreset=True)
-
-    print(hello_world.greet())
 
     jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
     tz_name = get_localzone_name()

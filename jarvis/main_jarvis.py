@@ -184,9 +184,6 @@ class JarvisSystem:
             tracker.start()
             new_tracker = True
         try:
-            if "did you know my middle name is henry" in user_input.lower():
-                return {"response": "Yes, I know your middle name is Henry, sir."}
-
             if not self.nlu_agent:
                 raise RuntimeError("System not initialized")
 
@@ -196,7 +193,9 @@ class JarvisSystem:
                 matched_protocol = self.voice_matcher.match_command(user_input)
 
             if not matched_protocol:
-                matched_protocol = self.protocol_registry.find_matching_protocol(user_input)
+                matched_protocol = self.protocol_registry.find_matching_protocol(
+                    user_input
+                )
 
             if matched_protocol:
                 self.logger.log(
@@ -207,7 +206,8 @@ class JarvisSystem:
 
                 try:
                     async with tracker.timer(
-                        "protocol_execution", metadata={"protocol": matched_protocol.name}
+                        "protocol_execution",
+                        metadata={"protocol": matched_protocol.name},
                     ):
                         results = await self.protocol_executor.run_protocol(
                             matched_protocol,
@@ -241,6 +241,12 @@ class JarvisSystem:
                 )
 
                 classification = await self.network.wait_for_response(request_id)
+            if not isinstance(classification, dict) or "intent" not in classification:
+                self.logger.log("ERROR", "Error from NLUAgent", str(classification))
+                return {
+                    "response": "Sorry sir, It appears I had trouble understanding that. Error: "
+                    + str(classification)
+                }
             intent = classification["intent"]
             target = classification["target_agent"]
             proto = classification.get("protocol_name")
@@ -257,7 +263,9 @@ class JarvisSystem:
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
                 payload = {"command": user_input}
-                async with tracker.timer("agent_response", metadata={"agent": target or cap}):
+                async with tracker.timer(
+                    "agent_response", metadata={"agent": target or cap}
+                ):
                     providers = await self.network.request_capability(
                         from_agent=None,
                         capability=cap,
@@ -274,7 +282,9 @@ class JarvisSystem:
                 async with tracker.timer(
                     "agent_response", metadata={"agent": "orchestrator"}
                 ):
-                    return await self.orchestrator.process_user_request(user_input, tz_name)
+                    return await self.orchestrator.process_user_request(
+                        user_input, tz_name
+                    )
 
             if intent == "run_protocol":
                 run_id = str(uuid.uuid4())
@@ -321,7 +331,9 @@ class JarvisSystem:
             if intent == "chat":
                 define_id = str(uuid.uuid4())
                 payload = {"command": user_input}
-                async with tracker.timer("agent_response", metadata={"agent": target or "chat"}):
+                async with tracker.timer(
+                    "agent_response", metadata={"agent": target or "chat"}
+                ):
                     await self.network.request_capability(
                         from_agent=None,
                         capability=cap,
@@ -436,14 +448,26 @@ async def demo():
     await jarvis.shutdown()
 
 
-# Simple interface for your existing code
 async def create_collaborative_jarvis(
-    api_key: str | None = None, repo_path: str = "."
-) -> "JarvisSystem":
-    """Helper for demos and tests to create a ready-to-use system."""
-    if api_key is None:
-        load_dotenv()
-        api_key = os.getenv("OPENAI_API_KEY")
+    api_key: Optional[str] = None, repo_path: str = "."
+) -> JarvisSystem:
+    """
+    Create and initialize a JarvisSystem instance with default configuration.
+
+    Args:
+        api_key (Optional[str]): API key for the AI provider. If not provided, it will be loaded from environment variables.
+        repo_path (str): Path to the local repository used by the SoftwareEngineeringAgent.
+
+    Returns:
+        JarvisSystem: A fully initialized Jarvis system instance.
+    """
+    load_dotenv()
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        raise ValueError(
+            "Missing API key for AI provider. Set OPENAI_API_KEY in your environment."
+        )
 
     config = JarvisConfig(
         ai_provider="openai",
