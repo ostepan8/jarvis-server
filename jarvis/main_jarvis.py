@@ -16,6 +16,7 @@ from .agents.lights_agent import PhillipsHueAgent
 from .agents.software_engineering_agent import SoftwareEngineeringAgent
 from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
+from .agents.weather_agent import WeatherAgent
 from .services.calendar_service import CalendarService
 from .agents.chat_agent import ChatAgent
 from .ai_clients import AIClientFactory, BaseAIClient
@@ -113,16 +114,24 @@ class JarvisSystem:
         self.chat_agent = ChatAgent(ai_client, self.logger)
         self.network.register_agent(self.chat_agent)
 
-        # 5) ProtocolAgent (for protocol management)
+        # 5) WeatherAgent (for weather info)
+        weather_key = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
+        try:
+            self.weather_agent = WeatherAgent(api_key=weather_key, logger=self.logger)
+            self.network.register_agent(self.weather_agent)
+        except Exception as exc:
+            self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
+
+        # 6) ProtocolAgent (for protocol management)
         self.protocol_agent = ProtocolAgent(self.logger)
 
-        # 6) LightsAgent (for smart home control)
+        # 7) LightsAgent (for smart home control)
         load_dotenv()
         bridge_ip = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
         self.network.register_agent(self.lights_agent)
 
-        # 7) SoftwareEngineeringAgent (developer tools)
+        # 8) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.repo_path
         self.software_agent = SoftwareEngineeringAgent(
             ai_client=ai_client, repo_path=repo_path, logger=self.logger

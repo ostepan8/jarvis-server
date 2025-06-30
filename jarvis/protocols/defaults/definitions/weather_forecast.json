@@ -1,0 +1,23 @@
+{
+  "name": "Weather Forecast",
+  "description": "Get a short term weather forecast for a location",
+  "argument_definitions": [
+    {"name": "location", "type": "text", "required": true, "description": "City or location"}
+  ],
+  "trigger_phrases": [
+    "weather forecast",
+    "forecast for {location}",
+    "what's the forecast",
+    "what's the forecast in {location}",
+    "show me the forecast",
+    "weather for next days in {location}"
+  ],
+  "steps": [
+    {
+      "agent": "WeatherAgent",
+      "function": "get_forecast",
+      "parameters": {},
+      "parameter_mappings": {"location": "$location"}
+    }
+  ]
+}
