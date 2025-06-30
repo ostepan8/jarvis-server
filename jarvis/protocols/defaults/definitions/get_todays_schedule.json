@@ -1,0 +1,37 @@
+{
+  "name": "Get Today's Events",
+  "description": "Retrieve all events scheduled for today from the calendar",
+  "argument_definitions": [],
+  "trigger_phrases": [
+    "what's on my schedule today",
+    "what's on the schedule today",
+    "what are my events today",
+    "what do I have today",
+    "show me today's events",
+    "show me today's schedule",
+    "do I have anything scheduled today",
+    "anything on my calendar today",
+    "what's planned for today",
+    "any appointments today",
+    "show today's calendar",
+    "today's schedule please",
+    "can you show me today's events",
+    "can you show today's schedule",
+    "tell me what's on today",
+    "what meetings do I have today",
+    "list today's events",
+    "give me today's schedule",
+    "is anything happening today",
+    "am I busy today",
+    "do I have plans today",
+    "check today's events",
+    "pull up my calendar for today"
+  ],
+  "steps": [
+    {
+      "agent": "CalendarAgent",
+      "function": "get_today_events",
+      "parameters": {}
+    }
+  ]
+}

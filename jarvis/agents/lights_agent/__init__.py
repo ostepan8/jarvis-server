@@ -128,6 +128,8 @@ class PhillipsHueAgent(NetworkAgent):
             "set_cool_white": self._set_cool_white,
             # Effects and Alerts
             "flash_light": self._flash_light,
+            "flash_group": self._flash_group_lights,
+            "flash_all_lights": self._flash_all_lights,
             "pulse_light": self._pulse_light,
             "stop_alert": self._stop_alert,
             "set_color_loop": self._set_color_loop,
@@ -430,6 +432,41 @@ class PhillipsHueAgent(NetworkAgent):
         except Exception as e:
             return f"Failed to flash light: {str(e)}"
 
+    def _flash_group_lights(self, group_name: str) -> str:
+        """Make all lights in a group flash briefly."""
+        try:
+            groups = self.bridge.get_group()
+            group_id = None
+            for gid, group_info in groups.items():
+                if group_info["name"].lower() == group_name.lower():
+                    group_id = gid
+                    break
+
+            if not group_id:
+                return f"Group '{group_name}' not found"
+
+            group_data = groups[group_id]
+            light_ids = group_data.get("lights", [])
+
+            for light_id in light_ids:
+                self.bridge.set_light(int(light_id), "alert", "select")
+
+            return f"Flashed all lights in group '{group_name}'"
+        except Exception as e:
+            return f"Failed to flash group lights: {str(e)}"
+
+    def _flash_all_lights(self) -> str:
+        """Make all lights flash briefly."""
+        try:
+            lights = self.bridge.get_light()  # Get all lights by ID
+            count = 0
+            for light_id in lights.keys():
+                self.bridge.set_light(int(light_id), "alert", "select")
+                count += 1
+            return f"Flashed all {count} lights"
+        except Exception as e:
+            return f"Failed to flash all lights: {str(e)}"
+
     def _pulse_light(self, light_name: str) -> str:
         """Make a light pulse continuously."""
         try:
@@ -594,6 +631,9 @@ class PhillipsHueAgent(NetworkAgent):
 
     def _set_all_color(self, color_name: str) -> str:
         """Set color for all lights in the system."""
+        color_name = color_name.strip().lower()
+        if color_name == "read":
+            color_name = "red"  # Handle common listening error
         try:
             color_name = color_name.lower()
             if color_name not in self.color_map:

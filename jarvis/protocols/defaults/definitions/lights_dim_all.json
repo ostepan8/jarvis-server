@@ -1,0 +1,62 @@
+{
+  "name": "Dim All Lights",
+  "description": "Dim all lights to 25% brightness",
+  "trigger_phrases": [
+    "dim all lights",
+    "dim the lights",
+    "make lights dimmer",
+    "lower all lights",
+    "reduce lighting",
+    "soften the lights",
+    "turn down all lights",
+    "make it dimmer",
+    "dim everything",
+    "lower the lighting",
+    "reduce all lights",
+    "soften all lighting",
+    "turn down the lights",
+    "make all lights dimmer",
+    "dim house lights",
+    "dim the house",
+    "lower house lighting",
+    "reduce house lights",
+    "soften house lighting",
+    "turn down house lights",
+    "make house dimmer",
+    "dim all lighting",
+    "lower all lighting",
+    "reduce all lighting",
+    "soften all lights",
+    "turn down all lighting",
+    "make all lighting dimmer",
+    "dim every light",
+    "lower every light",
+    "reduce every light",
+    "soften every light",
+    "turn down every light",
+    "make every light dimmer",
+    "lights need to be dimmer",
+    "lighting needs to be dimmer",
+    "make the lights soft",
+    "make the lighting soft",
+    "gentle lighting please",
+    "soft lighting please",
+    "subdued lighting please",
+    "mellow lighting please",
+    "quiet lighting please",
+    "peaceful lighting please",
+    "calm lighting please",
+    "relaxed lighting please",
+    "comfortable lighting please",
+    "cozy lighting please"
+  ],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "_set_all_brightness",
+      "parameters": {
+        "brightness": 64
+      }
+    }
+  ]
+}

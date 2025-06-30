@@ -64,13 +64,13 @@ class JarvisSystem:
             db_name="protocals",
         )
 
-    async def initialize(self) -> None:
+    async def initialize(self, load_protocol_directory: bool = False) -> None:
         """Initialize all agents and start the network."""
 
         ai_client = self._create_ai_client()
         await self._connect_usage_logger()
         self._register_agents(ai_client)
-        self._setup_protocol_system()
+        self._setup_protocol_system(load_protocol_directory)
         await self._start_network()
 
         self.logger.log(
@@ -132,7 +132,7 @@ class JarvisSystem:
         # Register protocol agent after other providers so capability map exists
         self.network.register_agent(self.protocol_agent)
 
-    def _setup_protocol_system(self) -> None:
+    def _setup_protocol_system(self, load_protocol_directory) -> None:
         """Initialize protocol executor and load protocol definitions."""
         self.protocol_executor = ProtocolExecutor(
             self.network, self.logger, usage_logger=self.usage_logger
@@ -162,8 +162,8 @@ class JarvisSystem:
                 elif result.get("success") is False:
                     self.logger.log(
                         "WARNING",
-                        f"Failed to register protocol: {protocol.name}. Reason: {result.reason}",
-                        result.message,
+                        f"Failed to register protocol: {protocol.name}.",
+                        result,
                     )
             except Exception as e:
                 self.logger.log(
@@ -388,7 +388,7 @@ class JarvisSystem:
         # Return specific response or generic success
         return protocol_responses.get(
             protocol.name,
-            f"{protocol.description or 'Command'} completed successfully, sir.",
+            f"{protocol.name} completed successfully, sir.",
         )
 
     def _format_calendar_response(self, results: Dict[str, Any]) -> str:
