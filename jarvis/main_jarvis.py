@@ -4,6 +4,7 @@ import asyncio
 import os
 from os import getenv
 import uuid
+import random
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
@@ -225,7 +226,9 @@ class JarvisSystem:
                             metadata=metadata,
                         )
 
-                    response = self._format_protocol_response(protocol, results)
+                    response = self._format_protocol_response(
+                        protocol, results, arguments
+                    )
 
                     return {
                         "response": response,
@@ -363,7 +366,10 @@ class JarvisSystem:
                 self.logger.log("INFO", "Performance summary", tracker.summary())
 
     def _format_protocol_response(
-        self, protocol: Protocol, results: Dict[str, Any]
+        self,
+        protocol: Protocol,
+        results: Dict[str, Any],
+        arguments: Dict[str, Any] | None = None,
     ) -> str:
         """Format protocol execution results in Jarvis style"""
         # Check if any step had an error
@@ -381,15 +387,24 @@ class JarvisSystem:
 
         # Create response based on protocol name and results
         protocol_responses = dict(PROTOCOL_RESPONSES)
-        protocol_responses["check_today_schedule"] = self._format_calendar_response(
+        protocol_responses["Get Today's Events"] = self._format_calendar_response(
             results
         )
 
-        # Return specific response or generic success
-        return protocol_responses.get(
+        # Choose a response based on the protocol name
+        resp = protocol_responses.get(
             protocol.name,
             f"{protocol.name} completed successfully, sir.",
         )
+
+        if isinstance(resp, list):
+            resp = random.choice(resp)
+
+        if arguments:
+            for key, value in arguments.items():
+                resp = resp.replace(f"{{{key}}}", str(value))
+
+        return resp
 
     def _format_calendar_response(self, results: Dict[str, Any]) -> str:
         """Format calendar-specific responses"""
