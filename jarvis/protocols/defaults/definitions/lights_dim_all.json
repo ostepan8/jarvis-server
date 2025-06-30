@@ -53,7 +53,7 @@
   "steps": [
     {
       "agent": "PhillipsHueAgent",
-      "function": "_set_all_brightness",
+      "function": "set_all_brightness",
       "parameters": {
         "brightness": 64
       }
