@@ -15,6 +15,7 @@ class JarvisConfig:
     repo_path: str = "."
     response_timeout: float = 15.0
     perf_tracking: bool = True
+    memory_dir: Optional[str] = None
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
     # ).lower() == "true"

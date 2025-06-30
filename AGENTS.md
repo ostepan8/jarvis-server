@@ -19,6 +19,7 @@ Additional Python packages used by the project:
 - `pymongo`
 - `pvporcupine`
 - `vosk`
+- `chromadb`
 
 ## Overview
 - **Language**: Python 3.11+
