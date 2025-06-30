@@ -7,6 +7,7 @@ from .base import NetworkAgent
 from .agent_network import AgentNetwork
 from .protocol_agent import ProtocolAgent
 from .software_engineering_agent import SoftwareEngineeringAgent
+from .weather_agent import WeatherAgent
 
 __all__ = [
     "CollaborativeCalendarAgent",
@@ -16,4 +17,5 @@ __all__ = [
     "AgentNetwork",
     "ProtocolAgent",
     "SoftwareEngineeringAgent",
+    "WeatherAgent",
 ]

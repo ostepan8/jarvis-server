@@ -1,0 +1,24 @@
+{
+  "name": "Current Weather",
+  "description": "Get the current weather conditions for a location",
+  "argument_definitions": [
+    {"name": "location", "type": "text", "required": true, "description": "City or location"}
+  ],
+  "trigger_phrases": [
+    "what's the weather",
+    "what's the weather like",
+    "current weather",
+    "weather in {location}",
+    "what's the weather in {location}",
+    "show me the weather in {location}",
+    "weather report"
+  ],
+  "steps": [
+    {
+      "agent": "WeatherAgent",
+      "function": "get_current_weather",
+      "parameters": {},
+      "parameter_mappings": {"location": "$location"}
+    }
+  ]
+}
