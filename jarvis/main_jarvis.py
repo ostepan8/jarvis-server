@@ -18,6 +18,7 @@ from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .services.calendar_service import CalendarService
 from .agents.chat_agent import ChatAgent
+from .services.vector_memory import VectorMemoryService
 from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
@@ -54,6 +55,7 @@ class JarvisSystem:
         self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
         self.software_agent: SoftwareEngineeringAgent | None = None
+        self.vector_memory: VectorMemoryService | None = None
 
         # Protocol system components
         self.protocol_registry = ProtocolRegistry()
@@ -109,8 +111,14 @@ class JarvisSystem:
         )
         self.network.register_agent(calendar_agent)
 
-        # 4) ChatAgent (for handling chat interactions)
-        self.chat_agent = ChatAgent(ai_client, self.logger)
+        # 4) Vector memory service and ChatAgent (for handling chat interactions)
+        self.vector_memory = VectorMemoryService(
+            persist_directory=self.config.memory_dir,
+            api_key=self.config.api_key,
+        )
+        self.chat_agent = ChatAgent(
+            ai_client, self.logger, memory=self.vector_memory
+        )
         self.network.register_agent(self.chat_agent)
 
         # 5) ProtocolAgent (for protocol management)

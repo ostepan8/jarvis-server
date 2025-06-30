@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-import asyncio
 from datetime import datetime
 from typing import Any, Dict, Optional, Set, List
 
@@ -9,6 +8,7 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients.base import BaseAIClient
 from ...logger import JarvisLogger
+from ...services.vector_memory import VectorMemoryService
 
 
 class ChatAgent(NetworkAgent):
@@ -18,9 +18,11 @@ class ChatAgent(NetworkAgent):
         self,
         ai_client: BaseAIClient,
         logger: Optional[JarvisLogger] = None,
+        memory: "VectorMemoryService | None" = None,
     ) -> None:
         super().__init__(name="ChatAgent", logger=logger)
         self.ai_client = ai_client
+        self.vector_memory = memory
 
         # Conversation memory and context
         self.conversation_history: List[Dict[str, str]] = []
@@ -46,6 +48,8 @@ class ChatAgent(NetworkAgent):
             "trivia": self._trivia_question,
             "mood_check": self._mood_check,
             "change_personality": self._change_personality,
+            "remember_context": self._remember_context,
+            "search_memory": self._search_memory,
         }
 
     @property
@@ -72,6 +76,8 @@ class ChatAgent(NetworkAgent):
             "trivia",
             "mood_check",
             "change_personality",
+            "remember_context",
+            "search_memory",
         }
 
     async def _handle_capability_request(self, message: Message) -> None:
@@ -116,6 +122,12 @@ class ChatAgent(NetworkAgent):
             }
         )
 
+        similar_context = []
+        if self.vector_memory:
+            similar_context = await self.vector_memory.similarity_search(
+                user_message, top_k=2
+            )
+
         # Keep only last 10 exchanges to manage context
         if len(self.conversation_history) > 10:
             self.conversation_history = self.conversation_history[-10:]
@@ -132,10 +144,12 @@ class ChatAgent(NetworkAgent):
             }
 
             system_prompt = f"""{personality_map.get(self.mood_state, personality_map['friendly'])}
-            
+
             Context from recent conversation: {self.conversation_history[-3:] if self.conversation_history else 'New conversation'}
-            
-            Respond naturally and engagingly. If the user seems to want something specific (games, jokes, stories, etc.), 
+
+            Relevant past memories: {similar_context}
+
+            Respond naturally and engagingly. If the user seems to want something specific (games, jokes, stories, etc.),
             suggest relevant capabilities you have. Be creative and make the conversation interesting!"""
 
             messages = [
@@ -147,6 +161,11 @@ class ChatAgent(NetworkAgent):
 
             # Add response to history
             self.conversation_history[-1]["assistant"] = response.content
+            if self.vector_memory:
+                await self.vector_memory.add_memory(
+                    f"User: {user_message}\nAssistant: {response.content}",
+                    {"source": "chat"},
+                )
             print(response.content)
 
             return {"response": response.content}
@@ -441,3 +460,24 @@ class ChatAgent(NetworkAgent):
                 "What's the most spoken language in the world? A) English B) Spanish C) Mandarin D) Hindi",
             ]
             return {"response": random.choice(questions)}
+
+    async def _remember_context(self, user_input: str = "") -> Dict[str, Any]:
+        """Manually store information in the vector memory."""
+        if not self.vector_memory:
+            return {"response": "Vector memory service not available."}
+        if not user_input:
+            return {"response": "Nothing provided to remember."}
+        await self.vector_memory.add_memory(user_input, {"source": "manual"})
+        return {"response": "I'll remember that."}
+
+    async def _search_memory(self, user_input: str = "") -> Dict[str, Any]:
+        """Search stored memories for related context."""
+        if not self.vector_memory:
+            return {"response": "Vector memory service not available."}
+        if not user_input:
+            return {"response": "Please provide something to search for."}
+        results = await self.vector_memory.similarity_search(user_input, top_k=3)
+        if not results:
+            return {"response": "I couldn't find anything relevant."}
+        snippets = "\n".join(f"- {r['text']}" for r in results)
+        return {"response": f"Here are some things I remember:\n{snippets}"}
