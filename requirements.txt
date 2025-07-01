@@ -61,7 +61,7 @@ mslex
 multidict
 networkx
 numpy
-openai
+openai==1.91.0
 oslex
 packaging
 pathspec
@@ -90,6 +90,7 @@ pypandoc
 pyparsing
 pyperclip
 pytest
+pytest-asyncio
 python-dateutil
 python-dotenv
 PyYAML
