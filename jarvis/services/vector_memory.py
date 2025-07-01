@@ -5,8 +5,7 @@ import uuid
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from chromadb import Client
-from chromadb.config import Settings
+from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
 
 
@@ -20,8 +19,7 @@ class VectorMemoryService:
         embedding_model: str = "text-embedding-ada-002",
         api_key: Optional[str] = None,
     ) -> None:
-        settings = Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory)
-        self.client = Client(settings)
+        self.client = PersistentClient(path=persist_directory or "./chroma")
         self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
             api_key=api_key or os.getenv("OPENAI_API_KEY"),
             model_name=embedding_model,
@@ -32,8 +30,8 @@ class VectorMemoryService:
         )
 
     async def persist(self) -> None:
-        """Persist the underlying database to disk."""
-        await asyncio.to_thread(self.client.persist)
+        """Persist the underlying database to disk (no-op for PersistentClient)."""
+        return None
 
     async def add_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Store a piece of text in the vector database."""
@@ -42,7 +40,6 @@ class VectorMemoryService:
         await asyncio.to_thread(
             self.collection.add, ids=[memory_id], documents=[text], metadatas=[metadata]
         )
-        await asyncio.to_thread(self.client.persist)
         return memory_id
 
     async def similarity_search(self, text: str, top_k: int = 3) -> List[Dict[str, Any]]:
