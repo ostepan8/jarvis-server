@@ -1,0 +1,20 @@
+{
+  "name": "Local Weather",
+  "description": "Get the current weather for the user's default location",
+  "argument_definitions": [],
+  "trigger_phrases": [
+    "what's the weather here",
+    "what's the weather outside",
+    "how's the weather outside",
+    "local weather",
+    "weather nearby",
+    "weather right now"
+  ],
+  "steps": [
+    {
+      "agent": "WeatherAgent",
+      "function": "get_current_weather",
+      "parameters": {"location": "Chicago"}
+    }
+  ]
+}

@@ -214,7 +214,7 @@ class WeatherAgent(NetworkAgent):
         ]
 
         # Map function names to methods
-        self.function_map = {
+        self.intent_map = {
             "get_current_weather": self._get_current_weather,
             "get_weather_forecast": self._get_weather_forecast,
             "compare_weather_locations": self._compare_weather_locations,
@@ -247,7 +247,7 @@ class WeatherAgent(NetworkAgent):
         self, function_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute a weather function with proper error handling."""
-        func = self.function_map.get(function_name)
+        func = self.intent_map.get(function_name)
         if not func:
             return {"error": f"Unknown function: {function_name}"}
 
