@@ -118,15 +118,15 @@ class JarvisSystem:
             persist_directory=self.config.memory_dir,
             api_key=self.config.api_key,
         )
-        self.chat_agent = ChatAgent(
-            ai_client, self.logger, memory=self.vector_memory
-        )
+        self.chat_agent = ChatAgent(ai_client, self.logger, memory=self.vector_memory)
         self.network.register_agent(self.chat_agent)
 
         # 5) WeatherAgent (for weather info)
         weather_key = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
         try:
-            self.weather_agent = WeatherAgent(api_key=weather_key, logger=self.logger)
+            self.weather_agent = WeatherAgent(
+                api_key=weather_key, logger=self.logger, ai_client=ai_client
+            )
             self.network.register_agent(self.weather_agent)
         except Exception as exc:
             self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
