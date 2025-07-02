@@ -35,6 +35,7 @@ python server.py
 
 The `/jarvis` endpoint accepts a JSON body with a `command` field describing the calendar request.
 The `/protocols` endpoint returns all registered protocols and their details as JSON.
+You can also run a protocol directly via `/protocols/run` by sending either a protocol definition or the name of a registered protocol.
 
 ## Demo script
 
