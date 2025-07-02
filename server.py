@@ -71,6 +71,15 @@ async def jarvis(
     return await jarvis_system.process_request(req.command, tz_name, metadata)
 
 
+@app.get("/protocols")
+async def list_protocols(
+    jarvis_system: JarvisSystem = Depends(get_jarvis),
+):
+    """Return all registered protocols with their details."""
+    protocols = [p.to_dict() for p in jarvis_system.protocol_registry.protocols.values()]
+    return {"protocols": protocols}
+
+
 def run():
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=DEFAULT_PORT)
