@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.constants import DEFAULT_PORT
 from jarvis.utils import detect_timezone
+from fastapi.middleware.cors import CORSMiddleware
 
 
 class ProtocolRunRequest(BaseModel):
@@ -19,6 +20,14 @@ class ProtocolRunRequest(BaseModel):
 
 
 app = FastAPI(title="Jarvis API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React or Next.js dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class JarvisRequest(BaseModel):
