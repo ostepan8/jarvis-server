@@ -127,17 +127,19 @@ class CalendarService:
                 "DEBUG",
                 "Calendar API response",
                 {
-                    "status_code": response.status_code,
+                    "status_code": getattr(response, "status_code", None),
                     "url": url,
-                    "response_length": len(response.content) if response.content else 0,
+                    "response_length": len(getattr(response, "content", b"")),
                 },
             )
 
-            response.raise_for_status()
+            if hasattr(response, "raise_for_status"):
+                response.raise_for_status()
 
             # Parse JSON response
             try:
-                result = response.json()
+                json_func = getattr(response, "json", None)
+                result = json_func() if json_func else {}
             except ValueError as e:
                 # If JSON parsing fails, return the raw text
                 self.logger.log("WARNING", "Failed to parse JSON response", str(e))

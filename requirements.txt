@@ -134,3 +134,5 @@ colorama
 pvporcupine
 vosk
 chromadb
+PyJWT
+passlib[bcrypt]
