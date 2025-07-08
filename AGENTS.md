@@ -20,6 +20,8 @@ Additional Python packages used by the project:
 - `pvporcupine`
 - `vosk`
 - `chromadb`
+- `passlib[bcrypt]`
+- `PyJWT`
 
 ## Overview
 - **Language**: Python 3.11+
