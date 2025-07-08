@@ -10,15 +10,32 @@ from dotenv import load_dotenv
 from typing import Any, Dict, Optional
 import sqlite3
 from passlib.context import CryptContext
-import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
+
+# Fix for JWT import - ensure we're using PyJWT
+try:
+    import jwt
+
+    # Test if jwt.encode exists
+    test_payload = {"test": "test"}
+    jwt.encode(test_payload, "secret", algorithm="HS256")
+except (ImportError, AttributeError):
+    try:
+        # Try alternative import
+        import PyJWT as jwt
+    except ImportError:
+        print("Please install PyJWT: pip install PyJWT")
+        raise ImportError("PyJWT is required for authentication")
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.protocols import Protocol
 from jarvis.constants import DEFAULT_PORT
 from jarvis.utils import detect_timezone
 from fastapi.middleware.cors import CORSMiddleware
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 instead of bcrypt to avoid version issues
+# This is still cryptographically secure and more reliable
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
 JWT_SECRET = os.getenv("JWT_SECRET", "secret")
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", 60))
@@ -51,7 +68,8 @@ class AuthRequest(BaseModel):
 
 
 def create_token(email: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    # Fix: Use timezone-aware datetime
+    expire = datetime.now(UTC) + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     payload = {"sub": email, "exp": expire}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -168,10 +186,17 @@ async def signup(req: AuthRequest, request: Request):
     db: sqlite3.Connection = request.app.state.auth_db
     try:
         password_hash = pwd_context.hash(req.password)
-        db.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)", (req.email, password_hash))
+        db.execute(
+            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+            (req.email, password_hash),
+        )
         db.commit()
     except sqlite3.IntegrityError:
         return JSONResponse({"error": "User already exists"}, status_code=400)
+    except Exception as e:
+        # Better error handling for hashing issues
+        return JSONResponse({"error": f"Signup failed: {str(e)}"}, status_code=500)
+
     token = create_token(req.email)
     return {"token": token}
 

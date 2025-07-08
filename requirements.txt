@@ -136,3 +136,5 @@ vosk
 chromadb
 PyJWT
 passlib[bcrypt]
+passlib
+PyJWT
