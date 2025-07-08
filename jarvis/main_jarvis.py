@@ -18,9 +18,11 @@ from .agents.software_engineering_agent import SoftwareEngineeringAgent
 from .agents.calendar_agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .agents.weather_agent import WeatherAgent
-from .services.calendar_service import CalendarService
 from .agents.chat_agent import ChatAgent
 from .services.vector_memory import VectorMemoryService
+from .services.calendar_service import CalendarService
+from .services.canvas_service import CanvasService  # ← NEW
+from .agents.canvas import CanvasAgent
 from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
@@ -39,11 +41,11 @@ class JarvisSystem:
 
     def __init__(self, config: JarvisConfig | Dict[str, Any]):
         """Create a new Jarvis system."""
-
         if isinstance(config, dict):
             self.config = JarvisConfig(**config)
         else:
             self.config = config
+
         self.logger = JarvisLogger()
         self.network = AgentNetwork(self.logger)
         self.perf_enabled = self.config.perf_tracking
@@ -53,6 +55,7 @@ class JarvisSystem:
         self.nlu_agent: NLUAgent = None
         self.orchestrator: OrchestratorAgent = None
         self.calendar_service: CalendarService = None
+        self.canvas_service: CanvasService = None  # ← NEW
         self.lights_agent: PhillipsHueAgent = None
         self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
@@ -70,7 +73,6 @@ class JarvisSystem:
 
     async def initialize(self, load_protocol_directory: bool = False) -> None:
         """Initialize all agents and start the network."""
-
         ai_client = self._create_ai_client()
         await self._connect_usage_logger()
         self._register_agents(ai_client)
@@ -80,7 +82,8 @@ class JarvisSystem:
         self.logger.log(
             "INFO",
             "Jarvis system initialized",
-            f"Active agents: {list(self.network.agents.keys())}, Loaded protocols: {len(self.protocol_registry.protocols)}",
+            f"Active agents: {list(self.network.agents.keys())}, "
+            f"Loaded protocols: {len(self.protocol_registry.protocols)}",
         )
 
     def _create_ai_client(self) -> BaseAIClient:
@@ -106,14 +109,20 @@ class JarvisSystem:
         )
         self.network.register_agent(self.orchestrator)
 
-        # 3) CalendarAgent
+        # 3) CollaborativeCalendarAgent (your existing Calendar API)
         self.calendar_service = CalendarService(self.config.calendar_api_url)
         calendar_agent = CollaborativeCalendarAgent(
             ai_client, self.calendar_service, self.logger
         )
         self.network.register_agent(calendar_agent)
 
-        # 4) Vector memory service and ChatAgent (for handling chat interactions)
+        # 4) CanvasAgent (Canvas LMS integration)               ← ADDED
+        #    Reads CANVAS_API_URL and CANVAS_API_TOKEN env-vars by default
+        self.canvas_service = CanvasService()
+        canvas_agent = CanvasAgent(ai_client, self.canvas_service, self.logger)
+        self.network.register_agent(canvas_agent)
+
+        # 5) Vector memory service and ChatAgent (chat interactions)
         self.vector_memory = VectorMemoryService(
             persist_directory=self.config.memory_dir,
             api_key=self.config.api_key,
@@ -121,7 +130,7 @@ class JarvisSystem:
         self.chat_agent = ChatAgent(ai_client, self.logger, memory=self.vector_memory)
         self.network.register_agent(self.chat_agent)
 
-        # 5) WeatherAgent (for weather info)
+        # 6) WeatherAgent (for weather info)
         weather_key = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
         try:
             self.weather_agent = WeatherAgent(
@@ -131,24 +140,22 @@ class JarvisSystem:
         except Exception as exc:
             self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
 
-        # 6) ProtocolAgent (for protocol management)
+        # 7) ProtocolAgent (for protocol management)
         self.protocol_agent = ProtocolAgent(self.logger)
+        self.network.register_agent(self.protocol_agent)
 
-        # 7) LightsAgent (for smart home control)
+        # 8) LightsAgent (for smart home control)
         load_dotenv()
         bridge_ip = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
         self.network.register_agent(self.lights_agent)
 
-        # 8) SoftwareEngineeringAgent (developer tools)
+        # 9) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.repo_path
         self.software_agent = SoftwareEngineeringAgent(
             ai_client=ai_client, repo_path=repo_path, logger=self.logger
         )
         self.network.register_agent(self.software_agent)
-
-        # Register protocol agent after other providers so capability map exists
-        self.network.register_agent(self.protocol_agent)
 
     def _setup_protocol_system(self, load_protocol_directory) -> None:
         """Initialize protocol executor and load protocol definitions."""

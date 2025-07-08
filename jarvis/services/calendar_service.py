@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 import types
@@ -16,11 +17,39 @@ class CalendarService:
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
+        api_key: Optional[str] = None,
         logger: JarvisLogger | None = None,
     ) -> None:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
-        self.client = httpx.AsyncClient()
+
+        # Get API key from parameter or environment
+        self.api_key = api_key or os.getenv("CALENDAR_API_KEY")
+
+        # Log configuration (mask the API key)
+        self.logger.log(
+            "INFO",
+            "Calendar service initialized",
+            {
+                "base_url": self.base_url,
+                "has_api_key": bool(self.api_key),
+                "api_key_source": (
+                    "parameter"
+                    if api_key
+                    else "environment" if self.api_key else "none"
+                ),
+            },
+        )
+
+        # Set up headers
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            # Alternative header formats you might need:
+            # headers["X-API-Key"] = self.api_key
+            # headers["API-Key"] = self.api_key
+
+        self.client = httpx.AsyncClient(headers=headers)
 
     async def __aenter__(self) -> "CalendarService":
         """Allow use as an async context manager."""
@@ -76,17 +105,78 @@ class CalendarService:
     ) -> Dict[str, Any]:
         """Internal helper to perform an HTTP request to the calendar API."""
         url = f"{self.base_url}{endpoint}"
+
+        # Log request (but don't log the actual API key)
         self.logger.log(
-            "INFO",
-            "API request",
-            f"{method} {url} params={params} json={json}",
+            "DEBUG",
+            "Calendar API request",
+            {
+                "method": method,
+                "url": url,
+                "params": params,
+                "has_json": bool(json),
+                "has_auth_header": "Authorization" in self.client.headers,
+            },
         )
-        response = await self.client.request(method, url, params=params, json=json)
-        result = response.json()
-        if result.get("status") == "error":
-            raise Exception(result.get("message", "Unknown error"))
-        self.logger.log("INFO", "API response", str(result))
-        return result
+
+        try:
+            response = await self.client.request(method, url, params=params, json=json)
+
+            # Log response details
+            self.logger.log(
+                "DEBUG",
+                "Calendar API response",
+                {
+                    "status_code": response.status_code,
+                    "url": url,
+                    "response_length": len(response.content) if response.content else 0,
+                },
+            )
+
+            response.raise_for_status()
+
+            # Parse JSON response
+            try:
+                result = response.json()
+            except ValueError as e:
+                # If JSON parsing fails, return the raw text
+                self.logger.log("WARNING", "Failed to parse JSON response", str(e))
+                return {
+                    "status": "error",
+                    "message": f"Invalid JSON response: {response.text}",
+                }
+
+            # Check for API-specific errors
+            if isinstance(result, dict) and result.get("status") == "error":
+                error_msg = result.get("message", "Unknown error")
+                self.logger.log("ERROR", "Calendar API error", error_msg)
+                raise Exception(error_msg)
+
+            return result
+
+        except httpx.HTTPStatusError as e:
+            error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+            self.logger.log(
+                "ERROR",
+                "Calendar API HTTP error",
+                {
+                    "status_code": e.response.status_code,
+                    "url": url,
+                    "error": error_msg,
+                },
+            )
+            raise Exception(error_msg)
+        except Exception as e:
+            self.logger.log(
+                "ERROR",
+                "Calendar API request failed",
+                {
+                    "url": url,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            raise
 
     async def get_events_by_date(self, date: str) -> Dict[str, Any]:
         """Get events for a specific date."""

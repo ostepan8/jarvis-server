@@ -23,11 +23,11 @@ class CollaborativeCalendarAgent(NetworkAgent):
         super().__init__("CalendarAgent", logger)
         self.calendar_service = calendar_service
         self.ai_client = ai_client
-        # Log initialization instead of printing to stdout
-        self.logger.log("DEBUG", "Initialized CollaborativeCalendarAgent")
 
         # Tools and prompt for natural language commands
         self.tools = calendar_tools
+        # Get current local time as a formatted string
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self.system_prompt = (
             "You are Jarvis, the AI assistant from Iron Man. "
@@ -38,7 +38,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             "2. Breaking down complex tasks into calendar API calls\n"
             "3. Executing the necessary operations in the correct order\n"
             "4. Explaining the results plainly\n\n"
-            "Current date: {current_date}. Always interpret dates relative to this value.\n\n"
+            f"Current date: {current_date}. Always interpret dates relative to this value.\n\n"
             "You have access to comprehensive calendar management functions including:\n"
             "- Viewing events (by date, week, month, or with filters)\n"
             "- Searching and categorizing events\n"

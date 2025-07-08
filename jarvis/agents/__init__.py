@@ -9,6 +9,8 @@ from .protocol_agent import ProtocolAgent
 from .software_engineering_agent import SoftwareEngineeringAgent
 from .weather_agent import WeatherAgent
 
+# from .canvas import CanvasAgent
+
 __all__ = [
     "CollaborativeCalendarAgent",
     "OrchestratorAgent",
@@ -18,4 +20,5 @@ __all__ = [
     "ProtocolAgent",
     "SoftwareEngineeringAgent",
     "WeatherAgent",
+    # "CanvasAgent",
 ]

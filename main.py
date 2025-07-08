@@ -51,17 +51,33 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
 
                 if isinstance(result_value, dict):
                     for key, value in result_value.items():
+                        # Truncate long values
+                        str_value = str(value)
+                        if len(str_value) > 100:
+                            str_value = str_value[:97] + "..."
                         await output.send_output(
-                            f"    - {key}: {Fore.MAGENTA}{value}{Style.RESET_ALL}"
+                            f"    - {key}: {Fore.MAGENTA}{str_value}{Style.RESET_ALL}"
                         )
                 elif isinstance(result_value, list):
-                    for item in result_value:
+                    # Limit number of items shown
+                    shown_items = result_value[:5]
+                    for item in shown_items:
+                        str_item = str(item)
+                        if len(str_item) > 100:
+                            str_item = str_item[:97] + "..."
                         await output.send_output(
-                            f"    - {Fore.MAGENTA}{item}{Style.RESET_ALL}"
+                            f"    - {Fore.MAGENTA}{str_item}{Style.RESET_ALL}"
+                        )
+                    if len(result_value) > 5:
+                        await output.send_output(
+                            f"    - {Fore.YELLOW}...and {len(result_value) - 5} more items{Style.RESET_ALL}"
                         )
                 else:
+                    str_result = str(result_value)
+                    if len(str_result) > 100:
+                        str_result = str_result[:97] + "..."
                     await output.send_output(
-                        f"    - {Fore.MAGENTA}{result_value}{Style.RESET_ALL}"
+                        f"    - {Fore.MAGENTA}{str_result}{Style.RESET_ALL}"
                     )
     else:
         if result.get("success"):
