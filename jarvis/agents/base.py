@@ -3,6 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import Any, Callable, Dict, Optional, Set
 
+from ..profile import AgentProfile
+from ..services.vector_memory import VectorMemoryService
+
 from .message import Message
 from .agent_network import AgentNetwork
 from ..logger import JarvisLogger
@@ -11,7 +14,13 @@ from ..logger import JarvisLogger
 class NetworkAgent:
     """Base class for collaborative network agents."""
 
-    def __init__(self, name: str, logger: Optional[JarvisLogger] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        logger: Optional[JarvisLogger] = None,
+        memory: Optional[VectorMemoryService] = None,
+        profile: Optional[AgentProfile] = None,
+    ) -> None:
         self._name = name
         self.network: Optional[AgentNetwork] = None
         self.logger = logger or JarvisLogger()
@@ -19,6 +28,8 @@ class NetworkAgent:
         self.message_handlers: Dict[str, Callable] = {}
         # Map intent names to bound methods for direct invocation
         self.intent_map: Dict[str, Callable] = {}
+        self.memory = memory
+        self.profile = profile or AgentProfile()
         self._setup_base_handlers()
 
     @property
@@ -142,3 +153,26 @@ class NetworkAgent:
             error,
         )
         await self.send_message(to_agent, "error", {"error": error}, request_id)
+
+    # ------------------------------------------------------------------
+    # Shared tools
+    # ------------------------------------------------------------------
+    async def store_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Add a piece of text to the shared vector memory."""
+        if not self.memory:
+            return None
+        return await self.memory.add_memory(text, metadata)
+
+    async def search_memory(self, query: str, top_k: int = 3) -> list[Dict[str, Any]]:
+        """Search the shared vector memory."""
+        if not self.memory:
+            return []
+        return await self.memory.similarity_search(query, top_k=top_k)
+
+    def update_profile(self, **fields: Any) -> None:
+        """Update the agent's profile in-place."""
+        if not self.profile:
+            self.profile = AgentProfile()
+        for key, value in fields.items():
+            if hasattr(self.profile, key):
+                setattr(self.profile, key, value)

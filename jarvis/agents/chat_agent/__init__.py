@@ -12,6 +12,7 @@ from ..message import Message
 from ...ai_clients.base import BaseAIClient
 from ...logger import JarvisLogger
 from ...services.vector_memory import VectorMemoryService
+from ...profile import AgentProfile
 
 
 class PersonalityMode(Enum):
@@ -47,28 +48,6 @@ class ConversationContext:
             self.user_preferences = {}
 
 
-@dataclass
-class UserProfile:
-    """Comprehensive user profile with preferences and history."""
-
-    name: Optional[str] = None
-    preferred_personality: str = "friendly"
-    interests: List[str] = None
-    conversation_style: str = "casual"
-    humor_preference: str = "witty"
-    topics_of_interest: List[str] = None
-    language_preference: str = "english"
-    interaction_count: int = 0
-    favorite_games: List[str] = None
-    last_seen: Optional[str] = None
-
-    def __post_init__(self):
-        if self.interests is None:
-            self.interests = []
-        if self.topics_of_interest is None:
-            self.topics_of_interest = []
-        if self.favorite_games is None:
-            self.favorite_games = []
 
 
 class GameState:
@@ -130,15 +109,21 @@ class ChatAgent(NetworkAgent):
         max_context_length: int = 20,
         memory_threshold: float = 0.7,
     ) -> None:
-        super().__init__(name="ChatAgent", logger=logger)
+        super().__init__(
+            name="ChatAgent",
+            logger=logger,
+            memory=memory,
+            profile=AgentProfile(),
+        )
         self.ai_client = ai_client
-        self.vector_memory = memory
+        # Aliases for backwards compatibility with older code
+        self.user_profile = self.profile
+        self.vector_memory = self.memory
         self.max_context_length = max_context_length
         self.memory_threshold = memory_threshold
 
         # Enhanced conversation management
         self.conversation_history: List[ConversationContext] = []
-        self.user_profile = UserProfile()
         self.current_session_id = self._generate_session_id()
         self.current_personality = PersonalityMode.FRIENDLY
 

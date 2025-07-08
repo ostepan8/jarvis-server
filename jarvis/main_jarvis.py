@@ -98,9 +98,16 @@ class JarvisSystem:
     def _register_agents(self, ai_client: BaseAIClient) -> None:
         """Create and register all agents with the network."""
 
+        # Shared memory service for all agents
+        self.vector_memory = VectorMemoryService(
+            persist_directory=self.config.memory_dir,
+            api_key=self.config.api_key,
+        )
+
         # 1) NLUAgent (must be registered so network.request_capability works)
         self.nlu_agent = NLUAgent(ai_client, self.logger)
         self.network.register_agent(self.nlu_agent)
+        self.nlu_agent.memory = self.vector_memory
 
         # 2) OrchestratorAgent (dynamic multi-step planning)
         timeout = self.config.response_timeout
@@ -108,6 +115,7 @@ class JarvisSystem:
             ai_client, self.logger, response_timeout=timeout
         )
         self.network.register_agent(self.orchestrator)
+        self.orchestrator.memory = self.vector_memory
 
         # 3) CollaborativeCalendarAgent (your existing Calendar API)
         self.calendar_service = CalendarService(self.config.calendar_api_url)
@@ -115,18 +123,16 @@ class JarvisSystem:
             ai_client, self.calendar_service, self.logger
         )
         self.network.register_agent(calendar_agent)
+        calendar_agent.memory = self.vector_memory
 
         # 4) CanvasAgent (Canvas LMS integration)               ← ADDED
         #    Reads CANVAS_API_URL and CANVAS_API_TOKEN env-vars by default
         self.canvas_service = CanvasService()
         canvas_agent = CanvasAgent(ai_client, self.canvas_service, self.logger)
         self.network.register_agent(canvas_agent)
+        canvas_agent.memory = self.vector_memory
 
-        # 5) Vector memory service and ChatAgent (chat interactions)
-        self.vector_memory = VectorMemoryService(
-            persist_directory=self.config.memory_dir,
-            api_key=self.config.api_key,
-        )
+        # 5) ChatAgent (chat interactions)
         self.chat_agent = ChatAgent(ai_client, self.logger, memory=self.vector_memory)
         self.network.register_agent(self.chat_agent)
 
@@ -137,18 +143,21 @@ class JarvisSystem:
                 api_key=weather_key, logger=self.logger, ai_client=ai_client
             )
             self.network.register_agent(self.weather_agent)
+            self.weather_agent.memory = self.vector_memory
         except Exception as exc:
             self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
 
         # 7) ProtocolAgent (for protocol management)
         self.protocol_agent = ProtocolAgent(self.logger)
         self.network.register_agent(self.protocol_agent)
+        self.protocol_agent.memory = self.vector_memory
 
         # 8) LightsAgent (for smart home control)
         load_dotenv()
         bridge_ip = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
         self.network.register_agent(self.lights_agent)
+        self.lights_agent.memory = self.vector_memory
 
         # 9) SoftwareEngineeringAgent (developer tools)
         repo_path = self.config.repo_path
@@ -156,6 +165,7 @@ class JarvisSystem:
             ai_client=ai_client, repo_path=repo_path, logger=self.logger
         )
         self.network.register_agent(self.software_agent)
+        self.software_agent.memory = self.vector_memory
 
     def _setup_protocol_system(self, load_protocol_directory) -> None:
         """Initialize protocol executor and load protocol definitions."""
