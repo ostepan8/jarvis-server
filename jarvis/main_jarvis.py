@@ -167,6 +167,33 @@ class JarvisSystem:
         self.network.register_agent(self.software_agent)
         self.software_agent.memory = self.vector_memory
 
+    def list_agents(self) -> Dict[str, Any]:
+        """List all registered agents in the network."""
+        agents_info = {}
+        for agent_name, agent in self.network.agents.items():
+            agents_info[agent_name] = {
+                "name": agent.name,
+                "capabilities": agent.capabilities,
+                "description": agent.description,
+            }
+        return agents_info
+
+    def get_agent_capabilities(self, agent_name: str) -> Dict[str, Any]:
+        """Get detailed capabilities for a specific agent by name."""
+        if agent_name not in self.network.agents:
+            return {
+                "error": f"Agent '{agent_name}' not found",
+                "available_agents": list(self.network.agents.keys()),
+            }
+
+        agent = self.network.agents[agent_name]
+        return {
+            "name": agent.name,
+            "capabilities": agent.capabilities,
+            "description": getattr(agent, "description", "No description available"),
+            "status": "active" if agent_name in self.network.agents else "inactive",
+        }
+
     def _setup_protocol_system(self, load_protocol_directory) -> None:
         """Initialize protocol executor and load protocol definitions."""
         self.protocol_executor = ProtocolExecutor(
