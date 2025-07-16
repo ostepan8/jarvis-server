@@ -124,6 +124,13 @@ make install
 make test
 ```
 
+Or run the helper script which creates a virtual environment and installs
+dependencies automatically:
+
+```bash
+./scripts/run_tests.sh
+```
+
 With Poetry:
 
 ```bash
