@@ -1,5 +1,7 @@
 # jarvis/agents/weather_agent/weather_agent.py
 from typing import Any, Dict, Set, Optional
+import asyncio
+import functools
 
 from ..base import NetworkAgent
 from ..message import Message
@@ -62,6 +64,20 @@ class WeatherAgent(NetworkAgent):
     @property
     def capabilities(self) -> Set[str]:
         return self.function_registry.capabilities
+
+    async def run_capability(self, capability: str, **kwargs: Any) -> Any:
+        """Execute a weather capability via the function registry."""
+        func = self.function_registry.get_function(capability)
+        if not func:
+            raise NotImplementedError(
+                f"Capability '{capability}' not implemented in WeatherAgent"
+            )
+
+        if asyncio.iscoroutinefunction(func):
+            return await func(**kwargs)
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, **kwargs))
 
     async def _handle_capability_request(self, message: Message) -> None:
         """Handle incoming capability requests"""

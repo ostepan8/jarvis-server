@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-import asyncio
-from functools import partial
 import time
 
 from ..logger import JarvisLogger
@@ -98,18 +96,6 @@ class ProtocolExecutor:
                 results[step_id] = {"error": "agent_not_found"}
                 continue
 
-            # Get the function from intent_map
-            intent_map = getattr(agent, "intent_map", {})
-            func = intent_map.get(step.function)
-
-            if not func:
-                self.logger.log(
-                    "ERROR",
-                    f"Function '{step.function}' not found in {step.agent}",
-                )
-                results[step_id] = {"error": "function_not_found"}
-                continue
-
             # Prepare parameters
             params = dict(step.parameters)
 
@@ -142,21 +128,23 @@ class ProtocolExecutor:
                             f"Available context: {list(context.keys())}, results: {list(results.keys())}",
                         )
 
-            # Execute the function
+            # Execute the capability
             try:
                 self.logger.log(
                     "INFO", f"Executing {step.agent}.{step.function}", str(params)
                 )
 
-                if asyncio.iscoroutinefunction(func):
-                    result = await func(**params)
-                else:
-                    loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(None, partial(func, **params))
+                result = await agent.run_capability(step.function, **params)
 
                 results[step_id] = result
                 self.logger.log("INFO", f"Step {step_id} completed", str(result))
 
+            except NotImplementedError:
+                self.logger.log(
+                    "ERROR",
+                    f"Function '{step.function}' not found in {step.agent}",
+                )
+                results[step_id] = {"error": "function_not_found"}
             except Exception as exc:
                 self.logger.log(
                     "ERROR",

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+import asyncio
+from functools import partial
 from typing import Any, Callable, Dict, Optional, Set
 
 from ..profile import AgentProfile
@@ -84,6 +86,23 @@ class NetworkAgent:
 
     async def _handle_error(self, message: Message) -> None:
         self.logger.log("ERROR", f"Error from {message.from_agent}", message.content)
+
+    async def run_capability(self, capability: str, **kwargs: Any) -> Any:
+        """Execute a capability using the agent's function map.
+
+        Subclasses can override this to provide custom execution logic.
+        """
+        func = self.intent_map.get(capability)
+        if not func:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not implement capability '{capability}'"
+            )
+
+        if asyncio.iscoroutinefunction(func):
+            return await func(**kwargs)
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, partial(func, **kwargs))
 
     async def send_message(
         self,
