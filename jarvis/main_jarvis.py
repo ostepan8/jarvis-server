@@ -15,7 +15,7 @@ from .agents.nlu_agent import NLUAgent
 from .agents.protocol_agent import ProtocolAgent
 from .agents.lights_agent import PhillipsHueAgent
 from .agents.software_engineering_agent import SoftwareEngineeringAgent
-from .agents.calendar_agent import CollaborativeCalendarAgent
+from .agents.calendar_agent.agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .agents.weather_agent import WeatherAgent
 from .agents.chat_agent import ChatAgent
@@ -127,10 +127,10 @@ class JarvisSystem:
 
         # 4) CanvasAgent (Canvas LMS integration)               ← ADDED
         #    Reads CANVAS_API_URL and CANVAS_API_TOKEN env-vars by default
-        self.canvas_service = CanvasService()
-        canvas_agent = CanvasAgent(ai_client, self.canvas_service, self.logger)
-        self.network.register_agent(canvas_agent)
-        canvas_agent.memory = self.vector_memory
+        # self.canvas_service = CanvasService()
+        # canvas_agent = CanvasAgent(ai_client, self.canvas_service, self.logger)
+        # self.network.register_agent(canvas_agent)
+        # canvas_agent.memory = self.vector_memory
 
         # 5) ChatAgent (chat interactions)
         self.chat_agent = ChatAgent(ai_client, self.logger, memory=self.vector_memory)

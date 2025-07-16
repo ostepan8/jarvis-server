@@ -1,4 +1,5 @@
 """Tool definitions for CalendarAgent."""
+
 from typing import Any, Dict, List
 
 tools: List[Dict[str, Any]] = [

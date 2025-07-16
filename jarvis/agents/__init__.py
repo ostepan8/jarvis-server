@@ -1,6 +1,6 @@
 """Agent implementations used within the AgentNetwork."""
 
-from .calendar_agent import CollaborativeCalendarAgent
+from .calendar_agent.agent import CollaborativeCalendarAgent
 from .orchestrator_agent import OrchestratorAgent
 from .task import Task
 from .base import NetworkAgent
