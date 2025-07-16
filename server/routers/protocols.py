@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from jarvis import JarvisSystem
 from jarvis.protocols import Protocol
 
-from models import ProtocolRunRequest
-from dependencies import get_jarvis
+from ..models import ProtocolRunRequest
+from ..dependencies import get_jarvis
 
 
 router = APIRouter()
