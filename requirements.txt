@@ -133,5 +133,8 @@ phue
 colorama
 vosk
 chromadb
-PyJWT>=2.8,<3.0
-passlib[bcrypt]>=1.7,<2.0
+PyJWT
+passlib[bcrypt]
+passlib
+PyJWT
+
