@@ -177,14 +177,15 @@ Your job is to read the exact **User Input** below and return **only** a JSON ob
 **CRITICAL RULES:**
 1. You can ONLY use capabilities that exist in the "Available Capabilities" list below
 2. DO NOT invent or hallucinate capability names or intents
-3. **INTENT vs CAPABILITY**: 
+3. Allowed intents: perform_capability, orchestrate_tasks, run_protocol, ask_about_protocol, define_protocol, chat
+4. **INTENT vs CAPABILITY**:
    - INTENT = what type of action ("perform_capability", "orchestrate_tasks", etc.)
    - CAPABILITY = specific skill from the list ("aider_software_agent_command", "schedule_appointment", etc.)
-4. If the user's request matches ONE available capability, use intent "perform_capability" 
-5. If no single capability matches OR multiple different agent types needed, use intent "orchestrate_tasks"
-6. **SOFTWARE TASKS**: All coding/development work uses capability "aider_software_agent_command" with intent "perform_capability"
-7. **MULTI-AGENT TASKS**: Use intent "orchestrate_tasks" only when you need multiple DIFFERENT types of agents (code + calendar, lights + code, etc.)
-8. Even if the intent is "chat" you still must return a capability (if it exists in the list, otherwise just put "chat" as capability)
+5. If the user's request matches ONE available capability, use intent "perform_capability"
+6. If no single capability matches OR multiple different agent types needed, use intent "orchestrate_tasks"
+7. **SOFTWARE TASKS**: All coding/development work uses capability "aider_software_agent_command" with intent "perform_capability"
+8. **MULTI-AGENT TASKS**: Use intent "orchestrate_tasks" only when you need multiple DIFFERENT types of agents (code + calendar, lights + code, etc.)
+9. Even if the intent is "chat" you still must return a capability (if it exists in the list, otherwise just put "chat" as capability)
 
 **User Input**  
 \"\"\"{user_input}\"\"\"
