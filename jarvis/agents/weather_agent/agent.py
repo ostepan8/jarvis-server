@@ -38,6 +38,19 @@ class WeatherAgent(NetworkAgent):
             default_location=default_location,
         )
 
+    @property
+    def client(self):
+        """Expose underlying HTTP client for compatibility with tests."""
+        return self.weather_service.client
+
+    def _get_current_weather(self, location: str) -> Dict[str, Any]:
+        """Proxy for WeatherService.get_current_weather used in tests."""
+        return self.weather_service.get_current_weather(location)
+
+    async def _process_weather_command(self, command: str) -> Dict[str, Any]:
+        """Proxy for WeatherCommandProcessor.process_command used in tests."""
+        return await self.command_processor.process_command(command)
+
     async def close(self) -> None:
         """Clean up resources"""
         await self.weather_service.close()
@@ -71,7 +84,7 @@ class WeatherAgent(NetworkAgent):
                 )
                 return
 
-            result = await self.command_processor.process_command(command)
+            result = await self._process_weather_command(command)
 
             await self.send_capability_response(
                 message.from_agent, result, message.request_id, message.id

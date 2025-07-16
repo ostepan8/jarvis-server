@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-import sys
-import os
-
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-
 from fastapi import APIRouter, Request, Depends
 from jarvis import JarvisSystem
 from jarvis.utils import detect_timezone

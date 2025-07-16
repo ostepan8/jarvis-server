@@ -31,8 +31,8 @@ async def test_get_current_weather(monkeypatch):
             "weather": [{"description": "sunny"}],
             "main": {"temp": 25}
         })
-    monkeypatch.setattr(agent.client, "get", mock_get)
-    result = await asyncio.to_thread(agent._get_current_weather, "London")
+    monkeypatch.setattr(agent.weather_service.client, "get", mock_get)
+    result = await asyncio.to_thread(agent.weather_service.get_current_weather, "London")
     assert result["location"] == "London"
     assert result["temperature"] == 25
     assert result["description"] == "Sunny"
@@ -43,7 +43,7 @@ async def test_handle_request(monkeypatch):
     async def fake_process(cmd):
         return {"location": "Paris", "temperature": 10, "description": "cloudy"}
 
-    monkeypatch.setattr(agent, "_process_weather_command", fake_process)
+    monkeypatch.setattr(agent.command_processor, "process_command", fake_process)
     captured = {}
     async def fake_send(to, result, request_id, msg_id):
         captured["result"] = result

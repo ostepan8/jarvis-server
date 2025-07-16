@@ -61,7 +61,7 @@ mslex
 multidict
 networkx
 numpy
-openai==1.91.0
+openai==1.11.0
 oslex
 packaging
 pathspec
@@ -131,10 +131,10 @@ yarl
 zipp
 phue
 colorama
-pvporcupine
 vosk
 chromadb
 PyJWT
 passlib[bcrypt]
 passlib
 PyJWT
+
