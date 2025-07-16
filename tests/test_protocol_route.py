@@ -1,12 +1,14 @@
 import pytest
 
-from server import list_protocols
+from server2 import list_protocols
 from jarvis.protocols.registry import ProtocolRegistry
 from jarvis.protocols import Protocol
+
 
 class DummyJarvis:
     def __init__(self, registry):
         self.protocol_registry = registry
+
 
 @pytest.mark.asyncio
 async def test_list_protocols(tmp_path):

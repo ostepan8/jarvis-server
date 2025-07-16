@@ -5,7 +5,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-import server
+import server2
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
 from jarvis.logger import JarvisLogger
@@ -40,7 +40,7 @@ async def test_run_protocol_endpoint(tmp_path):
     async def override_get_jarvis():
         return jarvis
 
-    server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server2.app.dependency_overrides[server2.get_jarvis] = override_get_jarvis
 
     proto = Protocol(
         id="1",
@@ -49,9 +49,9 @@ async def test_run_protocol_endpoint(tmp_path):
         steps=[ProtocolStep(agent="dummy", function="echo", parameters={"msg": "hi"})],
     )
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
-    transport = ASGITransport(app=server.app)
+    server2.app.router.on_startup.clear()
+    server2.app.router.on_shutdown.clear()
+    transport = ASGITransport(app=server2.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/protocols/run", json={"protocol": proto.to_dict()})
         assert resp.status_code == 200
