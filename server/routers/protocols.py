@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-import sys
-import os
-
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-
 from fastapi import APIRouter, HTTPException, Depends
 from jarvis import JarvisSystem
 from jarvis.protocols import Protocol

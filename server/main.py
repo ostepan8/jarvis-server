@@ -6,15 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.constants import DEFAULT_PORT
-from database import init_database, close_database
-from routers import jarvis_router, auth_router, protocol_router
+from .database import init_database, close_database
+from .routers import jarvis_router, auth_router, protocol_router
 
 
 def create_app() -> FastAPI:
