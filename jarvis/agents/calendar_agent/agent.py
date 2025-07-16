@@ -1,6 +1,8 @@
 # jarvis/agents/calendar_agent/agent.py
 from typing import Any, Dict, Set
 import json
+import asyncio
+import functools
 from datetime import datetime, timezone
 from ..base import NetworkAgent
 from ..message import Message
@@ -46,6 +48,20 @@ class CollaborativeCalendarAgent(NetworkAgent):
     @property
     def capabilities(self) -> Set[str]:
         return self.function_registry.capabilities
+
+    async def run_capability(self, capability: str, **kwargs: Any) -> Any:
+        """Execute a calendar capability via the function registry."""
+        func = self.function_registry.get_function(capability)
+        if not func:
+            raise NotImplementedError(
+                f"Capability '{capability}' not implemented in CalendarAgent"
+            )
+
+        if asyncio.iscoroutinefunction(func):
+            return await func(**kwargs)
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, **kwargs))
 
     def _safe_json_dumps(self, obj):
         """Safely serialize an object to JSON, handling non-serializable types"""
