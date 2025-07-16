@@ -11,8 +11,8 @@ from fastapi import APIRouter, Request, Depends
 from jarvis import JarvisSystem
 from jarvis.utils import detect_timezone
 
-from models import JarvisRequest
-from dependencies import get_jarvis
+from ..models import JarvisRequest
+from ..dependencies import get_jarvis
 
 
 router = APIRouter()

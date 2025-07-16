@@ -9,7 +9,10 @@ from ...ai_clients import BaseAIClient
 from ...logger import JarvisLogger
 from .function_registry import CalendarFunctionRegistry
 from .command_processor import CalendarCommandProcessor
-from .tools import tools as calendar_tools
+# Import the tools list explicitly from the tools module. Using
+# `from .tools import tools` would import the submodule instead of the
+# variable due to Python's import resolution order.
+from .tools.tools import tools as calendar_tools
 
 
 class CollaborativeCalendarAgent(NetworkAgent):

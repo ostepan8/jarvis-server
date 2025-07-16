@@ -4,9 +4,9 @@ import sqlite3
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 
-from models import AuthRequest
-from dependencies import get_auth_db
-from auth import create_token, decode_token, hash_password, verify_password
+from ..models import AuthRequest
+from ..dependencies import get_auth_db
+from ..auth import create_token, decode_token, hash_password, verify_password
 
 
 router = APIRouter()
