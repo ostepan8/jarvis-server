@@ -1,0 +1,22 @@
+{
+  "name": "wake_up",
+  "description": "Exit night mode and resume normal operation",
+  "trigger_phrases": [
+    "wake up",
+    "exit night mode",
+    "good morning jarvis"
+  ],
+  "steps": [
+    {
+      "agent": "NightModeControllerAgent",
+      "function": "stop_night_mode",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Back online, sir."
+    ]
+  }
+}
