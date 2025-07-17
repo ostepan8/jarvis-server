@@ -62,5 +62,11 @@
         "brightness": 254
       }
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Lights at full brightness, sir."
+    ]
+  }
 }

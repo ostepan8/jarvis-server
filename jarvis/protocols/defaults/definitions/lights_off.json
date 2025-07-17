@@ -108,5 +108,11 @@
       "function": "turn_off_all_lights",
       "parameters": {}
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "All lights powered down, sir."
+    ]
+  }
 }

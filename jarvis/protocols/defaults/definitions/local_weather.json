@@ -14,7 +14,15 @@
     {
       "agent": "WeatherAgent",
       "function": "get_current_weather",
-      "parameters": {"location": "Chicago"}
+      "parameters": {
+        "location": "Chicago"
+      }
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Here is the current weather."
+    ]
+  }
 }

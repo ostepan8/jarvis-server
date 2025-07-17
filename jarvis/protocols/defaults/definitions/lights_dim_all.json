@@ -58,5 +58,11 @@
         "brightness": 64
       }
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Lights dimmed, sir."
+    ]
+  }
 }

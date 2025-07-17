@@ -25,7 +25,6 @@ from .protocols.builder import create_from_file
 from .constants import (
     DEFAULT_PORT,
     LOG_DB_PATH,
-    PROTOCOL_RESPONSES,
     ExecutionResult,
 )
 from .performance import PerfTracker, track_async
@@ -54,7 +53,6 @@ __all__ = [
     "create_from_file",
     "DEFAULT_PORT",
     "LOG_DB_PATH",
-    "PROTOCOL_RESPONSES",
     "ExecutionResult",
     "PerfTracker",
     "track_async",
