@@ -1,6 +1,13 @@
 """Protocol system package"""
 
-from .models import Protocol, ProtocolStep, ArgumentDefinition, ArgumentType
+from .models import (
+    Protocol,
+    ProtocolStep,
+    ArgumentDefinition,
+    ArgumentType,
+    ProtocolResponse,
+    ResponseMode,
+)
 from .loggers import (
     ProtocolUsageLogger,
     ExecutionMetadata,
@@ -14,6 +21,8 @@ __all__ = [
     "ProtocolStep",
     "ArgumentDefinition",
     "ArgumentType",
+    "ProtocolResponse",
+    "ResponseMode",
     "ProtocolUsageLogger",
     "ExecutionMetadata",
     "ProtocolLogEntry",

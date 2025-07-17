@@ -20,9 +20,7 @@
     }
   ],
   "responses": {
-    "mode": "static",
-    "phrases": [
-      "Here is the current weather."
-    ]
+    "mode": "ai",
+    "prompt": "Briefly tell the user that the current weather for Chicago was retrieved."
   }
 }

@@ -28,9 +28,7 @@
     }
   ],
   "responses": {
-    "mode": "static",
-    "phrases": [
-      "Forecast retrieved, sir."
-    ]
+    "mode": "ai",
+    "prompt": "Inform the user in one sentence that the weather forecast for {location} was retrieved."
   }
 }

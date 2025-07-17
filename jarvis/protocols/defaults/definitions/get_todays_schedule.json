@@ -35,9 +35,7 @@
     }
   ],
   "responses": {
-    "mode": "static",
-    "phrases": [
-      "Here is today's schedule, sir."
-    ]
+    "mode": "ai",
+    "prompt": "Let the user know in a single sentence that today's calendar events were retrieved."
   }
 }
