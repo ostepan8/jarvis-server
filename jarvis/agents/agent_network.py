@@ -23,6 +23,9 @@ class AgentNetwork:
         self.agents: Dict[str, NetworkAgent] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
         self.capability_registry: Dict[str, List[str]] = {}
+        # Track night agents separately so we can enable them later
+        self.night_agents: Dict[str, NetworkAgent] = {}
+        self.night_capability_registry: Dict[str, List[str]] = {}
         self.logger = logger or JarvisLogger()
         self._running = False
         self._processor_task: Optional[asyncio.Task] = None
@@ -33,13 +36,24 @@ class AgentNetwork:
         # Reusable JARVIS protocols registry
         self.protocol_registry: List[str] = []
 
-    def register_agent(self, agent: NetworkAgent) -> None:
-        """Register an agent, its capabilities, and let it join the network."""
+    def register_agent(
+        self,
+        agent: NetworkAgent,
+        include_capabilities: bool = True,
+        night_agent: bool = False,
+    ) -> None:
+        """Register an agent with the network."""
         self.agents[agent.name] = agent
+        if night_agent:
+            self.night_agents[agent.name] = agent
+            # Always remember night capabilities for later activation
+            for capability in agent.capabilities:
+                self.night_capability_registry.setdefault(capability, []).append(agent.name)
         agent.set_network(self)
 
-        for capability in agent.capabilities:
-            self.capability_registry.setdefault(capability, []).append(agent.name)
+        if include_capabilities:
+            for capability in agent.capabilities:
+                self.capability_registry.setdefault(capability, []).append(agent.name)
 
         self.logger.log(
             "INFO",
@@ -50,6 +64,34 @@ class AgentNetwork:
         # If this agent has a 'protocols' attribute, register them
         if hasattr(agent, "protocols"):
             self.protocol_registry = list(getattr(agent, "protocols").keys())
+
+    def register_night_agent(
+        self,
+        agent: NetworkAgent,
+        include_capabilities: bool = False,
+    ) -> None:
+        """Convenience wrapper to register a night agent."""
+        self.register_agent(
+            agent,
+            include_capabilities=include_capabilities,
+            night_agent=True,
+        )
+
+    def add_agent_capabilities(self, agent: NetworkAgent) -> None:
+        """Activate an agent's capabilities on the network."""
+        for capability in agent.capabilities:
+            self.capability_registry.setdefault(capability, []).append(agent.name)
+
+    def remove_agent_capabilities(self, agent: NetworkAgent) -> None:
+        """Remove an agent's capabilities from the network."""
+        for capability in list(agent.capabilities):
+            providers = self.capability_registry.get(capability, [])
+            if agent.name in providers:
+                providers = [p for p in providers if p != agent.name]
+                if providers:
+                    self.capability_registry[capability] = providers
+                else:
+                    del self.capability_registry[capability]
 
     async def send_message(self, message: Message) -> None:
         """Enqueue a message for delivery."""

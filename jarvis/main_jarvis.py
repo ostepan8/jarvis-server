@@ -23,6 +23,11 @@ from .services.vector_memory import VectorMemoryService
 from .services.calendar_service import CalendarService
 from .services.canvas_service import CanvasService  # ← NEW
 from .agents.canvas import CanvasAgent
+from .night_agents import (
+    NightAgent,
+    TriggerPhraseSuggesterAgent,
+    NightModeControllerAgent,
+)
 from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
@@ -60,6 +65,11 @@ class JarvisSystem:
         self.protocol_agent: ProtocolAgent | None = None
         self.software_agent: SoftwareEngineeringAgent | None = None
         self.vector_memory: VectorMemoryService | None = None
+
+        # Night mode management
+        self.night_mode: bool = False
+        self.night_agents: list[NightAgent] = []
+        self.night_controller: NightModeControllerAgent | None = None
 
         # Protocol system components
         self.protocol_registry = ProtocolRegistry()
@@ -166,6 +176,15 @@ class JarvisSystem:
         self.network.register_agent(self.software_agent)
         self.software_agent.memory = self.vector_memory
 
+        # Night mode controller
+        self.night_controller = NightModeControllerAgent(self, self.logger)
+        self.network.register_agent(self.night_controller)
+
+        # Night agents
+        trigger_agent = TriggerPhraseSuggesterAgent(logger=self.logger)
+        self.network.register_night_agent(trigger_agent)
+        self.night_agents.append(trigger_agent)
+
     def list_agents(self) -> Dict[str, Any]:
         """List all registered agents in the network."""
         agents_info = {}
@@ -208,6 +227,20 @@ class JarvisSystem:
     async def _start_network(self) -> None:
         await self.network.start()
 
+    async def enter_night_mode(self) -> None:
+        """Enable night mode and launch background tasks."""
+        self.night_mode = True
+        for agent in self.night_agents:
+            agent.activate_capabilities()
+            asyncio.create_task(agent.start_background_tasks())
+
+    async def exit_night_mode(self) -> None:
+        """Disable night mode and stop background tasks."""
+        self.night_mode = False
+        for agent in self.night_agents:
+            agent.deactivate_capabilities()
+            await agent.stop_background_tasks()
+
     def _load_protocols_from_directory(self, directory: Path):
         """Load all protocol definitions from JSON files in the directory"""
         for json_file in directory.glob("*.json"):
@@ -247,6 +280,13 @@ class JarvisSystem:
         try:
             if not self.nlu_agent:
                 raise RuntimeError("System not initialized")
+
+            if self.night_mode:
+                match_result = None
+                if self.voice_matcher:
+                    match_result = self.voice_matcher.match_command(user_input)
+                if not match_result or match_result["protocol"].name != "wake_up":
+                    return {"response": "Jarvis is in maintenance mode"}
 
             # 1) First check for protocol matches (fast path)
             match_result = None

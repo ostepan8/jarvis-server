@@ -1,0 +1,22 @@
+{
+  "name": "goodnight",
+  "description": "Enter night mode for maintenance tasks",
+  "trigger_phrases": [
+    "goodnight",
+    "enter night mode",
+    "night mode"
+  ],
+  "steps": [
+    {
+      "agent": "NightModeControllerAgent",
+      "function": "start_night_mode",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Entering night mode, sir."
+    ]
+  }
+}
