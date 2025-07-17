@@ -469,6 +469,7 @@ class JarvisSystem:
 
     def _format_calendar_response(self, results: Dict[str, Any]) -> str:
         """Format calendar-specific responses"""
+        print(results, "RESULTS")
         # Extract calendar data from results
         for step_id, result in results.items():
             if isinstance(result, dict) and "response" in result:

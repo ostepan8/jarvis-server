@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 
-
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.constants import DEFAULT_PORT
 from server.database import init_database, close_database
