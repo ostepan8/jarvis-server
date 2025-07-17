@@ -46,9 +46,16 @@ class MemoryAgent(NetworkAgent):
                 await self.send_error(message.from_agent, str(exc), message.request_id)
         elif capability == "search_memory":
             query = data.get("query")
+            if not query:
+                # Fall back to "command" or "message" keys used by some callers
+                query = data.get("command") or data.get("message")
             top_k = data.get("top_k", 3)
             if not query:
-                await self.send_error(message.from_agent, "No query provided", message.request_id)
+                await self.send_error(
+                    message.from_agent,
+                    "No query provided",
+                    message.request_id,
+                )
                 return
             try:
                 results = await self.vector_memory.similarity_search(query, top_k=top_k)
