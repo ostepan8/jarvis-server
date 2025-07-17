@@ -20,12 +20,16 @@ class NightAgent(NetworkAgent):
 
     async def stop_background_tasks(self) -> None:
         """Stop all running background tasks."""
-        for task in list(self._background_tasks):
+        if not self._background_tasks:
+            return None
+
+        # First signal all tasks to cancel
+        for task in self._background_tasks:
             task.cancel()
-            try:
-                await task
-            except Exception:
-                pass
+
+        # Wait for the tasks to finish without propagating cancellation
+        await asyncio.gather(*self._background_tasks, return_exceptions=True)
+
         self._background_tasks.clear()
 
     def _create_background_task(self, coro: Coroutine[Any, Any, Any]) -> None:
