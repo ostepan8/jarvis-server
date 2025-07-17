@@ -1,6 +1,7 @@
 # jarvis/main_network.py
 
 import asyncio
+import json
 import os
 from os import getenv
 import uuid
@@ -36,7 +37,7 @@ from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
 from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
-from .protocols import Protocol, ResponseMode
+from .protocols.models import Protocol, ResponseMode
 from .performance import PerfTracker, get_tracker
 
 
@@ -282,7 +283,6 @@ class JarvisSystem:
                 raise RuntimeError("System not initialized")
 
             if self.night_mode:
-                match_result = None
                 if self.voice_matcher:
                     match_result = self.voice_matcher.match_command(user_input)
                 if not match_result or match_result["protocol"].name != "wake_up":
@@ -486,6 +486,8 @@ class JarvisSystem:
             return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
 
         response_cfg = protocol.response
+        print(protocol, "RESPONSE CFG")
+        print(results, "RESULTS")
 
         # Default fallback
         if response_cfg is None:
@@ -505,14 +507,47 @@ class JarvisSystem:
             return resp
 
         if response_cfg.mode == ResponseMode.AI:
-            prompt = response_cfg.prompt or ""
+            # Build comprehensive prompt with protocol and result context
+            base_prompt = response_cfg.prompt or ""
+
+            # Get current time for context
+            from datetime import datetime
+
+            current_time = datetime.now().strftime("%I:%M %p")  # 12-hour format
+            current_date = datetime.now().strftime("%Y-%m-%d")
+
+            # Create structured context for the AI
+            context_prompt = f"""You are Jarvis, Tony Stark's AI assistant. Your job is to communicate ONLY the actual results and information from the protocol execution to the user. Do not mention that data was "retrieved" or "fetched" - just communicate the actual content/results directly.
+
+    Protocol Data:
+    - Current Time: {current_time}
+    - Current Date: {current_date}
+    - Results: {json.dumps(results, indent=2)}
+    - User Arguments: {json.dumps(arguments or {}, indent=2)}
+
+    Instructions: {base_prompt}
+
+    IMPORTANT RULES:
+    1. Do NOT say things like "retrieved", "fetched", "successfully obtained", "data shows", etc.
+    2. Communicate the ACTUAL information/results directly to the user
+    3. Use Jarvis's polite, butler-like tone with "sir"
+    4. Focus on what the user actually needs to know from the results
+    5. Use 12-hour time format only
+    6. If there's no meaningful data to report, say so directly (e.g., "You have nothing scheduled today, sir")"""
+
+            # Replace argument placeholders in the base prompt
             if arguments:
                 for k, v in arguments.items():
-                    prompt = prompt.replace(f"{{{k}}}", str(v))
+                    context_prompt = context_prompt.replace(f"{{{k}}}", str(v))
+                    base_prompt = base_prompt.replace(f"{{{k}}}", str(v))
+
+            print("Full AI Prompt:", context_prompt)
+
             if self.chat_agent is None:
-                return prompt
-            message, _ = await self.chat_agent.ai_client.strong_chat(
-                [{"role": "user", "content": prompt}],
+                return base_prompt
+
+            message, _ = await self.chat_agent.ai_client.weak_chat(
+                [{"role": "user", "content": context_prompt}],
                 [],
             )
             return message.content

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Optional, Set
-
 from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients import BaseAIClient
@@ -119,6 +117,7 @@ class NLUAgent(NetworkAgent):
         self.logger.log("INFO", "NLU raw model output", content)
 
         classification = extract_json_from_text(content)
+        classification["target_agent"] = ""
 
         # Fallback: if the LLM fails, route to the orchestrator
         if classification is None:
@@ -170,42 +169,38 @@ class NLUAgent(NetworkAgent):
     ) -> str:
         cap_list = ", ".join(capabilities) if capabilities else "none"
 
-        prompt = f"""
-You are JARVIS's Natural Language Understanding engine.  
-Your job is to read the exact **User Input** below and return **only** a JSON object—no prose—conforming precisely to the schema.
+        prompt = f"""You are JARVIS's Natural Language Understanding engine.
+
+Your job is to analyze the user input and return **only** a JSON object—no prose, no explanations.
 
 **CRITICAL RULES:**
-1. You can ONLY use capabilities that exist in the "Available Capabilities" list below
-2. DO NOT invent or hallucinate capability names or intents
-3. Allowed intents: perform_capability, orchestrate_tasks, run_protocol, ask_about_protocol, define_protocol, chat
-4. **INTENT vs CAPABILITY**:
-   - INTENT = what type of action ("perform_capability", "orchestrate_tasks", etc.)
-   - CAPABILITY = specific skill from the list ("aider_software_agent_command", "schedule_appointment", etc.)
-5. If the user's request matches ONE available capability, use intent "perform_capability"
-6. If no single capability matches OR multiple different agent types needed, use intent "orchestrate_tasks"
-7. **SOFTWARE TASKS**: All coding/development work uses capability "aider_software_agent_command" with intent "perform_capability"
-8. **MULTI-AGENT TASKS**: Use intent "orchestrate_tasks" only when you need multiple DIFFERENT types of agents (code + calendar, lights + code, etc.)
-9. Even if the intent is "chat" you still must return a capability (if it exists in the list, otherwise just put "chat" as capability)
+1. You can ONLY use capabilities from the "Available Capabilities" list below
+2. DO NOT invent capability names
+3. There are only TWO intents:
+   - "perform_capability" = Execute ONE single capability
+   - "orchestrate_tasks" = Execute MULTIPLE capabilities or handle dependencies between tasks
 
-**User Input**  
+**Decision Logic:**
+- Does the user want ONE simple action that matches ONE capability? → "perform_capability"
+- Does the user want multiple actions, or complex coordination, or dependencies? → "orchestrate_tasks"
+- Not sure? Default to "perform_capability" if it matches any single capability
+
+**User Input**
 \"\"\"{user_input}\"\"\"
 
-**Available Capabilities:** {cap_list}
+**Available Capabilities:**
+{cap_list}
 
-#### Analysis Process:
-1. Is this a software/coding task? → intent: "perform_capability", capability: "aider_software_agent_command"
-2. Does this match ONE other capability? → intent: "perform_capability", capability: "that_capability" 
-3. Does this need multiple different agent types? → intent: "orchestrate_tasks", capability: null
-4. Otherwise → intent: "chat"
+**Examples:**
+- "Turn on the lights" → perform_capability (one action)
+- "Schedule a meeting" → perform_capability (one action)  
+- "Turn on lights and play music" → orchestrate_tasks (multiple actions)
+- "Schedule a meeting after checking my calendar" → orchestrate_tasks (dependency)
 
-#### JSON Schema (return ONLY this JSON, no other text):
-```json
+**Return ONLY this JSON:**
 {{
-"intent": "<perform_capability OR orchestrate_tasks OR run_protocol OR ask_about_protocol OR define_protocol OR chat>",
-"target_agent": "",
-"protocol_name": null,
-"capability": "<exact capability name from list above OR null>",
-"args": {{}}
-}}
-"""
+  "intent": "perform_capability OR orchestrate_tasks",
+  "capability": "exact_capability_name_from_list OR null",
+  "args": {{}}
+}}"""
         return prompt

@@ -5,7 +5,7 @@ import json
 import uuid
 from pathlib import Path
 
-from . import Protocol, ProtocolStep, ProtocolResponse, ResponseMode
+from .models import Protocol, ProtocolStep, ProtocolResponse, ResponseMode
 from .registry import ProtocolRegistry
 
 
@@ -90,12 +90,17 @@ def main(argv: list[str] | None = None) -> None:
         if not proto:
             print("Protocol not found")
         else:
-            print(json.dumps({
-                "id": proto.id,
-                "name": proto.name,
-                "description": proto.description,
-                "steps": [s.__dict__ for s in proto.steps],
-            }, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "id": proto.id,
+                        "name": proto.name,
+                        "description": proto.description,
+                        "steps": [s.__dict__ for s in proto.steps],
+                    },
+                    indent=2,
+                )
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover - manual tool

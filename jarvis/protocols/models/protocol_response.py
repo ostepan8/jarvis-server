@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
 
+
 class ResponseMode(Enum):
     """How a protocol should generate its response."""
 
@@ -34,4 +35,3 @@ class ProtocolResponse:
         if self.prompt:
             result["prompt"] = self.prompt
         return result
-

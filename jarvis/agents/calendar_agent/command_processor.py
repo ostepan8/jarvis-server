@@ -106,7 +106,7 @@ class CalendarCommandProcessor:
 
             while iterations < MAX_ITERATIONS:
                 try:
-                    message, tool_calls = await self.ai_client.strong_chat(
+                    message, tool_calls = await self.ai_client.weak_chat(
                         messages, self.tools
                     )
                     if self.logger:

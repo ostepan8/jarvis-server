@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 
 from ..logger import JarvisLogger
-from . import Protocol, ProtocolStep, ProtocolResponse
+from .models import Protocol, ProtocolStep, ProtocolResponse
 
 
 class ProtocolRegistry:
@@ -68,9 +68,7 @@ class ProtocolRegistry:
                     "ALTER TABLE protocols ADD COLUMN argument_definitions TEXT"
                 )
             if "response" not in cols:
-                self.conn.execute(
-                    "ALTER TABLE protocols ADD COLUMN response TEXT"
-                )
+                self.conn.execute("ALTER TABLE protocols ADD COLUMN response TEXT")
 
     def load(self, directory: Path | None = None) -> None:
         from .models import ArgumentDefinition  # Import here to avoid circular imports
@@ -232,7 +230,9 @@ class ProtocolRegistry:
             return None
 
         with ThreadPoolExecutor(max_workers=len(self.protocols) or 1) as executor:
-            futures = [executor.submit(check_protocol, p) for p in self.protocols.values()]
+            futures = [
+                executor.submit(check_protocol, p) for p in self.protocols.values()
+            ]
 
             for future in concurrent.futures.as_completed(futures, timeout=timeout):
                 proto = future.result()
