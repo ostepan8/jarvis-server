@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Set, List, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -290,6 +290,23 @@ class ChatAgent(NetworkAgent):
             error_response = await self._generate_error_response(capability, str(exc))
             await self.send_error(
                 message.from_agent, error_response, message.request_id
+            )
+
+    async def _handle_capability_response(self, message: Message) -> None:
+        """Handle responses from capabilities this agent invoked."""
+        self.logger.log(
+            "INFO",
+            "ChatAgent received capability response",
+            message.content,
+        )
+        task = self.active_tasks.get(message.request_id)
+        if task is not None:
+            task.setdefault("responses", []).append(
+                {
+                    "from_agent": message.from_agent,
+                    "content": message.content,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
             )
 
     async def _analyze_context(self, user_input: str) -> Dict[str, Any]:
