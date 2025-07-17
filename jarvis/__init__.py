@@ -3,7 +3,7 @@
 from .services.calendar_service import CalendarService
 from .logger import JarvisLogger
 from .config import JarvisConfig
-from .log_viewer import LogViewer
+from .log_viewer import LogViewerGUI
 from .ai_clients import (
     AIClientFactory,
     BaseAIClient,
@@ -40,7 +40,7 @@ __all__ = [
     "OpenAIClient",
     "AnthropicClient",
     "JarvisLogger",
-    "LogViewer",
+    "LogViewerGUI",
     "AgentNetwork",
     "CollaborativeCalendarAgent",
     "JarvisSystem",
