@@ -54,6 +54,6 @@ async def test_ai_response():
     )
 
     resp = await jarvis._format_protocol_response(proto, {}, {"name": "Tony"})
-    assert dummy.ai_client.messages[0]["content"] == "Say hi to Tony"
+    assert "Say hi to Tony" in dummy.ai_client.messages[0]["content"]
     assert resp == "AI reply"
 

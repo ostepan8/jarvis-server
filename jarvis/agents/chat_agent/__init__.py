@@ -11,7 +11,6 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients.base import BaseAIClient
 from ...logger import JarvisLogger
-from ...services.vector_memory import VectorMemoryService
 from ...profile import AgentProfile
 
 
@@ -105,20 +104,18 @@ class ChatAgent(NetworkAgent):
         self,
         ai_client: BaseAIClient,
         logger: Optional[JarvisLogger] = None,
-        memory: Optional[VectorMemoryService] = None,
         max_context_length: int = 20,
         memory_threshold: float = 0.7,
     ) -> None:
         super().__init__(
             name="ChatAgent",
             logger=logger,
-            memory=memory,
+            memory=None,
             profile=AgentProfile(),
         )
         self.ai_client = ai_client
         # Aliases for backwards compatibility with older code
         self.user_profile = self.profile
-        self.vector_memory = self.memory
         self.max_context_length = max_context_length
         self.memory_threshold = memory_threshold
 
@@ -309,11 +306,9 @@ class ChatAgent(NetworkAgent):
         }
 
         # Add memory context if available
-        if self.vector_memory and user_input:
+        if user_input:
             try:
-                relevant_memories = await self.vector_memory.similarity_search(
-                    user_input, top_k=3
-                )
+                relevant_memories = await self.search_memory(user_input, top_k=3)
                 context["relevant_memories"] = relevant_memories
             except Exception as e:
                 self.logger.log("WARNING", f"Memory search failed: {e}")
@@ -365,9 +360,8 @@ class ChatAgent(NetworkAgent):
             self.conversation_history.append(conv_context)
             await self._manage_conversation_history()
 
-            # Store in vector memory
-            if self.vector_memory:
-                await self._store_conversation_memory(conv_context)
+            # Store in vector memory via MemoryAgent
+            await self._store_conversation_memory(conv_context)
 
             # Update user profile and preferences
             await self._update_user_profile(user_message, enhanced_response)
@@ -557,9 +551,6 @@ Remember: You're not just answering questions - you're creating an engaging, per
         self, conv_context: ConversationContext
     ) -> None:
         """Store conversation in vector memory with rich metadata."""
-        if not self.vector_memory:
-            return
-
         try:
             memory_text = f"User: {conv_context.user_message}\nAssistant: {conv_context.assistant_response}"
             metadata = {
@@ -583,7 +574,7 @@ Remember: You're not just answering questions - you're creating an engaging, per
                 else:
                     cleaned_metadata[key] = str(value)
 
-            await self.vector_memory.add_memory(memory_text, cleaned_metadata)
+            await self.store_memory(memory_text, cleaned_metadata)
 
         except Exception as e:
             self.logger.log("WARNING", f"Failed to store conversation memory: {e}")
@@ -670,7 +661,7 @@ Remember: You're not just answering questions - you're creating an engaging, per
             )
 
         # Suggest memory exploration
-        if self.vector_memory and len(context.get("relevant_memories", [])) > 0:
+        if len(context.get("relevant_memories", [])) > 0:
             suggestions.append(
                 "I found some related memories from our past conversations. Want to explore them?"
             )
@@ -763,19 +754,18 @@ Remember: You're not just answering questions - you're creating an engaging, per
 
     async def _store_preference_memory(self, preference: str) -> None:
         """Store user preference in memory."""
-        if self.vector_memory:
-            try:
-                await self.vector_memory.add_memory(
-                    f"User preference: {preference}",
-                    {
-                        "type": "preference",
-                        "timestamp": datetime.now().isoformat(),
-                        "session_id": self.current_session_id,
-                        "user_name": self.user_profile.name,
-                    },
-                )
-            except Exception as e:
-                self.logger.log("WARNING", f"Failed to store preference: {e}")
+        try:
+            await self.store_memory(
+                f"User preference: {preference}",
+                {
+                    "type": "preference",
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": self.current_session_id,
+                    "user_name": self.user_profile.name,
+                },
+            )
+        except Exception as e:
+            self.logger.log("WARNING", f"Failed to store preference: {e}")
 
     async def _get_conversation_analytics(
         self, user_input: str = "", context: Dict[str, Any] = None
@@ -806,13 +796,7 @@ Remember: You're not just answering questions - you're creating an engaging, per
             "memory_stats": {},
         }
 
-        # Add memory statistics if available
-        if self.vector_memory:
-            try:
-                memory_stats = await self.vector_memory.get_collection_stats()
-                analytics["memory_stats"] = memory_stats
-            except Exception as e:
-                analytics["memory_stats"] = {"error": str(e)}
+
 
         return {
             "response": "Here's a comprehensive analysis of our conversation:",
@@ -851,18 +835,17 @@ Remember: You're not just answering questions - you're creating an engaging, per
             response, _ = await self.ai_client.strong_chat(messages, [])
 
             # Store joke in memory
-            if self.vector_memory:
-                try:
-                    await self.vector_memory.add_memory(
-                        f"Joke told: {response.content}",
-                        {
-                            "type": "joke",
-                            "personality": self.current_personality.value,
-                            "user_request": user_input or "general",
-                        },
-                    )
-                except Exception as e:
-                    self.logger.log("WARNING", f"Failed to store joke memory: {e}")
+            try:
+                await self.store_memory(
+                    f"Joke told: {response.content}",
+                    {
+                        "type": "joke",
+                        "personality": self.current_personality.value,
+                        "user_request": user_input or "general",
+                    },
+                )
+            except Exception as e:
+                self.logger.log("WARNING", f"Failed to store joke memory: {e}")
 
             return {
                 "response": f"Here's one for you: {response.content}",
@@ -1461,19 +1444,18 @@ What would you like to customize?""",
             response, _ = await self.ai_client.strong_chat(messages, [])
 
             # Store story in memory
-            if self.vector_memory:
-                try:
-                    await self.vector_memory.add_memory(
-                        f"Story created about: {user_input}\n\n{response.content}",
-                        {
-                            "type": "story",
-                            "prompt": user_input,
-                            "personality": self.current_personality.value,
-                            "timestamp": datetime.now().isoformat(),
-                        },
-                    )
-                except Exception as e:
-                    self.logger.log("WARNING", f"Failed to store story memory: {e}")
+            try:
+                await self.store_memory(
+                    f"Story created about: {user_input}\n\n{response.content}",
+                    {
+                        "type": "story",
+                        "prompt": user_input,
+                        "personality": self.current_personality.value,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+            except Exception as e:
+                self.logger.log("WARNING", f"Failed to store story memory: {e}")
 
             return {
                 "response": response.content,
@@ -1546,18 +1528,17 @@ What happens next in this story? Do they become the greatest storytelling duo in
             response, _ = await self.ai_client.strong_chat(messages, [])
 
             # Store advice interaction
-            if self.vector_memory:
-                try:
-                    await self.vector_memory.add_memory(
-                        f"Advice given about: {user_input}\nResponse: {response.content}",
-                        {
-                            "type": "advice",
-                            "topic": user_input,
-                            "personality": self.current_personality.value,
-                        },
-                    )
-                except Exception as e:
-                    self.logger.log("WARNING", f"Failed to store advice memory: {e}")
+            try:
+                await self.store_memory(
+                    f"Advice given about: {user_input}\nResponse: {response.content}",
+                    {
+                        "type": "advice",
+                        "topic": user_input,
+                        "personality": self.current_personality.value,
+                    },
+                )
+            except Exception as e:
+                self.logger.log("WARNING", f"Failed to store advice memory: {e}")
 
             return {
                 "response": response.content,
@@ -1667,18 +1648,17 @@ What happens next in this story? Do they become the greatest storytelling duo in
             response, _ = await self.ai_client.strong_chat(messages, [])
 
             # Store riddle for later answer checking
-            if self.vector_memory:
-                try:
-                    await self.vector_memory.add_memory(
-                        f"Riddle asked: {response.content}",
-                        {
-                            "type": "riddle",
-                            "difficulty": difficulty,
-                            "personality": self.current_personality.value,
-                        },
-                    )
-                except Exception as e:
-                    self.logger.log("WARNING", f"Failed to store riddle memory: {e}")
+            try:
+                await self.store_memory(
+                    f"Riddle asked: {response.content}",
+                    {
+                        "type": "riddle",
+                        "difficulty": difficulty,
+                        "personality": self.current_personality.value,
+                    },
+                )
+            except Exception as e:
+                self.logger.log("WARNING", f"Failed to store riddle memory: {e}")
 
             return {
                 "response": response.content,
@@ -2030,11 +2010,6 @@ Be encouraging and insightful, matching the {self.current_personality.value} per
         self, user_input: str = "", context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Enhanced memory storage with rich context."""
-        if not self.vector_memory:
-            return {
-                "response": "Vector memory service not available. I can only remember things during our current conversation."
-            }
-
         if not user_input:
             return {
                 "response": "What would you like me to remember? I can store information about your preferences, important facts, or anything else you'd like me to recall later.",
@@ -2058,7 +2033,7 @@ Be encouraging and insightful, matching the {self.current_personality.value} per
                 "category": await self._categorize_memory(user_input),
             }
 
-            await self.vector_memory.add_memory(user_input, memory_metadata)
+            await self.store_memory(user_input, memory_metadata)
 
             # Update user profile if relevant
             await self._update_profile_from_memory(user_input)
@@ -2134,8 +2109,6 @@ Be encouraging and insightful, matching the {self.current_personality.value} per
         self, user_input: str = "", context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Enhanced memory search with filtering and insights."""
-        if not self.vector_memory:
-            return {"response": "Vector memory service not available."}
 
         if not user_input:
             return {
@@ -2150,7 +2123,7 @@ Be encouraging and insightful, matching the {self.current_personality.value} per
 
         try:
             # Enhanced memory search with multiple approaches
-            results = await self.vector_memory.similarity_search(user_input, top_k=5)
+            results = await self.search_memory(user_input, top_k=5)
 
             if not results:
                 return {
@@ -2326,13 +2299,7 @@ Keep it concise but meaningful, written from JARVIS's perspective in {self.curre
 • **Stories Created:** {self.conversation_metrics.get('stories_created', 0)}
 • **Jokes Shared:** {self.conversation_metrics.get('jokes_told', 0)}"""
 
-            # Add memory insights if available
-            if self.vector_memory:
-                try:
-                    memory_stats = await self.vector_memory.get_collection_stats()
-                    summary_response += f"\n\n**Memory Bank:**\n• **Total Memories:** {memory_stats.get('total_memories', 0)}"
-                except Exception:
-                    pass
+
 
             return {
                 "response": summary_response,

@@ -176,17 +176,33 @@ class NetworkAgent:
     # ------------------------------------------------------------------
     # Shared tools
     # ------------------------------------------------------------------
-    async def store_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Add a piece of text to the shared vector memory."""
-        if not self.memory:
+    async def store_memory(
+        self, text: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Add a piece of text to the shared vector memory via MemoryAgent."""
+        if not self.network:
             return None
-        return await self.memory.add_memory(text, metadata)
+        req_id = await self.request_capability(
+            "store_memory", {"text": text, "metadata": metadata}
+        )
+        result = await self.network.wait_for_response(req_id)
+        if isinstance(result, str):
+            return result
+        if isinstance(result, dict) and "id" in result:
+            return result["id"]
+        return None
 
     async def search_memory(self, query: str, top_k: int = 3) -> list[Dict[str, Any]]:
-        """Search the shared vector memory."""
-        if not self.memory:
+        """Search the shared vector memory via MemoryAgent."""
+        if not self.network:
             return []
-        return await self.memory.similarity_search(query, top_k=top_k)
+        req_id = await self.request_capability(
+            "search_memory", {"query": query, "top_k": top_k}
+        )
+        result = await self.network.wait_for_response(req_id)
+        if isinstance(result, list):
+            return result
+        return []
 
     def update_profile(self, **fields: Any) -> None:
         """Update the agent's profile in-place."""
