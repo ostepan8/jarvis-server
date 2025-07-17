@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from .protocol_step import ProtocolStep
 from .argument_definition import ArgumentDefinition
+from .protocol_response import ProtocolResponse
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Protocol:
     trigger_phrases: List[str] = field(default_factory=list)  # For voice activation
     steps: List[ProtocolStep] = field(default_factory=list)
     argument_definitions: List[ArgumentDefinition] = field(default_factory=list)  # NEW
+    response: ProtocolResponse | None = None
 
     @classmethod
     def from_dict(
@@ -34,6 +36,9 @@ class Protocol:
         arg_defs_data = data.get("argument_definitions", [])
         arg_defs = [ArgumentDefinition.from_dict(ad) for ad in arg_defs_data]
 
+        resp_data = data.get("responses") or data.get("response")
+        response = ProtocolResponse.from_dict(resp_data) if resp_data else None
+
         pid = protocol_id or data.get("id") or str(uuid.uuid4())
         return cls(
             id=pid,
@@ -43,6 +48,7 @@ class Protocol:
             trigger_phrases=data.get("trigger_phrases", [data["name"]]),
             steps=steps,
             argument_definitions=arg_defs,  # NEW
+            response=response,
         )
 
     @classmethod
@@ -61,4 +67,5 @@ class Protocol:
             "trigger_phrases": self.trigger_phrases,
             "steps": [step.__dict__ for step in self.steps],
             "argument_definitions": [ad.to_dict() for ad in self.argument_definitions],
+            "responses": self.response.to_dict() if self.response else None,
         }

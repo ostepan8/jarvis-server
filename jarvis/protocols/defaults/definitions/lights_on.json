@@ -90,5 +90,12 @@
       "function": "turn_on_all_lights",
       "parameters": {}
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "All lights activated, sir.",
+      "Lighting engaged."
+    ]
+  }
 }

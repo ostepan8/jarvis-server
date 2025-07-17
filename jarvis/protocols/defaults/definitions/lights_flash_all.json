@@ -56,5 +56,11 @@
       "function": "flash_all_lights",
       "parameters": {}
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Lights flashed, sir."
+    ]
+  }
 }

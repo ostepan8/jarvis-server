@@ -5,7 +5,17 @@
     {
       "name": "color",
       "type": "choice",
-      "choices": ["red", "blue", "green", "yellow", "white", "purple", "orange", "pink", "read"],
+      "choices": [
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "white",
+        "purple",
+        "orange",
+        "pink",
+        "read"
+      ],
       "required": true,
       "description": "Color to set the lights"
     }
@@ -58,5 +68,11 @@
         "color_name": "$color"
       }
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Lights set to {color}, sir."
+    ]
+  }
 }

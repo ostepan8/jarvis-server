@@ -2,7 +2,12 @@
   "name": "Weather Forecast",
   "description": "Get a short term weather forecast for a location",
   "argument_definitions": [
-    {"name": "location", "type": "text", "required": true, "description": "City or location"}
+    {
+      "name": "location",
+      "type": "text",
+      "required": true,
+      "description": "City or location"
+    }
   ],
   "trigger_phrases": [
     "weather forecast",
@@ -17,7 +22,15 @@
       "agent": "WeatherAgent",
       "function": "get_forecast",
       "parameters": {},
-      "parameter_mappings": {"location": "$location"}
+      "parameter_mappings": {
+        "location": "$location"
+      }
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Forecast retrieved, sir."
+    ]
+  }
 }

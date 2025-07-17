@@ -33,5 +33,11 @@
       "function": "get_today_events",
       "parameters": {}
     }
-  ]
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": [
+      "Here is today's schedule, sir."
+    ]
+  }
 }

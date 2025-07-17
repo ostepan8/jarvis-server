@@ -31,8 +31,7 @@ from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
 from .protocols.loggers import ProtocolUsageLogger
 from .protocols.voice_trigger import VoiceTriggerMatcher
-from .protocols import Protocol
-from .constants import PROTOCOL_RESPONSES
+from .protocols import Protocol, ResponseMode
 from .performance import PerfTracker, get_tracker
 
 
@@ -287,7 +286,7 @@ class JarvisSystem:
                             metadata=metadata,
                         )
 
-                    response = self._format_protocol_response(
+                    response = await self._format_protocol_response(
                         protocol, results, arguments
                     )
 
@@ -426,7 +425,7 @@ class JarvisSystem:
                 tracker.save()
                 self.logger.log("INFO", "Performance summary", tracker.summary())
 
-    def _format_protocol_response(
+    async def _format_protocol_response(
         self,
         protocol: Protocol,
         results: Dict[str, Any],
@@ -446,26 +445,39 @@ class JarvisSystem:
         if errors:
             return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
 
-        # Create response based on protocol name and results
-        protocol_responses = dict(PROTOCOL_RESPONSES)
-        protocol_responses["Get Today's Events"] = self._format_calendar_response(
-            results
-        )
+        response_cfg = protocol.response
 
-        # Choose a response based on the protocol name
-        resp = protocol_responses.get(
-            protocol.name,
-            f"{protocol.name} completed successfully, sir.",
-        )
+        # Default fallback
+        if response_cfg is None:
+            resp = f"{protocol.name} completed successfully, sir."
+            if arguments:
+                for k, v in arguments.items():
+                    resp = resp.replace(f"{{{k}}}", str(v))
+            return resp
 
-        if isinstance(resp, list):
-            resp = random.choice(resp)
+        if response_cfg.mode == ResponseMode.STATIC:
+            if not response_cfg.phrases:
+                return ""
+            resp = random.choice(response_cfg.phrases)
+            if arguments:
+                for k, v in arguments.items():
+                    resp = resp.replace(f"{{{k}}}", str(v))
+            return resp
 
-        if arguments:
-            for key, value in arguments.items():
-                resp = resp.replace(f"{{{key}}}", str(value))
+        if response_cfg.mode == ResponseMode.AI:
+            prompt = response_cfg.prompt or ""
+            if arguments:
+                for k, v in arguments.items():
+                    prompt = prompt.replace(f"{{{k}}}", str(v))
+            if self.chat_agent is None:
+                return prompt
+            message, _ = await self.chat_agent.ai_client.strong_chat(
+                [{"role": "user", "content": prompt}],
+                [],
+            )
+            return message.content
 
-        return resp
+        return ""
 
     def _format_calendar_response(self, results: Dict[str, Any]) -> str:
         """Format calendar-specific responses"""

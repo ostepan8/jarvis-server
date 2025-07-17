@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 
 from ..logger import JarvisLogger
-from . import Protocol, ProtocolStep
+from . import Protocol, ProtocolStep, ProtocolResponse
 
 
 class ProtocolRegistry:
@@ -37,6 +37,7 @@ class ProtocolRegistry:
             steps                TEXT  -- JSON list of ProtocolStep definitions
             trigger_phrases      TEXT  -- JSON list of phrases that activate the protocol
             argument_definitions TEXT  -- JSON list of ArgumentDefinition objects
+            response             TEXT  -- JSON ProtocolResponse definition
         """
 
         with self.conn:
@@ -49,7 +50,8 @@ class ProtocolRegistry:
                     arguments TEXT,
                     steps TEXT,
                     trigger_phrases TEXT,
-                    argument_definitions TEXT
+                    argument_definitions TEXT,
+                    response TEXT
                 )
                 """
             )
@@ -64,6 +66,10 @@ class ProtocolRegistry:
             if "argument_definitions" not in cols:  # NEW
                 self.conn.execute(
                     "ALTER TABLE protocols ADD COLUMN argument_definitions TEXT"
+                )
+            if "response" not in cols:
+                self.conn.execute(
+                    "ALTER TABLE protocols ADD COLUMN response TEXT"
                 )
 
     def load(self, directory: Path | None = None) -> None:
@@ -85,7 +91,7 @@ class ProtocolRegistry:
             return
 
         rows = self.conn.execute(
-            "SELECT id, name, description, arguments, steps, trigger_phrases, argument_definitions FROM protocols"
+            "SELECT id, name, description, arguments, steps, trigger_phrases, argument_definitions, response FROM protocols"
         ).fetchall()
 
         for row in rows:
@@ -97,6 +103,8 @@ class ProtocolRegistry:
             # NEW: parse argument definitions
             arg_defs_data = json.loads(row["argument_definitions"] or "[]")
             arg_defs = [ArgumentDefinition.from_dict(ad) for ad in arg_defs_data]
+            resp_data = json.loads(row["response"] or "null")
+            response = ProtocolResponse.from_dict(resp_data) if resp_data else None
 
             proto = Protocol(
                 id=row["id"],
@@ -106,6 +114,7 @@ class ProtocolRegistry:
                 steps=steps,
                 trigger_phrases=triggers,
                 argument_definitions=arg_defs,  # NEW
+                response=response,
             )
             self.protocols[proto.id] = proto
             self.logger.log(
@@ -124,11 +133,15 @@ class ProtocolRegistry:
                     [ad.to_dict() for ad in proto.argument_definitions]
                 )  # NEW
 
+                response_json = (
+                    json.dumps(proto.response.to_dict()) if proto.response else "null"
+                )
+
                 self.conn.execute(
                     """
                     INSERT OR REPLACE INTO protocols
-                    (id, name, description, arguments, steps, trigger_phrases, argument_definitions)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id, name, description, arguments, steps, trigger_phrases, argument_definitions, response)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         proto.id,
@@ -138,6 +151,7 @@ class ProtocolRegistry:
                         steps_json,
                         triggers_json,
                         arg_defs_json,  # NEW
+                        response_json,
                     ),
                 )
 

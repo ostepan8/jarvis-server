@@ -5,7 +5,7 @@ import json
 import uuid
 from pathlib import Path
 
-from . import Protocol, ProtocolStep
+from . import Protocol, ProtocolStep, ProtocolResponse, ResponseMode
 from .registry import ProtocolRegistry
 
 
@@ -27,11 +27,26 @@ def create_interactively(registry: ProtocolRegistry) -> Protocol:
             parameters = {}
         steps.append(ProtocolStep(intent=intent, parameters=parameters))
 
+    resp_mode = input("Response mode (static/ai, blank for none): ").strip().lower()
+    response = None
+    if resp_mode == "static":
+        phrases_str = input("Response phrases as JSON list: ").strip()
+        try:
+            phrases = json.loads(phrases_str) if phrases_str else []
+        except json.JSONDecodeError:
+            print("Invalid JSON, using empty list")
+            phrases = []
+        response = ProtocolResponse(mode=ResponseMode.STATIC, phrases=phrases)
+    elif resp_mode == "ai":
+        prompt = input("AI response prompt: ").strip()
+        response = ProtocolResponse(mode=ResponseMode.AI, prompt=prompt)
+
     proto = Protocol(
         id=str(uuid.uuid4()),
         name=name,
         description=description,
         steps=steps,
+        response=response,
     )
     registry.register(proto)
     return proto
