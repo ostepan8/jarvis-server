@@ -33,13 +33,14 @@ class MemoryAgent(NetworkAgent):
 
         if capability == "store_memory":
             command = data.get("command")
+            metadata = data.get("metadata")
             if not command:
                 await self.send_error(
                     message.from_agent, "No command provided", message.request_id
                 )
                 return
             try:
-                mem_id = await self.vector_memory.add_memory(command)
+                mem_id = await self.vector_memory.add_memory(command, metadata)
                 await self.send_capability_response(
                     message.from_agent, mem_id, message.request_id, message.id
                 )

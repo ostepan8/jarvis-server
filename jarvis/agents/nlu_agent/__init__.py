@@ -119,6 +119,20 @@ class NLUAgent(NetworkAgent):
         classification = extract_json_from_text(content)
         classification["target_agent"] = ""
 
+        valid_intents = {
+            "perform_capability",
+            "orchestrate_tasks",
+            "chat",
+            "run_protocol",
+            "define_protocol",
+            "ask_about_protocol",
+        }
+        if classification and classification.get("intent") not in valid_intents:
+            if classification.get("capability") in capabilities:
+                classification["intent"] = "perform_capability"
+            else:
+                classification["intent"] = "orchestrate_tasks"
+
         # Fallback: if the LLM fails, route to the orchestrator
         if classification is None:
             self.logger.log(
