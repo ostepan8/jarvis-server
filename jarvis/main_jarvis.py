@@ -114,7 +114,7 @@ class JarvisSystem:
             persist_directory=self.config.memory_dir,
             api_key=self.config.api_key,
         )
-        self.memory_agent = MemoryAgent(self.vector_memory, self.logger)
+        self.memory_agent = MemoryAgent(self.vector_memory, self.logger, ai_client)
         self.network.register_agent(self.memory_agent)
 
         # 1) NLUAgent (must be registered so network.request_capability works)
@@ -374,7 +374,11 @@ class JarvisSystem:
                 payload = args or {"command": user_input}
                 if cap == "store_memory":
                     cmd = args.get("memory_data", user_input)
-                    meta = {"type": args.get("memory_type")} if args.get("memory_type") else {}
+                    meta = (
+                        {"type": args.get("memory_type")}
+                        if args.get("memory_type")
+                        else {}
+                    )
                     payload = {"command": cmd, "metadata": meta}
                 async with tracker.timer(
                     "agent_response", metadata={"agent": target or cap}
