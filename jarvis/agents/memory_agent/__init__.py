@@ -28,7 +28,7 @@ class MemoryAgent(NetworkAgent):
 
     @property
     def capabilities(self) -> Set[str]:
-        return {"store_memory", "search_memory"}
+        return {"store_memory", "search_memory", "query_memory"}
 
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
@@ -69,6 +69,19 @@ class MemoryAgent(NetworkAgent):
                 await self.send_capability_response(
                     message.from_agent,
                     {"response": summary, "actions": []},
+                    message.request_id,
+                    message.id,
+                )
+            except Exception as exc:
+                await self.send_error(message.from_agent, str(exc), message.request_id)
+        elif capability == "query_memory":
+            mem_id = data.get("memory_id")
+            metadata = data.get("metadata")
+            try:
+                results = await self.vector_memory.query_memory(mem_id, metadata)
+                await self.send_capability_response(
+                    message.from_agent,
+                    results,
                     message.request_id,
                     message.id,
                 )

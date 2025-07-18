@@ -204,6 +204,23 @@ class NetworkAgent:
             return result
         return []
 
+    async def query_memory(
+        self,
+        memory_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        limit: Optional[int] = None,
+    ) -> list[Dict[str, Any]]:
+        """Query the shared vector memory via MemoryAgent."""
+        if not self.network:
+            return []
+        req_id = await self.request_capability(
+            "query_memory", {"memory_id": memory_id, "metadata": metadata, "limit": limit}
+        )
+        result = await self.network.wait_for_response(req_id)
+        if isinstance(result, list):
+            return result
+        return []
+
     def update_profile(self, **fields: Any) -> None:
         """Update the agent's profile in-place."""
         if not self.profile:

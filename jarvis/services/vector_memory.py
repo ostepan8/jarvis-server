@@ -98,3 +98,29 @@ class VectorMemoryService:
         docs = result.get("documents", [[]])[0]
         metas = result.get("metadatas", [[]])[0]
         return [{"text": doc, "metadata": meta} for doc, meta in zip(docs, metas)]
+
+    async def query_memory(
+        self,
+        memory_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve memories by id or metadata filters."""
+        kwargs: Dict[str, Any] = {}
+        if memory_id:
+            kwargs["ids"] = [memory_id]
+        if metadata:
+            kwargs["where"] = metadata
+        if limit is not None:
+            kwargs["limit"] = limit
+
+        result = await asyncio.to_thread(self.collection.get, **kwargs)
+
+        docs = result.get("documents", [])
+        metas = result.get("metadatas", [])
+        ids = result.get("ids", [])
+
+        return [
+            {"id": i, "text": doc, "metadata": meta}
+            for i, doc, meta in zip(ids, docs, metas)
+        ]
