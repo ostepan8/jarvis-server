@@ -179,6 +179,7 @@ Your job is to analyze the user input and return **only** a JSON object—no pro
 3. There are only TWO intents:
    - "perform_capability" = Execute ONE single capability
    - "orchestrate_tasks" = Execute MULTIPLE capabilities or handle dependencies between tasks
+DO NOT USE ANY OTHER INTENTS, AND DO NOT MIX UP INTENTS WITH CAPABILITIES THEY ARE DIFFERENT!
 
 **Decision Logic:**
 - Does the user want ONE simple action that matches ONE capability? → "perform_capability"

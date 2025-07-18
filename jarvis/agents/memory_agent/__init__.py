@@ -32,33 +32,35 @@ class MemoryAgent(NetworkAgent):
         data = message.content.get("data", {})
 
         if capability == "store_memory":
-            text = data.get("text")
+            command = data.get("command")
             metadata = data.get("metadata")
-            if not text:
-                await self.send_error(message.from_agent, "No text provided", message.request_id)
+            if not command:
+                await self.send_error(
+                    message.from_agent, "No command provided", message.request_id
+                )
                 return
             try:
-                mem_id = await self.vector_memory.add_memory(text, metadata)
+                mem_id = await self.vector_memory.add_memory(command, metadata)
                 await self.send_capability_response(
                     message.from_agent, mem_id, message.request_id, message.id
                 )
             except Exception as exc:
                 await self.send_error(message.from_agent, str(exc), message.request_id)
         elif capability == "search_memory":
-            query = data.get("query")
-            if not query:
-                # Fall back to "command" or "message" keys used by some callers
-                query = data.get("command") or data.get("message")
+            print(data, "DATA IN MEMORY AGENT")
+            command = data.get("command")
             top_k = data.get("top_k", 3)
-            if not query:
+            if not command:
                 await self.send_error(
                     message.from_agent,
-                    "No query provided",
+                    "No command provided",
                     message.request_id,
                 )
                 return
             try:
-                results = await self.vector_memory.similarity_search(query, top_k=top_k)
+                results = await self.vector_memory.similarity_search(
+                    command, top_k=top_k
+                )
                 await self.send_capability_response(
                     message.from_agent, results, message.request_id, message.id
                 )
