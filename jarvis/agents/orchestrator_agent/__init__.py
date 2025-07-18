@@ -169,6 +169,12 @@ class OrchestratorAgent(NetworkAgent):
 
         self.logger.log(
             "INFO",
+            "Dependency context",
+            {"depends_on": task.depends_on, "context": context},
+        )
+
+        self.logger.log(
+            "INFO",
             f"Executing task {seq['current'] + 1}/{len(seq['tasks'])}",
             {
                 "capability": task.capability,
@@ -229,12 +235,15 @@ class OrchestratorAgent(NetworkAgent):
         """Use a quick weak LLM call to craft a prompt for the agent."""
         system_prompt = (
             "You generate concise prompts for specialized agents. "
-            "Be explicit about the single capability to perform and incorporate any provided context."
+            "First summarize the user's overall command, then explicitly name the agent that will act "
+            "and explain why the capability is needed. Finally craft a short instruction incorporating any provided context."
         )
 
         user_message = {
             "overall_request": user_input,
             "capability": task.capability,
+            "assigned_agent": task.assigned_agent,
+            "task_intent": task.intent,
             "context": context,
         }
 
@@ -264,6 +273,8 @@ class OrchestratorAgent(NetworkAgent):
         intent = analysis.get("intent", "No intent found")
         caps = analysis.get("capabilities_needed", [])
         dependency_map = analysis.get("dependencies", {})
+
+        self.logger.log("INFO", "Dependency map", dependency_map)
 
         for cap in caps:
             # Skip orchestrator capability to avoid recursion
