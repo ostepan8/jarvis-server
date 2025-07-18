@@ -183,7 +183,7 @@ class NetworkAgent:
         if not self.network:
             return None
         req_id = await self.request_capability(
-            "store_memory", {"command": text, "metadata": metadata}
+            "store_memory", {"prompt": text, "metadata": metadata}
         )
         result = await self.network.wait_for_response(req_id)
         if isinstance(result, str):
@@ -197,7 +197,7 @@ class NetworkAgent:
         if not self.network:
             return []
         req_id = await self.request_capability(
-            "search_memory", {"command": query, "top_k": top_k}
+            "search_memory", {"prompt": query, "top_k": top_k}
         )
         result = await self.network.wait_for_response(req_id)
         if isinstance(result, list):

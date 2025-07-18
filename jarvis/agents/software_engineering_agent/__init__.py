@@ -172,7 +172,7 @@ class SoftwareEngineeringAgent(NetworkAgent):
 
     async def _handle_capability_request(self, message: Message) -> None:
         """Handle all capability requests by sending to Aider."""
-        command = message.content.get("data", {}).get("command", "")
+        command = message.content.get("data", {}).get("prompt", "")
 
         if not command:
             await self.send_error(

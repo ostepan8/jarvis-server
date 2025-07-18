@@ -34,7 +34,7 @@ class MemoryAgent(NetworkAgent):
         data = message.content.get("data", {})
 
         if capability == "store_memory":
-            command = data.get("command")
+            command = data.get("prompt")
             metadata = data.get("metadata")
             if not command:
                 await self.send_error(
@@ -50,7 +50,7 @@ class MemoryAgent(NetworkAgent):
                 await self.send_error(message.from_agent, str(exc), message.request_id)
         elif capability == "search_memory":
             print(data, "DATA IN MEMORY AGENT")
-            command = data.get("command")
+            command = data.get("prompt")
             top_k = data.get("top_k", 3)
             if not command:
                 await self.send_error(

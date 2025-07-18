@@ -54,7 +54,7 @@ async def test_handle_request(monkeypatch):
         from_agent="tester",
         to_agent="WeatherAgent",
         message_type="capability_request",
-        content={"capability": "weather_command", "data": {"command": "Paris"}},
+        content={"capability": "weather_command", "data": {"prompt": "Paris"}},
         request_id="1"
     )
     await agent._handle_capability_request(message)

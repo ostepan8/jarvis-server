@@ -91,11 +91,11 @@ class WeatherAgent(NetworkAgent):
             self.logger.log("INFO", f"WeatherAgent handling: {capability}")
 
         try:
-            command = data.get("command", data.get("message", ""))
+            command = data.get("prompt", data.get("message", ""))
             if not command:
                 await self.send_error(
                     message.from_agent,
-                    "No weather command provided",
+                    "No weather prompt provided",
                     message.request_id,
                 )
                 return

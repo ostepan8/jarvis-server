@@ -264,7 +264,7 @@ class ChatAgent(NetworkAgent):
 
         try:
             if capability in self.function_map:
-                user_input = data.get("message", data.get("command", ""))
+                user_input = data.get("message", data.get("prompt", ""))
 
                 # Add context awareness
                 context = await self._analyze_context(user_input)

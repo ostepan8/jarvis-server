@@ -493,14 +493,14 @@ class CanvasAgent(NetworkAgent):
         )
 
         try:
-            command = data.get("command")
-            if not isinstance(command, str):
+            prompt = data.get("prompt")
+            if not isinstance(prompt, str):
                 await self.send_error(
-                    message.from_agent, "Invalid command", message.request_id
+                    message.from_agent, "Invalid prompt", message.request_id
                 )
                 return
 
-            result = await self._process_canvas_command(command)
+            result = await self._process_canvas_command(prompt)
             await self.send_capability_response(
                 message.from_agent, result, message.request_id, message.id
             )

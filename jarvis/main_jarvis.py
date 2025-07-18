@@ -371,7 +371,7 @@ class JarvisSystem:
             # 4) Route to the appropriate agent
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
-                payload = {"command": user_input}
+                payload = {"prompt": user_input}
                 if args:
                     payload.update(args)
                 if cap == "store_memory":
@@ -381,7 +381,7 @@ class JarvisSystem:
                         if args.get("memory_type")
                         else {}
                     )
-                    payload = {"command": cmd, "metadata": meta}
+                    payload = {"prompt": cmd, "metadata": meta}
                 async with tracker.timer(
                     "agent_response", metadata={"agent": target or cap}
                 ):
@@ -449,7 +449,7 @@ class JarvisSystem:
 
             if intent == "chat":
                 define_id = str(uuid.uuid4())
-                payload = {"command": user_input}
+                payload = {"prompt": user_input}
                 async with tracker.timer(
                     "agent_response", metadata={"agent": target or "chat"}
                 ):
