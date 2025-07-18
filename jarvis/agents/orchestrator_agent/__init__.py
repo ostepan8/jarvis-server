@@ -88,7 +88,7 @@ class OrchestratorAgent(NetworkAgent):
         self.logger.log(
             "INFO",
             f"Received result for {task.capability}",
-            json.dumps(message.content),
+            {"prompt": task.prompt, "result": message.content},
         )
 
         # Store the result
@@ -177,14 +177,15 @@ class OrchestratorAgent(NetworkAgent):
             },
         )
 
-        # Build command for the task
+        # Build prompt for the task via a quick LLM call
         user_input = self.pending_requests.get(request_id, {}).get("user_input", "")
-        command = self._build_task_command(task, user_input, context)
+        prompt = await self._draft_prompt_via_llm(user_input, task, context)
+        task.prompt = prompt
 
         # Prepare capability request
         content = {
             "capability": task.capability,
-            "data": {"command": command},
+            "data": {"prompt": prompt},
         }
         if context:
             content["context"] = context
@@ -222,17 +223,40 @@ class OrchestratorAgent(NetworkAgent):
             )
         return context
 
-    def _build_task_command(
-        self, task: Task, user_input: str, context: Dict[str, Any]
+    async def _draft_prompt_via_llm(
+        self, user_input: str, task: Task, context: Dict[str, Any]
     ) -> str:
-        """Create a command instructing the agent to perform only the given task."""
-        base = (
-            f"User request: {user_input}. "
-            f"Your subtask is to execute capability '{task.capability}'."
+        """Use a quick weak LLM call to craft a prompt for the agent."""
+        system_prompt = (
+            "You generate concise prompts for specialized agents. "
+            "Be explicit about the single capability to perform and incorporate any provided context."
         )
-        if context:
-            base += f" Use these previous results as context: {json.dumps(context)}."
-        return base + " Only handle this capability and nothing else."
+
+        user_message = {
+            "overall_request": user_input,
+            "capability": task.capability,
+            "context": context,
+        }
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_message)},
+        ]
+
+        try:
+            result, _ = await self.ai_client.weak_chat(messages, [])
+            prompt = getattr(result, "content", "")
+        except Exception as exc:
+            self.logger.log("ERROR", "Prompt drafting failed", str(exc))
+            prompt = ""
+
+        self.logger.log(
+            "INFO",
+            f"Prompt for {task.capability}",
+            prompt,
+        )
+
+        return prompt
 
     def _create_tasks(self, analysis: Dict[str, Any]) -> List[Task]:
         """Create a task list from analysis output."""

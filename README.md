@@ -34,6 +34,7 @@ python server.py
 ```
 
 The `/jarvis` endpoint accepts a JSON body with a `command` field describing the calendar request.
+The orchestrator now uses a quick LLM call to translate each step into a precise prompt for the relevant agent. Capability requests therefore include a `prompt` field that agents interpret themselves.
 The `/protocols` endpoint returns all registered protocols and their details as JSON.
 You can also run a protocol directly via `/protocols/run` by sending either a protocol definition or the name of a registered protocol.
 

@@ -1109,10 +1109,10 @@ class PhillipsHueAgent(NetworkAgent):
 
         self.logger.log("INFO", f"Handling capability: {capability}", str(data))
 
-        cmd = data.get("command")
+        cmd = data.get("prompt")
         if not isinstance(cmd, str):
             await self.send_error(
-                message.from_agent, "Invalid or missing command", message.request_id
+                message.from_agent, "Invalid or missing prompt", message.request_id
             )
             return
         result = await self._process_hue_command(cmd)

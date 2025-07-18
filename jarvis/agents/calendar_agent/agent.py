@@ -104,17 +104,17 @@ class CollaborativeCalendarAgent(NetworkAgent):
         )
 
         try:
-            command = data.get("command")
-            if not isinstance(command, str):
+            prompt = data.get("prompt")
+            if not isinstance(prompt, str):
                 await self.send_error(
-                    message.from_agent, "Invalid command", message.request_id
+                    message.from_agent, "Invalid prompt", message.request_id
                 )
                 return
 
             if self.logger:
-                self.logger.log("INFO", "Processing command", command)
+                self.logger.log("INFO", "Processing prompt", prompt)
 
-            result = await self.command_processor.process_command(command)
+            result = await self.command_processor.process_command(prompt)
 
             if result:
                 await self.send_capability_response(

@@ -57,6 +57,7 @@ async def test_orchestrator_sequence():
     ai = DummyAIClient(
         [
             '{"intent":"test","capabilities_needed":["dummy_cap"],"dependencies":{}}',
+            "do it",
             "All done",
         ]
     )
@@ -71,7 +72,8 @@ async def test_orchestrator_sequence():
     await network.stop()
 
     assert result["success"] is True
-    assert not provider.received.empty()
+    msg = provider.received.get_nowait()
+    assert msg.content["data"]["prompt"] == "do it"
 
 
 @pytest.mark.asyncio
@@ -79,6 +81,7 @@ async def test_orchestrator_query_memory_plan():
     ai = DummyAIClient(
         [
             '{"intent":"test","capabilities_needed":["query_memory"],"dependencies":{}}',
+            "fetch it",
             "All done",
         ]
     )
@@ -93,4 +96,5 @@ async def test_orchestrator_query_memory_plan():
     await network.stop()
 
     assert result["success"] is True
-    assert not provider.received.empty()
+    msg = provider.received.get_nowait()
+    assert msg.content["data"]["prompt"] == "fetch it"

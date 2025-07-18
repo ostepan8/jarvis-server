@@ -60,6 +60,10 @@ Logs are stored in `jarvis_logs.db`. Use the log viewer:
 python -m jarvis.log_viewer
 ```
 
+## Orchestrator prompts
+The orchestrator now calls `weak_chat` to craft a short prompt for each capability step. Agents expect this
+`prompt` string in incoming `capability_request` messages and no longer receive a `command` field.
+
 ## Tests
 Automated tests live under the `tests/` directory. Install the dependencies from
 `requirements.txt` (or run `poetry install`) and execute:

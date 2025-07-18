@@ -14,3 +14,4 @@ class Task:
     intent: Optional[str] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     result: Any = None
+    prompt: Optional[str] = None
