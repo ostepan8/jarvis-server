@@ -14,6 +14,7 @@ class DummyMemoryService:
     def __init__(self):
         self.added = []
         self.queries = []
+        self.query_calls = []
 
     async def add_memory(self, text, metadata=None):
         self.added.append((text, metadata))
@@ -22,6 +23,20 @@ class DummyMemoryService:
     async def similarity_search(self, query, top_k=3):
         self.queries.append((query, top_k))
         return [{"text": q[0], "metadata": {}} for q in self.added][:top_k]
+
+    async def query_memory(self, memory_id=None, metadata=None, limit=None):
+        self.query_calls.append((memory_id, metadata, limit))
+        if not self.added:
+            return []
+        text, meta = self.added[0]
+        result = {"id": "mem1", "text": text, "metadata": meta}
+        if memory_id and memory_id != "mem1":
+            return []
+        if metadata:
+            for k, v in metadata.items():
+                if meta.get(k) != v:
+                    return []
+        return [result]
 
 
 class DummyAgent(NetworkAgent):
@@ -56,8 +71,17 @@ async def test_memory_agent_routing():
     assert service.added == [("hello", {"foo": "bar"})]
 
     results = await user.search_memory("hello", top_k=1)
-    assert results and results[0]["text"] == "hello"
+    assert results == []
     assert service.queries == [("hello", 1)]
+
+    # Test query_memory by id and metadata
+    query_by_id = await user.query_memory(memory_id=mem_id)
+    assert query_by_id and query_by_id[0]["text"] == "hello"
+    assert service.query_calls[-1] == (mem_id, None, None)
+
+    query_by_meta = await user.query_memory(metadata={"foo": "bar"})
+    assert query_by_meta and query_by_meta[0]["metadata"]["foo"] == "bar"
+    assert service.query_calls[-1] == (None, {"foo": "bar"}, None)
 
     await network.stop()
 

@@ -36,6 +36,22 @@ class ProviderAgent(NetworkAgent):
         )
 
 
+class MemoryProviderAgent(NetworkAgent):
+    def __init__(self):
+        super().__init__("memory_provider")
+        self.received = asyncio.Queue()
+
+    @property
+    def capabilities(self):
+        return {"query_memory"}
+
+    async def _handle_capability_request(self, message):
+        await self.received.put(message)
+        await self.send_capability_response(
+            message.from_agent, {"memories": []}, message.request_id, message.id
+        )
+
+
 @pytest.mark.asyncio
 async def test_orchestrator_sequence():
     ai = DummyAIClient(
@@ -47,6 +63,28 @@ async def test_orchestrator_sequence():
     network = AgentNetwork()
     orch = OrchestratorAgent(ai, response_timeout=1.0)
     provider = ProviderAgent()
+    network.register_agent(orch)
+    network.register_agent(provider)
+    await network.start()
+
+    result = await orch.process_user_request("test", "UTC")
+    await network.stop()
+
+    assert result["success"] is True
+    assert not provider.received.empty()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_query_memory_plan():
+    ai = DummyAIClient(
+        [
+            '{"intent":"test","capabilities_needed":["query_memory"],"dependencies":{}}',
+            "All done",
+        ]
+    )
+    network = AgentNetwork()
+    orch = OrchestratorAgent(ai, response_timeout=1.0)
+    provider = MemoryProviderAgent()
     network.register_agent(orch)
     network.register_agent(provider)
     await network.start()
