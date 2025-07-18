@@ -371,7 +371,9 @@ class JarvisSystem:
             # 4) Route to the appropriate agent
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
-                payload = args or {"command": user_input}
+                payload = {"command": user_input}
+                if args:
+                    payload.update(args)
                 if cap == "store_memory":
                     cmd = args.get("memory_data", user_input)
                     meta = (

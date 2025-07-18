@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Any, Dict, Optional, Set
 
 from ..base import NetworkAgent
@@ -64,7 +63,8 @@ class MemoryAgent(NetworkAgent):
                 results = await self.vector_memory.similarity_search(
                     command, top_k=top_k
                 )
-                summary = await self._summarize_results(results)
+                # Pass the original command to the summarization method
+                summary = await self._summarize_results(results, command)
 
                 await self.send_capability_response(
                     message.from_agent,
@@ -88,16 +88,23 @@ class MemoryAgent(NetworkAgent):
             except Exception as exc:
                 await self.send_error(message.from_agent, str(exc), message.request_id)
 
-    async def _summarize_results(self, results: list[Dict[str, Any]] | None) -> str:
-        """Summarize memory search results using the attached AI client."""
+    async def _summarize_results(
+        self, results: list[Dict[str, Any]] | None, user_command: str
+    ) -> str:
+        """Summarize memory search results using the attached AI client with user command context."""
         if not results:
             return "I couldn't recall anything matching that, sir."
 
         memory_lines = "\n".join(
             f"{i+1}. {r.get('text', '')}" for i, r in enumerate(results)
         )
+
+        # Updated prompt to include the user's original command for context
         prompt = (
-            "Summarize the following memories in one short sentence:\n" + memory_lines
+            f"The user asked: '{user_command}'\n\n"
+            f"Based on the following relevant memories, provide a concise answer to the user's request:\n"
+            f"{memory_lines}\n\n"
+            f"Summarize these memories as a direct response to the user's command/question."
         )
 
         if not self.ai_client:
