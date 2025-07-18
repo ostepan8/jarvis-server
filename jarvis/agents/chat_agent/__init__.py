@@ -47,8 +47,6 @@ class ConversationContext:
             self.user_preferences = {}
 
 
-
-
 class GameState:
     """Manages active game states and progress."""
 
@@ -162,9 +160,6 @@ class ChatAgent(NetworkAgent):
             "philosophical_discussion": self._philosophical_discussion,
             "brainstorm": self._brainstorm_session,
             # Memory & Context
-            "remember_context": self._remember_context,
-            "search_memory": self._search_memory,
-            "learn_preference": self._learn_user_preference,
             "get_conversation_summary": self._get_conversation_summary,
             # Personality & Customization
             "change_personality": self._change_personality,
@@ -812,8 +807,6 @@ Remember: You're not just answering questions - you're creating an engaging, per
             },
             "memory_stats": {},
         }
-
-
 
         return {
             "response": "Here's a comprehensive analysis of our conversation:",
@@ -2023,208 +2016,6 @@ Be encouraging and insightful, matching the {self.current_personality.value} per
             ]
             return {"response": random.choice(backup_questions)}
 
-    async def _remember_context(
-        self, user_input: str = "", context: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """Enhanced memory storage with rich context."""
-        if not user_input:
-            return {
-                "response": "What would you like me to remember? I can store information about your preferences, important facts, or anything else you'd like me to recall later.",
-                "suggestions": [
-                    "My preferences",
-                    "Important information",
-                    "Personal details",
-                    "Goals and plans",
-                ],
-            }
-
-        try:
-            # Enhanced memory storage with rich metadata
-            memory_metadata = {
-                "type": "manual_memory",
-                "timestamp": datetime.now().isoformat(),
-                "session_id": self.current_session_id,
-                "user_name": self.user_profile.name or "unknown",
-                "personality_mode": self.current_personality.value,
-                "importance": "high",  # User-requested memories are high importance
-                "category": await self._categorize_memory(user_input),
-            }
-
-            await self.store_memory(user_input, memory_metadata)
-
-            # Update user profile if relevant
-            await self._update_profile_from_memory(user_input)
-
-            return {
-                "response": f"I'll remember that! 🧠✨ Stored with high importance and linked to our current conversation context.",
-                "suggestions": [
-                    "Search my memories",
-                    "What else should I remember?",
-                    "Show me what you know about me",
-                ],
-            }
-
-        except Exception as e:
-            self.logger.log("ERROR", f"Memory storage failed: {e}")
-            return {
-                "response": "I had trouble storing that in my long-term memory, but I'll remember it for our current conversation at least!"
-            }
-
-    async def _categorize_memory(self, memory_text: str) -> str:
-        """Categorize memory for better organization."""
-        categories = {
-            "personal": ["my", "i", "me", "personal", "family", "friend"],
-            "preferences": [
-                "like",
-                "love",
-                "prefer",
-                "favorite",
-                "enjoy",
-                "hate",
-                "dislike",
-            ],
-            "goals": ["want", "goal", "plan", "hope", "dream", "aspire"],
-            "facts": ["fact", "information", "data", "detail", "note"],
-            "experiences": ["happened", "experience", "memory", "story", "event"],
-        }
-
-        text_lower = memory_text.lower()
-        for category, keywords in categories.items():
-            if any(keyword in text_lower for keyword in keywords):
-                return category
-
-        return "general"
-
-    async def _update_profile_from_memory(self, memory_text: str) -> None:
-        """Update user profile based on stored memory."""
-        text_lower = memory_text.lower()
-
-        # Extract name if mentioned
-        if "my name is" in text_lower or "call me" in text_lower:
-            import re
-
-            name_match = re.search(r"(?:my name is|call me)\s+(\w+)", text_lower)
-            if name_match and not self.user_profile.name:
-                self.user_profile.name = name_match.group(1).title()
-
-        # Extract interests
-        interest_keywords = {
-            "technology": ["tech", "computer", "programming", "ai", "software"],
-            "art": ["art", "paint", "draw", "create", "design"],
-            "music": ["music", "song", "instrument", "concert"],
-            "sports": ["sport", "exercise", "gym", "run", "play"],
-            "reading": ["read", "book", "novel", "literature"],
-            "travel": ["travel", "trip", "visit", "explore"],
-        }
-
-        for interest, keywords in interest_keywords.items():
-            if any(keyword in text_lower for keyword in keywords):
-                if interest not in self.user_profile.interests:
-                    self.user_profile.interests.append(interest)
-
-    async def _search_memory(
-        self, user_input: str = "", context: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """Enhanced memory search with filtering and insights."""
-
-        if not user_input:
-            return {
-                "response": "What would you like me search for in my memories? I can find information about our past conversations, things you've told me, or specific topics we've discussed.",
-                "suggestions": [
-                    "My preferences",
-                    "Past conversations",
-                    "Things about me",
-                    "Specific topics",
-                ],
-            }
-
-        try:
-            # Enhanced memory search with multiple approaches
-            results = await self.search_memory(user_input, top_k=5)
-
-            if not results:
-                return {
-                    "response": f"I couldn't find anything relevant about '{user_input}' in my memories. Would you like to tell me something about this topic so I can remember it?",
-                    "suggestions": [
-                        "Tell me about this",
-                        "Search for something else",
-                        "Show me all my memories",
-                    ],
-                }
-
-            # Format results with rich context
-            memory_summary = f"🔍 **Memory Search Results for '{user_input}':**\n\n"
-
-            for i, result in enumerate(results, 1):
-                similarity = result.get("similarity", 0)
-                text = result.get("text", "")
-                metadata = result.get("metadata", {})
-
-                # Truncate long memories
-                if len(text) > 200:
-                    text = text[:200] + "..."
-
-                memory_summary += f"**{i}.** (Similarity: {similarity:.1%})\n{text}\n"
-
-                if metadata.get("timestamp"):
-                    from datetime import datetime
-
-                    try:
-                        timestamp = datetime.fromisoformat(
-                            metadata["timestamp"].replace("Z", "+00:00")
-                        )
-                        memory_summary += f"*From: {timestamp.strftime('%B %d, %Y')}*\n"
-                    except:
-                        pass
-                memory_summary += "\n"
-
-            # Add insights
-            insights = await self._generate_memory_insights(results, user_input)
-            if insights:
-                memory_summary += f"💡 **Insights:** {insights}"
-
-            return {
-                "response": memory_summary,
-                "suggestions": [
-                    "Search for more",
-                    "Tell me more about this",
-                    "Update this information",
-                ],
-            }
-
-        except Exception as e:
-            self.logger.log("ERROR", f"Memory search failed: {e}")
-            return {
-                "response": f"I had trouble searching my memories, but I'm still here to help! What would you like to talk about regarding '{user_input}'?"
-            }
-
-    async def _generate_memory_insights(self, results: List[Dict], query: str) -> str:
-        """Generate insights from memory search results."""
-        if not results:
-            return ""
-
-        # Analyze patterns in the memories
-        timestamps = []
-        topics = []
-
-        for result in results:
-            metadata = result.get("metadata", {})
-            if metadata.get("timestamp"):
-                timestamps.append(metadata["timestamp"])
-            if metadata.get("category"):
-                topics.append(metadata["category"])
-
-        insights = []
-
-        if len(results) > 2:
-            insights.append(f"Found {len(results)} related memories")
-
-        if topics:
-            most_common_topic = max(set(topics), key=topics.count)
-            insights.append(f"mostly about {most_common_topic}")
-
-            return ", ".join(insights) if insights else ""
-
     async def _get_conversation_summary(
         self, user_input: str = "", context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -2315,8 +2106,6 @@ Keep it concise but meaningful, written from JARVIS's perspective in {self.curre
 • **Games Played:** {self.conversation_metrics.get('games_played', 0)}
 • **Stories Created:** {self.conversation_metrics.get('stories_created', 0)}
 • **Jokes Shared:** {self.conversation_metrics.get('jokes_told', 0)}"""
-
-
 
             return {
                 "response": summary_response,
