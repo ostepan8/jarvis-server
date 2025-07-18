@@ -3,7 +3,11 @@ import pytest
 
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.memory_agent import MemoryAgent
+from jarvis.agents.nlu_agent import NLUAgent
 from jarvis.agents.base import NetworkAgent
+from jarvis.main_jarvis import JarvisSystem
+from jarvis.config import JarvisConfig
+from jarvis.ai_clients.base import BaseAIClient
 
 
 class DummyMemoryService:
@@ -56,3 +60,38 @@ async def test_memory_agent_routing():
     assert service.queries == [("hello", 1)]
 
     await network.stop()
+
+
+class DummyAIClient(BaseAIClient):
+    def __init__(self, output: str):
+        self.output = output
+
+    async def strong_chat(self, messages, tools=None):
+        return (type("Msg", (), {"content": self.output}), None)
+
+    async def weak_chat(self, messages, tools=None):
+        return await self.strong_chat(messages, tools)
+
+
+class DummyVectorMemoryService(DummyMemoryService):
+    pass
+
+
+@pytest.mark.asyncio
+async def test_process_request_unknown_intent_memory():
+    output = '{"intent": "remember", "capability": "store_memory", "args": {"memory_data": "hello"}}'
+    ai_client = DummyAIClient(output)
+    jarvis = JarvisSystem(JarvisConfig())
+    service = DummyVectorMemoryService()
+    jarvis.vector_memory = service
+    jarvis.memory_agent = MemoryAgent(service, jarvis.logger)
+    jarvis.nlu_agent = NLUAgent(ai_client, jarvis.logger)
+    jarvis.network = AgentNetwork(jarvis.logger)
+    jarvis.network.register_agent(jarvis.memory_agent)
+    jarvis.network.register_agent(jarvis.nlu_agent)
+    await jarvis.network.start()
+
+    await jarvis.process_request("remember this", "UTC")
+
+    await jarvis.network.stop()
+    assert service.added == [("hello", {})]

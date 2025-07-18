@@ -371,7 +371,11 @@ class JarvisSystem:
             # 4) Route to the appropriate agent
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
-                payload = {"command": user_input}
+                payload = args or {"command": user_input}
+                if cap == "store_memory":
+                    cmd = args.get("memory_data", user_input)
+                    meta = {"type": args.get("memory_type")} if args.get("memory_type") else {}
+                    payload = {"command": cmd, "metadata": meta}
                 async with tracker.timer(
                     "agent_response", metadata={"agent": target or cap}
                 ):
