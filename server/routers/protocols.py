@@ -5,7 +5,7 @@ from jarvis import JarvisSystem
 from jarvis.protocols import Protocol
 
 from ..models import ProtocolRunRequest
-from ..dependencies import get_jarvis
+from ..dependencies import get_jarvis, get_user_allowed_agents
 
 
 router = APIRouter()
@@ -26,6 +26,7 @@ async def list_protocols(
 async def run_protocol(
     req: ProtocolRunRequest,
     jarvis_system: JarvisSystem = Depends(get_jarvis),
+    allowed: set[str] = Depends(get_user_allowed_agents),
 ):
     """Run a protocol provided directly or by name."""
     if req.protocol is None and req.protocol_name is None:
@@ -41,5 +42,7 @@ async def run_protocol(
         if proto is None:
             raise HTTPException(404, detail="Protocol not found")
 
-    results = await jarvis_system.protocol_executor.run_protocol(proto, req.arguments)
+    results = await jarvis_system.protocol_executor.run_protocol(
+        proto, req.arguments, allowed_agents=allowed
+    )
     return {"protocol": proto.name, "results": results}

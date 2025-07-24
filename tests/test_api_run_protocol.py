@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from server.dependencies import get_user_allowed_agents
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
 from jarvis.logger import JarvisLogger
@@ -41,6 +42,7 @@ async def test_run_protocol_endpoint(tmp_path):
         return jarvis
 
     server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server.app.dependency_overrides[get_user_allowed_agents] = lambda: {"dummy"}
 
     proto = Protocol(
         id="1",
@@ -64,3 +66,5 @@ async def test_run_protocol_endpoint(tmp_path):
         assert resp.status_code == 200
         data = resp.json()
         assert data["results"]["step_0_echo"]["echo"] == {"msg": "hi"}
+
+    server.app.dependency_overrides.clear()

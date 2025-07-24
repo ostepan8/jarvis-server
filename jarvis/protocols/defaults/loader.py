@@ -82,7 +82,7 @@ async def execute_protocol_file(
     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
     proto = Protocol.from_file(file_path)
     logger.log("INFO", f"Executing protocol: {proto.name}")
-    results = await executor.execute(proto)
+    results = await executor.execute(proto, allowed_agents=None)
     logger.log("INFO", "Results", results)
     await jarvis.shutdown()
 
@@ -238,7 +238,9 @@ def launch_protocol_management_cli() -> None:
                 async def run_protocol():
                     jarvis = await create_collaborative_jarvis()
                     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
-                    results = await executor.execute(proto, context=arguments)
+                    results = await executor.execute(
+                        proto, context=arguments, allowed_agents=None
+                    )
                     await jarvis.shutdown()
                     return results
 
