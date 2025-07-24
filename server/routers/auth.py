@@ -23,7 +23,7 @@ async def signup(req: AuthRequest, db: sqlite3.Connection = Depends(get_auth_db)
         )
         db.commit()
     except sqlite3.IntegrityError:
-        return JSONResponse({"error": "User already exists"}, status_code=400)
+        return JSONResponse({"error": "User already exists"}, status_code=401)
     except Exception as e:
         # Better error handling for hashing issues
         return JSONResponse({"error": f"Signup failed: {str(e)}"}, status_code=500)

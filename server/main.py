@@ -18,11 +18,18 @@ from server.routers.protocols import router as protocol_router
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(title="Jarvis API")
-
+    origins = [
+        "http://localhost:3000",  # React default
+        "http://localhost:3001",  # Alternative React port
+        "http://localhost:5173",  # Vite default
+        "http://localhost:8080",  # Alternative frontend
+        "http://127.0.0.1:3000",  # Alternative localhost format
+        "http://127.0.0.1:5173",  # Alternative Vite format
+    ]
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],  # React or Next.js dev server
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
