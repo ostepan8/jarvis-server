@@ -13,6 +13,7 @@ from server.database import init_database, close_database
 from server.routers.jarvis import router as jarvis_router
 from server.routers.auth import router as auth_router
 from server.routers.protocols import router as protocol_router
+from server.routers.users import router as users_router
 
 
 def create_app() -> FastAPI:
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(jarvis_router, prefix="/jarvis", tags=["jarvis"])
     app.include_router(auth_router, prefix="/auth", tags=["auth"])
     app.include_router(protocol_router, prefix="/protocols", tags=["protocols"])
+    app.include_router(users_router, prefix="/users", tags=["users"])
 
     # Add startup and shutdown events
     @app.on_event("startup")

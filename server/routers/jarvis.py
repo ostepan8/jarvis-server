@@ -5,7 +5,7 @@ from jarvis import JarvisSystem
 from jarvis.utils import detect_timezone
 
 from ..models import JarvisRequest
-from ..dependencies import get_jarvis
+from ..dependencies import get_jarvis, get_user_allowed_agents
 
 
 router = APIRouter()
@@ -16,6 +16,7 @@ async def jarvis(
     req: JarvisRequest,
     request: Request,
     jarvis_system: JarvisSystem = Depends(get_jarvis),
+    allowed: set[str] = Depends(get_user_allowed_agents),
 ):
     """Execute a command using the agent network."""
     tz_name = detect_timezone(request)
@@ -25,7 +26,9 @@ async def jarvis(
         "user": request.headers.get("X-User"),
         "source": request.headers.get("X-Source", "text"),
     }
-    return await jarvis_system.process_request(req.command, tz_name, metadata)
+    return await jarvis_system.process_request(
+        req.command, tz_name, metadata, allowed_agents=allowed
+    )
 
 
 @router.get("/agents")

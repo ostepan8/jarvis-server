@@ -156,6 +156,9 @@ class AgentNetwork:
                 if message.message_type == "capability_request":
                     capability = message.content.get("capability")
                     providers = self.capability_registry.get(capability, [])
+                    allowed = message.content.get("allowed_agents")
+                    if allowed:
+                        providers = [p for p in providers if p in allowed]
                     for provider in providers:
                         cloned = Message(
                             from_agent=message.from_agent,
@@ -181,6 +184,7 @@ class AgentNetwork:
         capability: str,
         data: Any,
         request_id: Optional[str] = None,
+        allowed_agents: Optional[set[str]] = None,
     ) -> List[str]:
         """
         Broadcast a capability_request and return the list of providers.
@@ -205,13 +209,19 @@ class AgentNetwork:
             from_agent=from_agent,
             to_agent=None,
             message_type="capability_request",
-            content={"capability": capability, "data": data},
+            content={
+                "capability": capability,
+                "data": data,
+                "allowed_agents": list(allowed_agents) if allowed_agents else None,
+            },
             request_id=request_id,
         )
         await self.send_message(msg)
 
         # Get providers and log them
         providers = self.capability_registry.get(capability, [])
+        if allowed_agents is not None:
+            providers = [p for p in providers if p in allowed_agents]
         self.logger.log(
             "INFO",
             f"Capability request broadcast",
