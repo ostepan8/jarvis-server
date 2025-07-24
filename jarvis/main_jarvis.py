@@ -423,7 +423,19 @@ class JarvisSystem:
                     self.logger.log(
                         "DEBUG", f"Requested '{cap}' from {providers}", payload
                     )
-                    result = await self.network.wait_for_response(request_id)
+                    if not providers:
+                        self.logger.log(
+                            "WARNING",
+                            "No providers found for requested capability",
+                            cap,
+                        )
+                        return {
+                            "response": "No agent is available to handle that request."
+                        }
+
+                    result = await self.network.wait_for_response(
+                        request_id, timeout=self.config.response_timeout
+                    )
                 return {"response": result}
 
             if intent == "orchestrate_tasks":
