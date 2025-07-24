@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import json
 from typing import Optional
 
 
@@ -20,6 +21,25 @@ def init_database() -> sqlite3.Connection:
             agent_name TEXT,
             allowed INTEGER DEFAULT 1,
             UNIQUE(user_id, agent_name),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            preferred_personality TEXT,
+            interests TEXT,
+            conversation_style TEXT,
+            humor_preference TEXT,
+            topics_of_interest TEXT,
+            language_preference TEXT,
+            interaction_count INTEGER DEFAULT 0,
+            favorite_games TEXT,
+            last_seen TEXT,
+            required_resources TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
         """
@@ -54,4 +74,91 @@ def set_user_agent_permissions(db: sqlite3.Connection, user_id: int, mapping: di
             """,
             (user_id, name, int(allowed)),
         )
+    db.commit()
+
+
+def get_user_profile(db: sqlite3.Connection, user_id: int) -> dict:
+    """Return the stored profile for a user as a dict."""
+    fields = [
+        "name",
+        "preferred_personality",
+        "interests",
+        "conversation_style",
+        "humor_preference",
+        "topics_of_interest",
+        "language_preference",
+        "interaction_count",
+        "favorite_games",
+        "last_seen",
+        "required_resources",
+    ]
+    cur = db.execute(
+        f"SELECT {', '.join(fields)} FROM user_profiles WHERE user_id = ?",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {}
+
+    profile = {}
+    list_fields = {
+        "interests",
+        "topics_of_interest",
+        "favorite_games",
+        "required_resources",
+    }
+    for field, value in zip(fields, row):
+        if field in list_fields and value:
+            try:
+                profile[field] = json.loads(value)
+            except Exception:
+                profile[field] = []
+        else:
+            profile[field] = value
+
+    return profile
+
+
+def set_user_profile(db: sqlite3.Connection, user_id: int, profile: dict) -> None:
+    """Insert or update a user's profile."""
+    existing = get_user_profile(db, user_id)
+    list_fields = {
+        "interests",
+        "topics_of_interest",
+        "favorite_games",
+        "required_resources",
+    }
+
+    if not existing:
+        fields = []
+        values = []
+        placeholders = []
+        for field, value in profile.items():
+            fields.append(field)
+            if field in list_fields and value is not None:
+                value = json.dumps(value)
+            values.append(value)
+            placeholders.append("?")
+
+        if fields:
+            db.execute(
+                f"INSERT INTO user_profiles (user_id, {', '.join(fields)}) VALUES (?, {', '.join(placeholders)})",
+                [user_id] + values,
+            )
+    else:
+        updates = []
+        values = []
+        for field, value in profile.items():
+            if field in list_fields and value is not None:
+                value = json.dumps(value)
+            updates.append(f"{field}=?")
+            values.append(value)
+
+        if updates:
+            values.append(user_id)
+            db.execute(
+                f"UPDATE user_profiles SET {', '.join(updates)} WHERE user_id=?",
+                values,
+            )
+
     db.commit()

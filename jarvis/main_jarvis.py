@@ -21,6 +21,7 @@ from .agents.orchestrator_agent import OrchestratorAgent
 from .agents.weather_agent import WeatherAgent
 from .agents.memory_agent import MemoryAgent
 from .agents.chat_agent import ChatAgent
+from .profile import AgentProfile
 from .services.vector_memory import VectorMemoryService
 from .services.calendar_service import CalendarService
 from .services.canvas_service import CanvasService  # ← NEW
@@ -67,6 +68,7 @@ class JarvisSystem:
         self.protocol_agent: ProtocolAgent | None = None
         self.software_agent: SoftwareEngineeringAgent | None = None
         self.vector_memory: VectorMemoryService | None = None
+        self.user_profiles: dict[int, AgentProfile] = {}
 
         # Night mode management
         self.night_mode: bool = False
@@ -288,6 +290,19 @@ class JarvisSystem:
             tracker = PerfTracker(enabled=self.perf_enabled)
             tracker.start()
             new_tracker = True
+        if metadata:
+            user_id = metadata.get("user_id")
+            profile_data = metadata.get("profile")
+            profile_obj = None
+            if user_id is not None:
+                if profile_data is not None:
+                    profile_obj = AgentProfile(**profile_data)
+                    self.user_profiles[user_id] = profile_obj
+                else:
+                    profile_obj = self.user_profiles.get(user_id)
+                if profile_obj and self.chat_agent:
+                    self.chat_agent.profile = profile_obj
+                    self.chat_agent.current_user_id = user_id
         try:
             if not self.nlu_agent:
                 raise RuntimeError("System not initialized")

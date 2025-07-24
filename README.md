@@ -47,6 +47,20 @@ Each authenticated user may allow or deny individual agents. Use the following e
 
 Requests to `/jarvis` will only use agents that the user has allowed. If no preferences exist, all agents are considered allowed by default.
 
+### User profiles
+
+Jarvis now stores a profile for each authenticated user. The profile tracks the user's
+name, preferred personality, interests and other traits which are injected into prompts
+to personalize responses.
+
+Use the following endpoints to manage your profile:
+
+- `GET /users/me/profile` – retrieve the current profile data.
+- `POST /users/me/profile` – update profile fields by sending any subset of the profile attributes.
+
+When a `/jarvis` request is processed, the stored profile is included in the request
+metadata so agents can tailor their output to the user.
+
 ## Demo script
 
 Run the interactive demo from the command line:

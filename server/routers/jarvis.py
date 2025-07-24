@@ -5,7 +5,13 @@ from jarvis import JarvisSystem
 from jarvis.utils import detect_timezone
 
 from ..models import JarvisRequest
-from ..dependencies import get_jarvis, get_user_allowed_agents
+from ..dependencies import (
+    get_jarvis,
+    get_user_allowed_agents,
+    get_current_user,
+    get_auth_db,
+)
+from ..database import get_user_profile
 
 
 router = APIRouter()
@@ -17,14 +23,19 @@ async def jarvis(
     request: Request,
     jarvis_system: JarvisSystem = Depends(get_jarvis),
     allowed: set[str] = Depends(get_user_allowed_agents),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_auth_db),
 ):
     """Execute a command using the agent network."""
     tz_name = detect_timezone(request)
+    profile = get_user_profile(db, current_user["id"])
     metadata = {
         "device": request.headers.get("X-Device"),
         "location": request.headers.get("X-Location"),
         "user": request.headers.get("X-User"),
         "source": request.headers.get("X-Source", "text"),
+        "user_id": current_user["id"],
+        "profile": profile,
     }
     return await jarvis_system.process_request(
         req.command, tz_name, metadata, allowed_agents=allowed
