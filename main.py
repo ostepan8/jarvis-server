@@ -100,7 +100,7 @@ async def demo(
         if user_command.strip().lower() in {"exit", "quit"}:
             break
 
-        result = await jarvis.process_request(user_command, tz_name, {})
+        result = await jarvis.process_request(user_command, tz_name, {}, allowed_agents=None)
         await _display_result(result, output_handler)
 
     await jarvis.shutdown()
@@ -147,7 +147,7 @@ async def run_voice() -> None:
             system.stop()
             return "Goodbye, sir."
 
-        result = await jarvis.process_request(text, tz_name, {})
+        result = await jarvis.process_request(text, tz_name, {}, allowed_agents=None)
         await _display_result(result, ConsoleOutput())
 
         resp = result.get("response", "")
@@ -162,7 +162,7 @@ async def run_voice() -> None:
 
 async def calendar_ai(command: str, api_key: Optional[str] = None) -> str:
     jarvis = await create_collaborative_jarvis(api_key or os.getenv("OPENAI_API_KEY"))
-    result = await jarvis.process_request(command, get_localzone_name(), {})
+    result = await jarvis.process_request(command, get_localzone_name(), {}, allowed_agents=None)
     await jarvis.shutdown()
     return result["response"]
 

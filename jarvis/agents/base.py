@@ -128,12 +128,16 @@ class NetworkAgent:
         await self.network.send_message(message)
 
     async def request_capability(
-        self, capability: str, data: Any, request_id: Optional[str] = None
+        self,
+        capability: str,
+        data: Any,
+        request_id: Optional[str] = None,
+        allowed_agents: Optional[set[str]] = None,
     ) -> str:
         if not request_id:
             request_id = str(uuid.uuid4())
         providers = await self.network.request_capability(
-            self.name, capability, data, request_id
+            self.name, capability, data, request_id, allowed_agents=allowed_agents
         )
         self.logger.log(
             "INFO",

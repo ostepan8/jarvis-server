@@ -108,8 +108,19 @@ class JarvisSystem:
 
     def _register_agents(self, ai_client: BaseAIClient) -> None:
         """Create and register all agents with the network."""
+        self._create_memory_agent(ai_client)
+        self._create_nlu_agent(ai_client)
+        self._create_orchestrator(ai_client)
+        self._create_calendar_agent(ai_client)
+        self._create_chat_agent(ai_client)
+        self._create_weather_agent(ai_client)
+        self._create_protocol_agent()
+        self._create_lights_agent(ai_client)
+        self._create_software_agent(ai_client)
+        self._create_night_agents()
 
-        # Shared memory service provided via MemoryAgent
+    # Factory helpers
+    def _create_memory_agent(self, ai_client: BaseAIClient) -> None:
         self.vector_memory = VectorMemoryService(
             persist_directory=self.config.memory_dir,
             api_key=self.config.api_key,
@@ -117,36 +128,29 @@ class JarvisSystem:
         self.memory_agent = MemoryAgent(self.vector_memory, self.logger, ai_client)
         self.network.register_agent(self.memory_agent)
 
-        # 1) NLUAgent (must be registered so network.request_capability works)
+    def _create_nlu_agent(self, ai_client: BaseAIClient) -> None:
         self.nlu_agent = NLUAgent(ai_client, self.logger)
         self.network.register_agent(self.nlu_agent)
 
-        # 2) OrchestratorAgent (dynamic multi-step planning)
+    def _create_orchestrator(self, ai_client: BaseAIClient) -> None:
         timeout = self.config.response_timeout
         self.orchestrator = OrchestratorAgent(
             ai_client, self.logger, response_timeout=timeout
         )
         self.network.register_agent(self.orchestrator)
 
-        # 3) CollaborativeCalendarAgent (your existing Calendar API)
+    def _create_calendar_agent(self, ai_client: BaseAIClient) -> None:
         self.calendar_service = CalendarService(self.config.calendar_api_url)
         calendar_agent = CollaborativeCalendarAgent(
             ai_client, self.calendar_service, self.logger
         )
         self.network.register_agent(calendar_agent)
 
-        # 4) CanvasAgent (Canvas LMS integration)               ← ADDED
-        #    Reads CANVAS_API_URL and CANVAS_API_TOKEN env-vars by default
-        # self.canvas_service = CanvasService()
-        # canvas_agent = CanvasAgent(ai_client, self.canvas_service, self.logger)
-        # self.network.register_agent(canvas_agent)
-        # canvas_agent.memory = self.vector_memory
-
-        # 5) ChatAgent (chat interactions)
+    def _create_chat_agent(self, ai_client: BaseAIClient) -> None:
         self.chat_agent = ChatAgent(ai_client, self.logger)
         self.network.register_agent(self.chat_agent)
 
-        # 6) WeatherAgent (for weather info)
+    def _create_weather_agent(self, ai_client: BaseAIClient) -> None:
         weather_key = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
         try:
             self.weather_agent = WeatherAgent(
@@ -156,22 +160,30 @@ class JarvisSystem:
         except Exception as exc:
             self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
 
-        # 7) ProtocolAgent (for protocol management)
+    def _create_protocol_agent(self) -> None:
         self.protocol_agent = ProtocolAgent(self.logger)
         self.network.register_agent(self.protocol_agent)
 
-        # 8) LightsAgent (for smart home control)
+    def _create_lights_agent(self, ai_client: BaseAIClient) -> None:
         load_dotenv()
         bridge_ip = os.getenv("HUE_BRIDGE_IP")
         self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
         self.network.register_agent(self.lights_agent)
 
-        # 9) SoftwareEngineeringAgent (developer tools)
+    def _create_software_agent(self, ai_client: BaseAIClient) -> None:
         repo_path = self.config.repo_path
         self.software_agent = SoftwareEngineeringAgent(
             ai_client=ai_client, repo_path=repo_path, logger=self.logger
         )
         self.network.register_agent(self.software_agent)
+
+    def _create_night_agents(self) -> None:
+        self.night_controller = NightModeControllerAgent(self, self.logger)
+        self.network.register_agent(self.night_controller)
+
+        trigger_agent = TriggerPhraseSuggesterAgent(logger=self.logger)
+        self.network.register_night_agent(trigger_agent)
+        self.night_agents.append(trigger_agent)
 
         # Night mode controller
         self.night_controller = NightModeControllerAgent(self, self.logger)
@@ -190,6 +202,7 @@ class JarvisSystem:
                 "name": agent.name,
                 "capabilities": agent.capabilities,
                 "description": agent.description,
+                "required_resources": getattr(agent.profile, "required_resources", []),
             }
         return agents_info
 
@@ -266,6 +279,7 @@ class JarvisSystem:
         user_input: str,
         tz_name: str,
         metadata: Dict[str, Any] | None = None,
+        allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
         tracker = get_tracker()
@@ -347,6 +361,7 @@ class JarvisSystem:
                     capability="intent_matching",
                     data={"input": user_input},
                     request_id=request_id,
+                    allowed_agents=allowed_agents,
                 )
 
                 classification = await self.network.wait_for_response(request_id)
@@ -390,6 +405,7 @@ class JarvisSystem:
                         capability=cap,
                         data=payload,
                         request_id=request_id,
+                        allowed_agents=allowed_agents,
                     )
                     self.logger.log(
                         "DEBUG", f"Requested '{cap}' from {providers}", payload
@@ -415,6 +431,7 @@ class JarvisSystem:
                         capability="run_protocol",
                         data={"protocol_name": proto, "args": args},
                         request_id=run_id,
+                        allowed_agents=allowed_agents,
                     )
                     result = await self.network.wait_for_response(run_id)
                 return {"response": result}
@@ -429,6 +446,7 @@ class JarvisSystem:
                         capability="define_protocol",
                         data=args,
                         request_id=define_id,
+                        allowed_agents=allowed_agents,
                     )
                     result = await self.network.wait_for_response(define_id)
                 return {"response": result}
@@ -443,6 +461,7 @@ class JarvisSystem:
                         capability="describe_protocol",
                         data={"protocol_name": proto},
                         request_id=desc_id,
+                        allowed_agents=allowed_agents,
                     )
                     result = await self.network.wait_for_response(desc_id)
                 return {"response": result}
@@ -458,6 +477,7 @@ class JarvisSystem:
                         capability=cap,
                         data=payload,
                         request_id=define_id,
+                        allowed_agents=allowed_agents,
                     )
                     result = await self.network.wait_for_response(define_id)
 
@@ -609,7 +629,7 @@ async def demo():
     print("\n=== Testing Voice Trigger ===")
     user_input = "blue lights"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name(), {})
+    result = await jarvis.process_request(user_input, get_localzone_name(), {}, allowed_agents=None)
     print(f"Jarvis: {result['response']}")
     if "protocol_executed" in result:
         print(f"(Executed via protocol: {result['protocol_executed']})")
@@ -617,7 +637,7 @@ async def demo():
     print("\n=== Testing NLU Routing ===")
     user_input = "What's on my calendar tomorrow?"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name(), {})
+    result = await jarvis.process_request(user_input, get_localzone_name(), {}, allowed_agents=None)
     print(f"Jarvis: {result['response']}")
 
     print("\n=== Available Voice Commands ===")

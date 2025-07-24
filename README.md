@@ -38,6 +38,15 @@ The orchestrator now uses a quick LLM call to translate each step into a precise
 The `/protocols` endpoint returns all registered protocols and their details as JSON.
 You can also run a protocol directly via `/protocols/run` by sending either a protocol definition or the name of a registered protocol.
 
+### User agent permissions
+
+Each authenticated user may allow or deny individual agents. Use the following endpoints to manage preferences:
+
+- `GET /users/me/agents` – list allowed and disallowed agents for the current user.
+- `POST /users/me/agents` – update preferences by sending `{"allowed": [...], "disallowed": [...]}`.
+
+Requests to `/jarvis` will only use agents that the user has allowed. If no preferences exist, all agents are considered allowed by default.
+
 ## Demo script
 
 Run the interactive demo from the command line:

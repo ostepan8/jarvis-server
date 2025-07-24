@@ -115,7 +115,7 @@ async def test_process_request_unknown_intent_memory():
     jarvis.network.register_agent(jarvis.nlu_agent)
     await jarvis.network.start()
 
-    await jarvis.process_request("remember this", "UTC")
+    await jarvis.process_request("remember this", "UTC", allowed_agents=None)
 
     await jarvis.network.stop()
     assert service.added == [("hello", {})]

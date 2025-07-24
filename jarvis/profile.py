@@ -18,6 +18,7 @@ class AgentProfile:
     interaction_count: int = 0
     favorite_games: List[str] = None
     last_seen: Optional[str] = None
+    required_resources: List[str] | None = None
 
     def __post_init__(self) -> None:
         if self.interests is None:
@@ -26,3 +27,5 @@ class AgentProfile:
             self.topics_of_interest = []
         if self.favorite_games is None:
             self.favorite_games = []
+        if self.required_resources is None:
+            self.required_resources = []
