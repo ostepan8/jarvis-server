@@ -14,10 +14,15 @@ router = APIRouter()
 @router.get("/")
 async def list_protocols(
     jarvis_system: JarvisSystem = Depends(get_jarvis),
+    allowed: set[str] | None = Depends(get_user_allowed_agents),
 ):
-    """Return all registered protocols with their details."""
+    """Return protocols that can be executed by the user."""
+    if not isinstance(allowed, set):
+        allowed_set = None
+    else:
+        allowed_set = allowed
     protocols = [
-        p.to_dict() for p in jarvis_system.protocol_registry.protocols.values()
+        p.to_dict() for p in jarvis_system.list_protocols(allowed_agents=allowed_set)
     ]
     return {"protocols": protocols}
 
