@@ -222,6 +222,19 @@ class JarvisSystem:
             "status": "active" if agent_name in self.network.agents else "inactive",
         }
 
+    def list_protocols(self, allowed_agents: set[str] | None = None) -> list[Protocol]:
+        """Return protocols whose required agents are available and allowed."""
+        available = set(self.network.agents.keys())
+        protocols = []
+        for proto in self.protocol_registry.protocols.values():
+            required = {step.agent for step in proto.steps}
+            if not required.issubset(available):
+                continue
+            if allowed_agents is not None and not required.issubset(allowed_agents):
+                continue
+            protocols.append(proto)
+        return protocols
+
     def _setup_protocol_system(self, load_protocol_directory) -> None:
         """Initialize protocol executor and load protocol definitions."""
         self.protocol_executor = ProtocolExecutor(
@@ -430,9 +443,7 @@ class JarvisSystem:
                             cap,
                         )
                         return {
-                            "response": "No agent is available to handle that request (capability: {}).".format(
-                                cap
-                            )
+                            "response": "No agent is available to handle that request."
                         }
 
                     result = await self.network.wait_for_response(
@@ -616,13 +627,15 @@ class JarvisSystem:
                 return result["response"]
         return "Calendar information retrieved, sir."
 
-    def get_available_commands(self) -> Dict[str, List[str]]:
-        """Get all available voice trigger commands organized by protocol"""
+    def get_available_commands(
+        self, allowed_agents: set[str] | None = None
+    ) -> Dict[str, List[str]]:
+        """Get all available voice trigger commands organized by protocol."""
         if not self.voice_matcher:
             return {}
 
         commands = {}
-        for protocol in self.protocol_registry.protocols.values():
+        for protocol in self.list_protocols(allowed_agents=allowed_agents):
             commands[protocol.name] = protocol.trigger_phrases
 
         return commands

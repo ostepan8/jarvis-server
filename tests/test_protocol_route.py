@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from server import list_protocols
 from jarvis.protocols.registry import ProtocolRegistry
@@ -8,6 +9,10 @@ from jarvis.protocols import Protocol
 class DummyJarvis:
     def __init__(self, registry):
         self.protocol_registry = registry
+        self.network = SimpleNamespace(agents={})
+
+    def list_protocols(self, allowed_agents=None):
+        return list(self.protocol_registry.protocols.values())
 
 
 @pytest.mark.asyncio
