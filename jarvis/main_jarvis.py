@@ -430,7 +430,9 @@ class JarvisSystem:
                             cap,
                         )
                         return {
-                            "response": "No agent is available to handle that request."
+                            "response": "No agent is available to handle that request (capability: {}).".format(
+                                cap
+                            )
                         }
 
                     result = await self.network.wait_for_response(
@@ -654,7 +656,9 @@ async def demo():
     print("\n=== Testing Voice Trigger ===")
     user_input = "blue lights"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name(), {}, allowed_agents=None)
+    result = await jarvis.process_request(
+        user_input, get_localzone_name(), {}, allowed_agents=None
+    )
     print(f"Jarvis: {result['response']}")
     if "protocol_executed" in result:
         print(f"(Executed via protocol: {result['protocol_executed']})")
@@ -662,7 +666,9 @@ async def demo():
     print("\n=== Testing NLU Routing ===")
     user_input = "What's on my calendar tomorrow?"
     print(f"User: {user_input}")
-    result = await jarvis.process_request(user_input, get_localzone_name(), {}, allowed_agents=None)
+    result = await jarvis.process_request(
+        user_input, get_localzone_name(), {}, allowed_agents=None
+    )
     print(f"Jarvis: {result['response']}")
 
     print("\n=== Available Voice Commands ===")
