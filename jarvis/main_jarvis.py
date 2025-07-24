@@ -365,7 +365,19 @@ class JarvisSystem:
                     allowed_agents=allowed_agents,
                 )
 
-                classification = await self.network.wait_for_response(request_id)
+                try:
+                    classification = await self.network.wait_for_response(
+                        request_id, timeout=self.config.intent_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.log(
+                        "ERROR",
+                        "NLU classification timed out",
+                        f"request_id={request_id}",
+                    )
+                    return {
+                        "response": "The request took too long to complete. Please try again.",
+                    }
             if not isinstance(classification, dict) or "intent" not in classification:
                 self.logger.log("ERROR", "Error from NLUAgent", str(classification))
                 return {
@@ -650,7 +662,9 @@ async def demo():
 
 
 async def create_collaborative_jarvis(
-    api_key: Optional[str] = None, repo_path: str = "."
+    api_key: Optional[str] = None,
+    repo_path: str = ".",
+    intent_timeout: float = 5.0,
 ) -> JarvisSystem:
     """
     Create and initialize a JarvisSystem instance with default configuration.
@@ -658,6 +672,7 @@ async def create_collaborative_jarvis(
     Args:
         api_key (Optional[str]): API key for the AI provider. If not provided, it will be loaded from environment variables.
         repo_path (str): Path to the local repository used by the SoftwareEngineeringAgent.
+        intent_timeout (float): Seconds to wait for the NLU classification step before timing out.
 
     Returns:
         JarvisSystem: A fully initialized Jarvis system instance.
@@ -676,6 +691,7 @@ async def create_collaborative_jarvis(
         calendar_api_url="http://localhost:8080",
         response_timeout=60.0,
         repo_path=repo_path,
+        intent_timeout=intent_timeout,
     )
 
     jarvis = JarvisSystem(config)
