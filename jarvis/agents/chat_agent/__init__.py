@@ -114,6 +114,7 @@ class ChatAgent(NetworkAgent):
         self.ai_client = ai_client
         # Aliases for backwards compatibility with older code
         self.user_profile = self.profile
+        self.current_user_id = None
         self.max_context_length = max_context_length
         self.memory_threshold = memory_threshold
 
@@ -568,6 +569,7 @@ Remember: You're not just answering questions - you're creating an engaging, per
             metadata = {
                 "type": "conversation",
                 "timestamp": conv_context.timestamp,
+                "user_id": self.current_user_id or -1,
                 "session_id": conv_context.session_id,
                 "personality_mode": conv_context.mood,
                 "topic": conv_context.topic or "general",
