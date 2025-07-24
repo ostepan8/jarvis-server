@@ -38,6 +38,11 @@ The orchestrator now uses a quick LLM call to translate each step into a precise
 The `/protocols` endpoint returns all registered protocols and their details as JSON.
 You can also run a protocol directly via `/protocols/run` by sending either a protocol definition or the name of a registered protocol.
 
+The `/agents` route exposes information about each available agent. `GET /agents`
+returns the full list, `GET /agents/{name}` retrieves details for a single agent
+and `GET /agents/{name}/capabilities` lists its capabilities. These endpoints are
+also accessible under `/jarvis/agents` for compatibility.
+
 ### User agent permissions
 
 Each authenticated user may allow or deny individual agents. Use the following endpoints to manage preferences:

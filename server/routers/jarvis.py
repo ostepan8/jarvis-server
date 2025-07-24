@@ -3,6 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Depends
 from jarvis import JarvisSystem
 from jarvis.utils import detect_timezone
+from .agents import (
+    list_agents as list_agents_route,
+    get_agent_capabilities as agent_caps_route,
+)
 
 from ..models import JarvisRequest
 from ..dependencies import get_jarvis, get_user_allowed_agents
@@ -34,7 +38,7 @@ async def jarvis(
 @router.get("/agents")
 async def list_agents(jarvis_system: JarvisSystem = Depends(get_jarvis)):
     """List all available agents."""
-    return jarvis_system.list_agents()
+    return await list_agents_route(jarvis_system)
 
 
 @router.get("/agents/{agent_name}/capabilities")
@@ -42,4 +46,4 @@ async def get_agent_capabilities(
     agent_name: str, jarvis_system: JarvisSystem = Depends(get_jarvis)
 ):
     """Get all capabilities for a specific agent."""
-    return await jarvis_system.get_agent_capabilities(agent_name)
+    return await agent_caps_route(agent_name, jarvis_system)
