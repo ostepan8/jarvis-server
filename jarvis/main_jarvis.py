@@ -334,6 +334,7 @@ class JarvisSystem:
                             match_result,
                             trigger_phrase=user_input,
                             metadata=metadata,
+                            allowed_agents=allowed_agents,
                         )
 
                     response = await self._format_protocol_response(

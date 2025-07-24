@@ -31,9 +31,12 @@ class ProtocolExecutor:
         *,
         trigger_phrase: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Public helper to execute a protocol."""
-        return await self.execute(protocol, arguments, trigger_phrase, metadata)
+        return await self.execute(
+            protocol, arguments, trigger_phrase, metadata, allowed_agents
+        )
 
     async def run_protocol_with_match(
         self,
@@ -41,6 +44,7 @@ class ProtocolExecutor:
         *,
         trigger_phrase: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Execute a protocol using the result from enhanced voice matcher."""
         print("Running protocol with match result:", match_result)
@@ -60,6 +64,7 @@ class ProtocolExecutor:
             extracted_args,
             trigger_phrase or matched_phrase,
             enhanced_metadata,
+            allowed_agents,
         )
 
     async def execute(
@@ -68,6 +73,7 @@ class ProtocolExecutor:
         context: Dict[str, Any] | None = None,
         trigger_phrase: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Execute each step in protocol directly."""
 
@@ -85,6 +91,14 @@ class ProtocolExecutor:
 
         for i, step in enumerate(protocol.steps):
             step_id = f"step_{i}_{step.function}"
+
+            if allowed_agents is not None and step.agent not in allowed_agents:
+                self.logger.log(
+                    "WARNING",
+                    f"Agent '{step.agent}' not allowed for step {step_id}",
+                )
+                results[step_id] = {"error": "agent_disallowed"}
+                continue
 
             # Get the agent
             agent = self.network.agents.get(step.agent)
