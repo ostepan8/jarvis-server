@@ -53,6 +53,7 @@ python -m asyncio run main.py
 ## JarvisSystem options
 - `response_timeout` – number of seconds the orchestrator waits for
   capability responses when processing a user request. Defaults to 10 seconds.
+- `intent_timeout` – seconds to wait for NLU classification before giving up. Defaults to 5 seconds.
 
 ## Logs
 Logs are stored in `jarvis_logs.db`. Use the log viewer:
