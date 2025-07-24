@@ -68,19 +68,26 @@ Response is the final structured result returned by the orchestrator. Example:
 ```
 The exact schema depends on the active agents and protocols.
 
-### `GET /jarvis/agents`
-Return a mapping of all available agents.
+### `GET /agents`
+Return a mapping of all registered agents. This information is also available at
+`/jarvis/agents` for backward compatibility.
 Example response:
 ```json
 {
-  "CalendarAgent": "CollaborativeCalendarAgent",
-  "WeatherAgent": "WeatherAgent"
+  "CalendarAgent": {
+    "name": "CalendarAgent",
+    "capabilities": [...]
+  }
 }
 ```
 
-### `GET /jarvis/agents/{name}/capabilities`
+### `GET /agents/{name}`
+Retrieve information about a single agent including its description and
+capability names.
+
+### `GET /agents/{name}/capabilities`
 List capability definitions for the specified agent.
-Response is an array describing each capability and its parameters.
+These routes are mirrored under `/jarvis/agents` as well.
 
 ## Protocol Management
 
@@ -141,7 +148,7 @@ Response:
 
 ## Usage Workflow
 1. **Sign up or log in** to obtain a JWT token.
-2. **Call `/jarvis`** with a natural language command. Optionally query `/jarvis/agents` to inspect available agents first.
+2. **Call `/jarvis`** with a natural language command. Optionally query `/agents` (or `/jarvis/agents`) to inspect available agents first.
 3. **Review the result** and use `/protocols` or `/protocols/run` to execute complex multi-step workflows.
 4. **Manage agent permissions** using `/users/me/agents` to restrict which agents may act on the user's behalf.
 
