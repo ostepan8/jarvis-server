@@ -83,7 +83,7 @@ tools: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "search_locations",
+            "name": "search_locations_for_weather_service",
             "description": "Search for location names when user input is unclear",
             "parameters": {
                 "type": "object",

@@ -145,7 +145,6 @@ class NLUAgent(NetworkAgent):
                 "target_agent": "OrchestratorAgent",
                 "protocol_name": None,
                 "capability": None,
-                "args": {},
             }
             return classification
 
@@ -171,7 +170,6 @@ class NLUAgent(NetworkAgent):
                     "target_agent": "OrchestratorAgent",
                     "protocol_name": None,
                     "capability": None,
-                    "args": {},
                 }
 
         return classification
@@ -216,6 +214,5 @@ DO NOT USE ANY OTHER INTENTS, AND DO NOT MIX UP INTENTS WITH CAPABILITIES THEY A
 {{
   "intent": "perform_capability OR orchestrate_tasks",
   "capability": "exact_capability_name_from_list OR null",
-  "args": {{}}
 }}"""
         return prompt

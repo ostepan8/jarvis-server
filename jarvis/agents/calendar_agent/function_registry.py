@@ -34,8 +34,6 @@ class CalendarFunctionRegistry(FunctionRegistry):
             "validate_event_time": self.calendar_service.validate_event_time,
             "find_free_slots": self.calendar_service.find_free_slots,
             "find_next_available_slot": self.calendar_service.find_next_available_slot,
-            # Statistics
-            "get_event_stats": self.calendar_service.get_event_stats,
             # Create/Update operations
             "add_event": self.calendar_service.add_event,
             "update_event": self.calendar_service.update_event,
@@ -63,7 +61,6 @@ class CalendarFunctionRegistry(FunctionRegistry):
             "get_busy_days": self.calendar_service.get_busy_days,
             "get_overlapping_events": self.calendar_service.get_overlapping_events,
             # Advanced helpers
-            "find_best_time_for_event": self.calendar_service.find_best_time_for_event,
             "get_event_by_id": self.calendar_service.get_event_by_id,
             # Capability aliases (map user-friendly names to function names)
             "view_calendar_schedule": self.calendar_service.get_all_events,
@@ -78,16 +75,11 @@ class CalendarFunctionRegistry(FunctionRegistry):
             "remove_calendar_event": self.calendar_service.delete_event,
             "cancel_appointment": self.calendar_service.delete_event,
             "bulk_calendar_operations": self.calendar_service.add_events_bulk,
-            "find_free_time_slots": self.calendar_service.find_free_slots,
             "check_scheduling_conflicts": self.calendar_service.check_conflicts,
             "analyze_calendar_patterns": self.calendar_service.get_event_stats,
-            "find_meeting_times": self.calendar_service.find_best_time_for_event,
             "manage_event_categories": self.calendar_service.get_categories,
             "restore_deleted_appointments": self.calendar_service.restore_event,
-            "organize_calendar": self.calendar_service.get_schedule_summary,
             "get_today_schedule": self.calendar_service.get_today_events,
             "get_week_schedule": self.calendar_service.get_week_events,
             "get_month_schedule": self.calendar_service.get_month_events,
-            "check_busy_days": self.calendar_service.get_busy_days,
         }
-

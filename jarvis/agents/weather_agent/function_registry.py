@@ -19,7 +19,7 @@ class WeatherFunctionRegistry(FunctionRegistry):
             "get_weather_forecast": self.weather_service.get_weather_forecast,
             "compare_weather_locations": self.weather_service.compare_weather_locations,
             "get_weather_recommendations": self.weather_service.get_weather_recommendations,
-            "search_locations": self.weather_service.search_locations,
+            "search_locations_for_weather_service": self.weather_service.search_locations_for_weather_service,
             "get_air_quality": self.weather_service.get_air_quality,
             # Capability aliases (map user-friendly names to function names)
             "weather_command": self.weather_service.get_current_weather,
@@ -30,4 +30,3 @@ class WeatherFunctionRegistry(FunctionRegistry):
             "weather_planning": self.weather_service.get_weather_recommendations,
             "air_quality": self.weather_service.get_air_quality,
         }
-

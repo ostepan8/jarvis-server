@@ -408,7 +408,7 @@ class WeatherService:
         except Exception as e:
             return {"error": f"Could not get recommendations: {str(e)}"}
 
-    def search_locations(self, query: str) -> Dict[str, Any]:
+    def search_locations_for_weather_service(self, query: str) -> Dict[str, Any]:
         """Search for locations matching the query"""
         try:
             response = asyncio.run(

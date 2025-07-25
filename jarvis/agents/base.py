@@ -180,50 +180,31 @@ class NetworkAgent:
     # ------------------------------------------------------------------
     # Shared tools
     # ------------------------------------------------------------------
-    async def store_memory(
-        self, text: str, metadata: Optional[Dict[str, Any]] = None
+    async def remember(
+        self, content: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Optional[str]:
-        """Add a piece of text to the shared vector memory via MemoryAgent."""
+        """Store something in shared memory via MemoryAgent."""
         if not self.network:
             return None
         req_id = await self.request_capability(
-            "store_memory", {"prompt": text, "metadata": metadata}
+            "remember", {"content": content, "metadata": metadata}
         )
         result = await self.network.wait_for_response(req_id)
-        if isinstance(result, str):
-            return result
-        if isinstance(result, dict) and "id" in result:
-            return result["id"]
+        if isinstance(result, dict):
+            return result.get("memory_id")
         return None
 
-    async def search_memory(self, query: str, top_k: int = 3) -> list[Dict[str, Any]]:
-        """Search the shared vector memory via MemoryAgent."""
+    async def recall(self, query: str, top_k: int = 3) -> str:
+        """Search shared memory and get a summarized response via MemoryAgent."""
         if not self.network:
-            return []
+            return "No memory network available."
         req_id = await self.request_capability(
-            "search_memory", {"prompt": query, "top_k": top_k}
+            "add_to_memory", {"query": query, "top_k": top_k}
         )
         result = await self.network.wait_for_response(req_id)
-        if isinstance(result, list):
-            return result
-        return []
-
-    async def query_memory(
-        self,
-        memory_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
-    ) -> list[Dict[str, Any]]:
-        """Query the shared vector memory via MemoryAgent."""
-        if not self.network:
-            return []
-        req_id = await self.request_capability(
-            "query_memory", {"memory_id": memory_id, "metadata": metadata, "limit": limit}
-        )
-        result = await self.network.wait_for_response(req_id)
-        if isinstance(result, list):
-            return result
-        return []
+        if isinstance(result, dict):
+            return result.get("response", "No memories found.")
+        return "No memories found."
 
     def update_profile(self, **fields: Any) -> None:
         """Update the agent's profile in-place."""

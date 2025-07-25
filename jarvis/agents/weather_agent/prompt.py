@@ -28,7 +28,7 @@ def get_weather_system_prompt() -> str:
     LOCATION HANDLING:
     - If user asks about weather without specifying a location, ask them which city they want weather for
     - NEVER use "current location" as a location parameter - always use specific city names
-    - If location is unclear, use the search_locations tool to find valid options
+    - If location is unclear, use the search_locations_for_weather_service tool to find valid options
     - Default to major cities if user is vague (e.g., "Chicago" for general US queries)
 
     TOOL USAGE GUIDELINES:

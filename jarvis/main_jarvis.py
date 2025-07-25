@@ -25,6 +25,7 @@ from .profile import AgentProfile
 from .services.vector_memory import VectorMemoryService
 from .services.calendar_service import CalendarService
 from .services.canvas_service import CanvasService  # ← NEW
+from .agents.canvas import CanvasAgent
 from .night_agents import (
     NightAgent,
     TriggerPhraseSuggesterAgent,
@@ -414,28 +415,17 @@ class JarvisSystem:
             target = classification["target_agent"]
             proto = classification.get("protocol_name")
             cap = classification.get("capability")
-            args = classification.get("args", {})
 
             self.logger.log(
                 "INFO",
                 "Routing after NLU",
-                f"intent={intent}, target={target}, cap={cap}, proto={proto}, args={args}",
+                f"intent={intent}, target={target}, cap={cap}, proto={proto}",
             )
 
             # 4) Route to the appropriate agent
             if intent == "perform_capability" and cap:
                 request_id = str(uuid.uuid4())
                 payload = {"prompt": user_input}
-                if args:
-                    payload.update(args)
-                if cap == "store_memory":
-                    cmd = args.get("memory_data", user_input)
-                    meta = (
-                        {"type": args.get("memory_type")}
-                        if args.get("memory_type")
-                        else {}
-                    )
-                    payload = {"prompt": cmd, "metadata": meta}
                 async with tracker.timer(
                     "agent_response", metadata={"agent": target or cap}
                 ):
@@ -472,69 +462,6 @@ class JarvisSystem:
                         user_input, tz_name
                     )
 
-            if intent == "run_protocol":
-                run_id = str(uuid.uuid4())
-                async with tracker.timer(
-                    "protocol_execution", metadata={"protocol": proto}
-                ):
-                    await self.network.request_capability(
-                        from_agent=self.nlu_agent.name,
-                        capability="run_protocol",
-                        data={"protocol_name": proto, "args": args},
-                        request_id=run_id,
-                        allowed_agents=allowed_agents,
-                    )
-                    result = await self.network.wait_for_response(run_id)
-                return {"response": result}
-
-            if intent == "define_protocol":
-                define_id = str(uuid.uuid4())
-                async with tracker.timer(
-                    "agent_response", metadata={"agent": "nlu_define"}
-                ):
-                    await self.network.request_capability(
-                        from_agent=self.nlu_agent.name,
-                        capability="define_protocol",
-                        data=args,
-                        request_id=define_id,
-                        allowed_agents=allowed_agents,
-                    )
-                    result = await self.network.wait_for_response(define_id)
-                return {"response": result}
-
-            if intent == "ask_about_protocol":
-                desc_id = str(uuid.uuid4())
-                async with tracker.timer(
-                    "agent_response", metadata={"agent": "nlu_describe"}
-                ):
-                    await self.network.request_capability(
-                        from_agent=self.nlu_agent.name,
-                        capability="describe_protocol",
-                        data={"protocol_name": proto},
-                        request_id=desc_id,
-                        allowed_agents=allowed_agents,
-                    )
-                    result = await self.network.wait_for_response(desc_id)
-                return {"response": result}
-
-            if intent == "chat":
-                define_id = str(uuid.uuid4())
-                payload = {"prompt": user_input}
-                async with tracker.timer(
-                    "agent_response", metadata={"agent": target or "chat"}
-                ):
-                    await self.network.request_capability(
-                        from_agent=None,
-                        capability=cap,
-                        data=payload,
-                        request_id=define_id,
-                        allowed_agents=allowed_agents,
-                    )
-                    result = await self.network.wait_for_response(define_id)
-
-                return {"response": result}
-
-            # fallback
             return {"response": "Sorry, I didn't understand that."}
         finally:
             if new_tracker:

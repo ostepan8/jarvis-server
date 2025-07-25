@@ -89,7 +89,7 @@ __all__ = [
 #         LOCATION HANDLING:
 #         - If user asks about weather without specifying a location, ask them which city they want weather for
 #         - NEVER use "current location" as a location parameter - always use specific city names
-#         - If location is unclear, use the search_locations tool to find valid options
+#         - If location is unclear, use the search_locations_for_weather_service tool to find valid options
 #         - Default to major cities if user is vague (e.g., "Chicago" for general US queries)
 
 #         TOOL USAGE GUIDELINES:
@@ -195,7 +195,7 @@ __all__ = [
 #             {
 #                 "type": "function",
 #                 "function": {
-#                     "name": "search_locations",
+#                     "name": "search_locations_for_weather_service",
 #                     "description": "Search for location names when user input is unclear",
 #                     "parameters": {
 #                         "type": "object",
@@ -234,7 +234,7 @@ __all__ = [
 #             "get_weather_forecast": self._get_weather_forecast,
 #             "compare_weather_locations": self._compare_weather_locations,
 #             "get_weather_recommendations": self._get_weather_recommendations,
-#             "search_locations": self._search_locations,
+#             "search_locations_for_weather_service": self._search_locations_for_weather_service,
 #             "get_air_quality": self._get_air_quality,
 #         }
 
@@ -646,7 +646,7 @@ __all__ = [
 #         except Exception as e:
 #             return {"error": f"Could not get recommendations: {str(e)}"}
 
-#     def _search_locations(self, query: str) -> Dict[str, Any]:
+#     def _search_locations_for_weather_service(self, query: str) -> Dict[str, Any]:
 #         """Search for locations matching the query."""
 #         try:
 #             response = asyncio.run(

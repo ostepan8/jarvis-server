@@ -153,7 +153,6 @@ __all__ = [
 #             "find_free_time_slots",
 #             "check_scheduling_conflicts",
 #             "analyze_calendar_patterns",
-#             "find_meeting_times",
 #             # Calendar management
 #             "manage_event_categories",
 #             "restore_deleted_appointments",
