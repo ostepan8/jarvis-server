@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover - optional dependency may be missing
     create_collaborative_jarvis = None
 from .protocols import Protocol, ProtocolStep
 from .protocols.registry import ProtocolRegistry
+from .registry import BaseRegistry, FunctionRegistry
 from .protocols.executor import ProtocolExecutor
 from .protocols.builder import create_from_file
 from .constants import (
@@ -49,6 +50,8 @@ __all__ = [
     "Protocol",
     "ProtocolStep",
     "ProtocolRegistry",
+    "BaseRegistry",
+    "FunctionRegistry",
     "ProtocolExecutor",
     "create_from_file",
     "DEFAULT_PORT",

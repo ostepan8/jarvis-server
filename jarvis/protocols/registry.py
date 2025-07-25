@@ -9,10 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 
 from ..logger import JarvisLogger
+from ..registry import BaseRegistry
 from .models import Protocol, ProtocolStep, ProtocolResponse
 
 
-class ProtocolRegistry:
+class ProtocolRegistry(BaseRegistry[Protocol]):
     """Stores and retrieves Protocol definitions using SQLite."""
 
     def __init__(
@@ -23,7 +24,9 @@ class ProtocolRegistry:
         self.conn: sqlite3.Connection = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._ensure_table()
-        self.protocols: Dict[str, Protocol] = {}
+        super().__init__({})
+        # Alias for backward compatibility
+        self.protocols = self._items
         self.load()
 
     def _ensure_table(self) -> None:
