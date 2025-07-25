@@ -9,6 +9,7 @@ from .protocol_agent import ProtocolAgent
 from .software_engineering_agent import SoftwareEngineeringAgent
 from .weather_agent import WeatherAgent
 from .memory_agent import MemoryAgent
+from .chat_agent import ChatAgent
 
 # from .canvas import CanvasAgent
 
@@ -22,5 +23,6 @@ __all__ = [
     "SoftwareEngineeringAgent",
     "WeatherAgent",
     "MemoryAgent",
+    "ChatAgent",
     # "CanvasAgent",
 ]
