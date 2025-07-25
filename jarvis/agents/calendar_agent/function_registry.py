@@ -1,14 +1,15 @@
 # jarvis/agents/calendar_agent/function_registry.py
-from typing import Dict, Callable, Any, Set
+from typing import Dict, Callable
 from ...services.calendar_service import CalendarService
+from ...registry import FunctionRegistry
 
 
-class CalendarFunctionRegistry:
+class CalendarFunctionRegistry(FunctionRegistry):
     """Unified registry for calendar functions and capabilities"""
 
     def __init__(self, calendar_service: CalendarService):
         self.calendar_service = calendar_service
-        self._function_map = self._build_function_map()
+        super().__init__(self._build_function_map())
 
     def _build_function_map(self) -> Dict[str, Callable]:
         """Build the mapping of function names to calendar service methods"""
@@ -90,31 +91,3 @@ class CalendarFunctionRegistry:
             "check_busy_days": self.calendar_service.get_busy_days,
         }
 
-    @property
-    def functions(self) -> Dict[str, Callable]:
-        """Get the function mapping"""
-        return self._function_map
-
-    @property
-    def capabilities(self) -> Set[str]:
-        """Get capabilities as a set of all function names"""
-        return set(self._function_map.keys())
-
-    def get_function(self, function_name: str) -> Callable | None:
-        """Get a specific function by name"""
-        return self._function_map.get(function_name)
-
-    def has_function(self, function_name: str) -> bool:
-        """Check if a function exists"""
-        return function_name in self._function_map
-
-    def add_function(self, name: str, func: Callable) -> None:
-        """Add a new function to the registry"""
-        self._function_map[name] = func
-
-    def remove_function(self, name: str) -> bool:
-        """Remove a function from the registry"""
-        if name in self._function_map:
-            del self._function_map[name]
-            return True
-        return False
