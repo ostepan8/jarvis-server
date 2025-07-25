@@ -25,7 +25,6 @@ from .profile import AgentProfile
 from .services.vector_memory import VectorMemoryService
 from .services.calendar_service import CalendarService
 from .services.canvas_service import CanvasService  # ← NEW
-from .agents.canvas import CanvasAgent
 from .night_agents import (
     NightAgent,
     TriggerPhraseSuggesterAgent,
@@ -34,7 +33,6 @@ from .night_agents import (
 from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
-from .agents.message import Message
 from .protocols.registry import ProtocolRegistry
 from .protocols.executor import ProtocolExecutor
 from .protocols.loggers import ProtocolUsageLogger
@@ -565,8 +563,6 @@ class JarvisSystem:
             return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
 
         response_cfg = protocol.response
-        print(protocol, "RESPONSE CFG")
-        print(results, "RESULTS")
 
         # Default fallback
         if response_cfg is None:
@@ -632,15 +628,6 @@ class JarvisSystem:
             return message.content
 
         return ""
-
-    def _format_calendar_response(self, results: Dict[str, Any]) -> str:
-        """Format calendar-specific responses"""
-        print(results, "RESULTS")
-        # Extract calendar data from results
-        for step_id, result in results.items():
-            if isinstance(result, dict) and "response" in result:
-                return result["response"]
-        return "Calendar information retrieved, sir."
 
     def get_available_commands(
         self, allowed_agents: set[str] | None = None
