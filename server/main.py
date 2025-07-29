@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
         jarvis_system = JarvisSystem(config)
         await jarvis_system.initialize()
         app.state.jarvis_system = jarvis_system
+        app.state.user_systems = {}
 
         # Initialize database
         app.state.auth_db = init_database()

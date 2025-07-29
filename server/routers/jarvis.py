@@ -11,6 +11,7 @@ from .agents import (
 from ..models import JarvisRequest
 from ..dependencies import (
     get_jarvis,
+    get_user_jarvis,
     get_user_allowed_agents,
     get_current_user,
     get_auth_db,
@@ -25,7 +26,7 @@ router = APIRouter()
 async def jarvis(
     req: JarvisRequest,
     request: Request,
-    jarvis_system: JarvisSystem = Depends(get_jarvis),
+    jarvis_system: JarvisSystem = Depends(get_user_jarvis),
     allowed: set[str] = Depends(get_user_allowed_agents),
     current_user: dict = Depends(get_current_user),
     db=Depends(get_auth_db),

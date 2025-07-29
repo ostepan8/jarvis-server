@@ -22,6 +22,7 @@ Additional Python packages used by the project:
 - `chromadb`
 - `passlib[bcrypt]`
 - `PyJWT`
+- `cryptography`
 
 ## Overview
 - **Language**: Python 3.11+

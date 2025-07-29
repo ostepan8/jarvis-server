@@ -152,7 +152,11 @@ class JarvisSystem:
         self.network.register_agent(self.chat_agent)
 
     def _create_weather_agent(self, ai_client: BaseAIClient) -> None:
-        weather_key = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
+        weather_key = (
+            self.config.weather_api_key
+            or os.getenv("WEATHER_API_KEY")
+            or os.getenv("OPENWEATHER_API_KEY")
+        )
         try:
             self.weather_agent = WeatherAgent(
                 api_key=weather_key, logger=self.logger, ai_client=ai_client
@@ -167,8 +171,12 @@ class JarvisSystem:
 
     def _create_lights_agent(self, ai_client: BaseAIClient) -> None:
         load_dotenv()
-        bridge_ip = os.getenv("HUE_BRIDGE_IP")
-        self.lights_agent = PhillipsHueAgent(ai_client=ai_client, bridge_ip=bridge_ip)
+        bridge_ip = self.config.hue_bridge_ip or os.getenv("HUE_BRIDGE_IP")
+        self.lights_agent = PhillipsHueAgent(
+            ai_client=ai_client,
+            bridge_ip=bridge_ip,
+            username=self.config.hue_username,
+        )
         self.network.register_agent(self.lights_agent)
 
     def _create_software_agent(self, ai_client: BaseAIClient) -> None:

@@ -48,6 +48,7 @@ async def test_protocol_run_disallowed_agent(tmp_path):
         return {"other"}
 
     server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server.app.dependency_overrides[server.get_user_jarvis] = override_get_jarvis
     server.app.dependency_overrides[get_user_allowed_agents] = override_allowed
 
     proto = Protocol(
@@ -97,6 +98,7 @@ async def test_voice_trigger_disallowed_agent(tmp_path):
         return {"other"}
 
     server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server.app.dependency_overrides[server.get_user_jarvis] = override_get_jarvis
     server.app.dependency_overrides[get_user_allowed_agents] = override_allowed
 
     server.app.router.on_startup.clear()
