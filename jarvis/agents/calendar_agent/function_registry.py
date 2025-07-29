@@ -20,8 +20,8 @@ class CalendarFunctionRegistry(FunctionRegistry):
             "get_today_events": self.calendar_service.get_today_events,
             "get_tomorrow_events": self.calendar_service.get_tomorrow_events,
             "get_events_by_date": self.calendar_service.get_events_by_date,
-            "get_week_events": self.calendar_service.get_week_events,
             "get_month_events": self.calendar_service.get_month_events,
+            "get_week_schedule": self.calendar_service.get_week_events,
             # Search and filtering
             "search_events": self.calendar_service.search_events,
             "get_events_in_range": self.calendar_service.get_events_in_range,
@@ -78,8 +78,5 @@ class CalendarFunctionRegistry(FunctionRegistry):
             "check_scheduling_conflicts": self.calendar_service.check_conflicts,
             "analyze_calendar_patterns": self.calendar_service.get_event_stats,
             "manage_event_categories": self.calendar_service.get_categories,
-            "restore_deleted_appointments": self.calendar_service.restore_event,
             "get_today_schedule": self.calendar_service.get_today_events,
-            "get_week_schedule": self.calendar_service.get_week_events,
-            "get_month_schedule": self.calendar_service.get_month_events,
         }
