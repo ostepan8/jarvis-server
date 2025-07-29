@@ -44,6 +44,20 @@ def init_database() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_configs (
+            user_id INTEGER PRIMARY KEY,
+            openai_api_key TEXT,
+            anthropic_api_key TEXT,
+            calendar_api_url TEXT,
+            weather_api_key TEXT,
+            hue_bridge_ip TEXT,
+            hue_username TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
     conn.commit()
     return conn
 
@@ -161,4 +175,72 @@ def set_user_profile(db: sqlite3.Connection, user_id: int, profile: dict) -> Non
                 values,
             )
 
+    db.commit()
+
+
+def get_user_config(db: sqlite3.Connection, user_id: int) -> dict:
+    """Return decrypted config values for a user."""
+    fields = [
+        "openai_api_key",
+        "anthropic_api_key",
+        "calendar_api_url",
+        "weather_api_key",
+        "hue_bridge_ip",
+        "hue_username",
+    ]
+    cur = db.execute(
+        f"SELECT {', '.join(fields)} FROM user_configs WHERE user_id=?",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {}
+    from .crypto import decrypt
+
+    sensitive = {
+        "openai_api_key",
+        "anthropic_api_key",
+        "weather_api_key",
+        "hue_username",
+    }
+    result = {}
+    for field, value in zip(fields, row):
+        if value is None:
+            result[field] = None
+        elif field in sensitive:
+            result[field] = decrypt(value)
+        else:
+            result[field] = value
+    return result
+
+
+def set_user_config(db: sqlite3.Connection, user_id: int, config: dict) -> None:
+    """Insert or update user configuration, encrypting sensitive fields."""
+    if not config:
+        return
+
+    from .crypto import encrypt
+
+    sensitive = {
+        "openai_api_key",
+        "anthropic_api_key",
+        "weather_api_key",
+        "hue_username",
+    }
+
+    fields = []
+    values = []
+    for field, value in config.items():
+        if field in sensitive and value is not None:
+            value = encrypt(value)
+        fields.append(field)
+        values.append(value)
+    placeholders = ", ".join("?" for _ in fields)
+    updates = ", ".join(f"{f}=excluded.{f}" for f in fields)
+    db.execute(
+        f"INSERT INTO user_configs (user_id, {', '.join(fields)}) "
+        f"VALUES (?, {placeholders}) "
+        f"ON CONFLICT(user_id) DO UPDATE SET {updates}",
+        [user_id] + values,
+    )
     db.commit()

@@ -42,6 +42,7 @@ async def test_user_profile_endpoints(tmp_path):
         return jarvis
 
     server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server.app.dependency_overrides[server.get_user_jarvis] = override_get_jarvis
 
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

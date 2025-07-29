@@ -42,6 +42,7 @@ async def test_run_protocol_endpoint(tmp_path):
         return jarvis
 
     server.app.dependency_overrides[server.get_jarvis] = override_get_jarvis
+    server.app.dependency_overrides[server.get_user_jarvis] = override_get_jarvis
     server.app.dependency_overrides[get_user_allowed_agents] = lambda: {"dummy"}
 
     proto = Protocol(

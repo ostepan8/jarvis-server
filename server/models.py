@@ -35,3 +35,16 @@ class UserProfile(BaseModel):
 
 class UserProfileUpdate(UserProfile):
     pass
+
+
+class UserConfig(BaseModel):
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    calendar_api_url: Optional[str] = None
+    weather_api_key: Optional[str] = None
+    hue_bridge_ip: Optional[str] = None
+    hue_username: Optional[str] = None
+
+
+class UserConfigUpdate(UserConfig):
+    pass

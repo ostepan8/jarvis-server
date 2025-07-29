@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from ..dependencies import get_current_user, get_auth_db, get_user_allowed_agents, get_jarvis
+from ..dependencies import (
+    get_current_user,
+    get_auth_db,
+    get_user_allowed_agents,
+    get_jarvis,
+)
 from ..database import (
     set_user_agent_permissions,
     get_user_agent_permissions,
     get_user_profile,
     set_user_profile,
+    get_user_config,
+    set_user_config,
 )
-from ..models import UserProfile, UserProfileUpdate
+from ..models import (
+    UserProfile,
+    UserProfileUpdate,
+    UserConfig,
+    UserConfigUpdate,
+)
 from jarvis import JarvisSystem
 
 router = APIRouter()
@@ -70,4 +82,23 @@ async def update_my_profile(
     jarvis.user_profiles[current_user["id"]] = jarvis.chat_agent.profile.__class__(
         **profile
     )
+    return {"success": True}
+
+
+@router.get("/me/config", response_model=UserConfig)
+async def get_my_config(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_auth_db),
+):
+    config = get_user_config(db, current_user["id"])
+    return config or {}
+
+
+@router.post("/me/config")
+async def update_my_config(
+    body: UserConfigUpdate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_auth_db),
+):
+    set_user_config(db, current_user["id"], body.dict(exclude_unset=True))
     return {"success": True}

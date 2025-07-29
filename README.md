@@ -24,6 +24,7 @@ Create a `.env` file or export the following variables before running the server
 - `CALENDAR_API_URL` – base URL of the calendar API (defaults to `http://localhost:8080`)
 - `REPO_PATH` – path to the repository used by the SoftwareEngineeringAgent (defaults to `.`)
 - `WEATHER_API_KEY` – API key for OpenWeatherMap used by `WeatherAgent`
+- `CONFIG_SECRET` – 32-byte base64 key used to encrypt user configuration
 
 ## Running the server
 
@@ -62,6 +63,8 @@ Use the following endpoints to manage your profile:
 
 - `GET /users/me/profile` – retrieve the current profile data.
 - `POST /users/me/profile` – update profile fields by sending any subset of the profile attributes.
+- `GET /users/me/config` – fetch your stored API keys and service settings.
+- `POST /users/me/config` – update any of those configuration values.
 
 When a `/jarvis` request is processed, the stored profile is included in the request
 metadata so agents can tailor their output to the user.
