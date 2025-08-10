@@ -9,10 +9,7 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...logger import JarvisLogger
 from ...ai_clients.base import BaseAIClient
-from ...services.aider_service.aider_service import (
-    AiderService,
-    create_aider_service,
-)
+
 from .tools import code, testing, git, github, filesystem, memory
 from .tools.helpers import run_service
 
@@ -107,88 +104,88 @@ class SoftwareEngineeringAgent(NetworkAgent):
         """High-level capabilities that match natural user requests."""
         return {"aider_software_agent_command"}
 
-    async def _send_to_aider(self, command: str) -> str:
-        """Send command to Aider and return clean response."""
-        try:
-            self.logger.log("INFO", f"Sending to Aider: {command}")
-            enhanced_command = (
-                f"{command}. Please proceed without asking for confirmation."
-            )
+    # async def _send_to_aider(self, command: str) -> str:
+    #     """Send command to Aider and return clean response."""
+    #     try:
+    #         self.logger.log("INFO", f"Sending to Aider: {command}")
+    #         enhanced_command = (
+    #             f"{command}. Please proceed without asking for confirmation."
+    #         )
 
-            result = await run_service(
-                self.service.aider.send_message,
-                repo_path=self.repo_path,
-                message=command,
-                files=[],
-            )
+    #         result = await run_service(
+    #             self.service.aider.send_message,
+    #             repo_path=self.repo_path,
+    #             message=command,
+    #             files=[],
+    #         )
 
-            if (
-                isinstance(result, dict)
-                and result.get("success")
-                and result.get("stdout")
-            ):
-                # Clean up the Aider output - remove the startup junk
-                stdout = result["stdout"]
+    #         if (
+    #             isinstance(result, dict)
+    #             and result.get("success")
+    #             and result.get("stdout")
+    #         ):
+    #             # Clean up the Aider output - remove the startup junk
+    #             stdout = result["stdout"]
 
-                # Split by lines and find where the actual response starts
-                lines = stdout.split("\n")
+    #             # Split by lines and find where the actual response starts
+    #             lines = stdout.split("\n")
 
-                # Skip Aider startup lines (the ones with dashes, version info, etc.)
-                start_idx = 0
-                for i, line in enumerate(lines):
-                    if line.strip() and not any(
-                        skip in line
-                        for skip in [
-                            "────",
-                            "Using gpt-",
-                            "Aider v",
-                            "Main model:",
-                            "Weak model:",
-                            "Repo-map:",
-                            "Tokens:",
-                            "Cost:",
-                        ]
-                    ):
-                        start_idx = i
-                        break
+    #             # Skip Aider startup lines (the ones with dashes, version info, etc.)
+    #             start_idx = 0
+    #             for i, line in enumerate(lines):
+    #                 if line.strip() and not any(
+    #                     skip in line
+    #                     for skip in [
+    #                         "────",
+    #                         "Using gpt-",
+    #                         "Aider v",
+    #                         "Main model:",
+    #                         "Weak model:",
+    #                         "Repo-map:",
+    #                         "Tokens:",
+    #                         "Cost:",
+    #                     ]
+    #                 ):
+    #                     start_idx = i
+    #                     break
 
-                # Join the actual response lines
-                clean_response = "\n".join(lines[start_idx:]).strip()
+    #             # Join the actual response lines
+    #             clean_response = "\n".join(lines[start_idx:]).strip()
 
-                # Remove any trailing token/cost info
-                clean_lines = []
-                for line in clean_response.split("\n"):
-                    if not any(skip in line for skip in ["Tokens:", "Cost:"]):
-                        clean_lines.append(line)
+    #             # Remove any trailing token/cost info
+    #             clean_lines = []
+    #             for line in clean_response.split("\n"):
+    #                 if not any(skip in line for skip in ["Tokens:", "Cost:"]):
+    #                     clean_lines.append(line)
 
-                return "\n".join(clean_lines).strip()
+    #             return "\n".join(clean_lines).strip()
 
-            else:
-                return result.get("error_message", "No response from Aider")
+    #         else:
+    #             return result.get("error_message", "No response from Aider")
 
-        except Exception as exc:
-            self.logger.log("ERROR", f"Aider failed: {str(exc)}")
-            return f"Error: {str(exc)}"
+    #     except Exception as exc:
+    #         self.logger.log("ERROR", f"Aider failed: {str(exc)}")
+    #         return f"Error: {str(exc)}"
 
-    async def _handle_capability_request(self, message: Message) -> None:
-        """Handle all capability requests by sending to Aider."""
-        command = message.content.get("data", {}).get("prompt", "")
+    # async def _handle_capability_request(self, message: Message) -> None:
+    #     """Handle all capability requests by sending to Aider."""
+    #     command = message.content.get("data", {}).get("prompt", "")
 
-        if not command:
-            await self.send_error(
-                message.from_agent, "No command provided", message.request_id
-            )
-            return
+    #     if not command:
+    #         await self.send_error(
+    #             message.from_agent, "No command provided", message.request_id
+    #         )
+    #         return
 
-        # Send directly to Aider - no modifications, no logic
-        response = await self._send_to_aider(command)
+    #     # Send directly to Aider - no modifications, no logic
+    #     response = await self._send_to_aider(command)
 
-        await self.send_capability_response(
-            message.from_agent, {"response": response}, message.request_id, message.id
-        )
+    #     await self.send_capability_response(
+    #         message.from_agent, {"response": response}, message.request_id, message.id
+    #     )
 
-    async def _handle_capability_response(self, message: Message) -> None:
-        pass
+    # async def _handle_capability_response(self, message: Message) -> None:
+    #     pass
 
 
 # from __future__ import annotations

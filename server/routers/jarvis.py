@@ -42,9 +42,13 @@ async def jarvis(
         "user_id": current_user["id"],
         "profile": profile,
     }
-    return await jarvis_system.process_request(
+    response = await jarvis_system.process_request(
         req.command, tz_name, metadata, allowed_agents=allowed
     )
+    import json
+
+    print(json.dumps(response, indent=2))
+    return response
 
 
 @router.get("/agents")

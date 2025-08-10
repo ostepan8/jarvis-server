@@ -460,7 +460,8 @@ class JarvisSystem:
                     result = await self.network.wait_for_response(
                         request_id, timeout=self.config.response_timeout
                     )
-                return {"response": result}
+
+                return result
 
             if intent == "orchestrate_tasks":
                 async with tracker.timer(
