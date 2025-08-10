@@ -22,12 +22,12 @@ class SoftwareEngineeringAgent(NetworkAgent):
         ai_client: BaseAIClient,
         repo_path: str,
         logger: Optional[JarvisLogger] = None,
-        aider_service: Optional[AiderService] = None,
+        # aider_service: Optional[AiderService] = None,
     ) -> None:
         super().__init__("SoftwareEngineeringAgent", logger)
         self.ai_client = ai_client
         self.repo_path = repo_path
-        self.service = aider_service or create_aider_service()
+        # self.service = aider_service or create_aider_service()
         self.todos: List[str] = []
         self.private_capabilities: Set[str] = {
             "software_command",
