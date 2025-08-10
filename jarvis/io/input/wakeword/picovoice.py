@@ -23,7 +23,7 @@ class PicovoiceWakeWordListener(WakeWordListener):
         debug: bool = False,
         logger: JarvisLogger | None = None,
     ) -> None:
-        self.access_key = access_key or os.getenv("PORCUPINE_API_KEY")
+        self.access_key = access_key
         if not self.access_key:
             raise ValueError("Picovoice access key required")
         self.keyword_paths = list(keyword_paths or [])
@@ -32,7 +32,9 @@ class PicovoiceWakeWordListener(WakeWordListener):
 
         try:
             if not self.keyword_paths:
-                self._porcupine = pvporcupine.create(access_key=self.access_key, keywords=["jarvis"])
+                self._porcupine = pvporcupine.create(
+                    access_key=self.access_key, keywords=["jarvis"]
+                )
             else:
                 self._porcupine = pvporcupine.create(
                     access_key=self.access_key, keyword_paths=self.keyword_paths
@@ -81,7 +83,9 @@ class PicovoiceWakeWordListener(WakeWordListener):
                                     self.logger.log("DEBUG", "Wake word detected")
                                 break
                         except Exception as e:
-                            self.logger.log("ERROR", "Error during wake word detection", str(e))
+                            self.logger.log(
+                                "ERROR", "Error during wake word detection", str(e)
+                            )
                             break
             except Exception as e:
                 self.logger.log("ERROR", "Stream context error", str(e))

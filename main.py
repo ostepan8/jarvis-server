@@ -121,7 +121,7 @@ async def run_voice() -> None:
 
     # Initialize components
     wake_listener = PicovoiceWakeWordListener(
-        access_key=os.getenv("PICOVOICE_ACCESS_KEY"),
+        access_key=os.getenv("PORCUPINE_API_KEY"),
         keyword_paths=(
             os.getenv("PICOVOICE_KEYWORD_PATHS", "").split(os.pathsep)
             if os.getenv("PICOVOICE_KEYWORD_PATHS")
