@@ -1,12 +1,8 @@
 from .base import TextToSpeechEngine
 from .mock import MockTTSEngine
+from .openai import OpenAITTSEngine
+from .elevenlabs import ElevenLabsTTSEngine
 
-try:  # optional heavy deps
-    from .openai import OpenAITTSEngine
-    from .elevenlabs import ElevenLabsTTSEngine
-except Exception:  # pragma: no cover - optional deps may be missing
-    OpenAITTSEngine = None
-    ElevenLabsTTSEngine = None
 
 __all__ = [
     "TextToSpeechEngine",
