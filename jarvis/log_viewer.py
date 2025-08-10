@@ -465,11 +465,10 @@ class LogViewerGUI:
                     # Write data
                     for item in self.tree.get_children():
                         values = self.tree.item(item)["values"]
-                        # Escape commas and quotes in CSV
-                        escaped_values = [
-                            f'"{str(v).replace('"', '""')}"' for v in values
-                        ]
+                        # Escape quotes in CSV by doubling them, then wrap in quotes
+                        escaped_values = ['"{}"'.format(str(v).replace('"', '""')) for v in values]
                         f.write(",".join(escaped_values) + "\n")
+
 
                 messagebox.showinfo("Export", f"Logs exported to {filename}")
                 self.update_status(f"Exported logs to {filename}")
