@@ -6,7 +6,8 @@ from .task import Task
 from .base import NetworkAgent
 from .agent_network import AgentNetwork
 from .protocol_agent import ProtocolAgent
-from .software_engineering_agent import SoftwareEngineeringAgent
+
+# from .software_engineering_agent import SoftwareEngineeringAgent
 from .weather_agent import WeatherAgent
 from .memory_agent import MemoryAgent
 from .chat_agent import ChatAgent
@@ -20,7 +21,7 @@ __all__ = [
     "NetworkAgent",
     "AgentNetwork",
     "ProtocolAgent",
-    "SoftwareEngineeringAgent",
+    # "SoftwareEngineeringAgent",
     "WeatherAgent",
     "MemoryAgent",
     "ChatAgent",

@@ -15,7 +15,8 @@ from .agents.agent_network import AgentNetwork
 from .agents.nlu_agent import NLUAgent
 from .agents.protocol_agent import ProtocolAgent
 from .agents.lights_agent import PhillipsHueAgent
-from .agents.software_engineering_agent import SoftwareEngineeringAgent
+
+# from .agents.software_engineering_agent import SoftwareEngineeringAgent
 from .agents.calendar_agent.agent import CollaborativeCalendarAgent
 from .agents.orchestrator_agent import OrchestratorAgent
 from .agents.weather_agent import WeatherAgent
@@ -65,7 +66,7 @@ class JarvisSystem:
         self.lights_agent: PhillipsHueAgent = None
         self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
-        self.software_agent: SoftwareEngineeringAgent | None = None
+        # self.software_agent: SoftwareEngineeringAgent | None = None
         self.vector_memory: VectorMemoryService | None = None
         self.user_profiles: dict[int, AgentProfile] = {}
 
@@ -181,10 +182,10 @@ class JarvisSystem:
 
     def _create_software_agent(self, ai_client: BaseAIClient) -> None:
         repo_path = self.config.repo_path
-        self.software_agent = SoftwareEngineeringAgent(
-            ai_client=ai_client, repo_path=repo_path, logger=self.logger
-        )
-        self.network.register_agent(self.software_agent)
+        # self.software_agent = SoftwareEngineeringAgent(
+        #     ai_client=ai_client, repo_path=repo_path, logger=self.logger
+        # )
+        # self.network.register_agent(self.software_agent)
 
     def _create_night_agents(self) -> None:
         self.night_controller = NightModeControllerAgent(self, self.logger)
