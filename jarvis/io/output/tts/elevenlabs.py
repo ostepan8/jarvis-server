@@ -30,7 +30,11 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
     async def speak(self, text: str, voice_id: Optional[str] = None) -> None:  # noqa: D401
         """Convert ``text`` to speech and play it."""
         voice = voice_id or self.default_voice
-        headers = {"xi-api-key": self.api_key, "Content-Type": "application/json"}
+        headers = {
+            "xi-api-key": self.api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/wav",
+        }
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}"
         tracker = get_tracker()
         try:
@@ -40,14 +44,28 @@ class ElevenLabsTTSEngine(TextToSpeechEngine):
                     metadata={"engine": "elevenlabs_tts", "voice": voice},
                 ):
                     response = await self.client.post(
-                        url, headers=headers, json={"text": text}
+                        url,
+                        headers=headers,
+                        params={"output_format": "pcm"},
+                        json={"text": text},
                     )
                     response.raise_for_status()
                     audio_bytes = response.content
             else:
-                response = await self.client.post(url, headers=headers, json={"text": text})
+                response = await self.client.post(
+                    url,
+                    headers=headers,
+                    params={"output_format": "pcm"},
+                    json={"text": text},
+                )
                 response.raise_for_status()
                 audio_bytes = response.content
+
+            content_type = response.headers.get("Content-Type", "")
+            if "audio/wav" not in content_type and "audio/x-wav" not in content_type:
+                raise ValueError(f"Unexpected content type: {content_type}")
+            if not audio_bytes.startswith(b"RIFF"):
+                raise ValueError("ElevenLabs TTS did not return WAV/PCM audio")
 
             if tracker and tracker.enabled:
                 async with tracker.timer(
