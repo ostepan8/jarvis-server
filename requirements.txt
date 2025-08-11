@@ -9,4 +9,6 @@ tzlocal
 motor
 phue
 colorama
+sounddevice
+soundfile
 

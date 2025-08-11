@@ -23,6 +23,10 @@ Additional Python packages used by the project:
 - `passlib[bcrypt]`
 - `PyJWT`
 - `cryptography`
+- `sounddevice`
+- `soundfile`
+
+`sounddevice` and `soundfile` depend on the system libraries PortAudio and libsndfile respectively. Ensure these libraries are installed in runtime environments.
 
 ## Overview
 - **Language**: Python 3.11+
