@@ -93,10 +93,12 @@ class JarvisBuilder:
         calendar_api_url: str = "http://localhost:8080",
         response_timeout: float = 60.0,
         intent_timeout: float = 5.0,
+        hue_bridge_ip_env: Optional[str] = "PHILLIPS_HUE_BRIDGE_IP",
         repo_path: str = ".",
     ) -> "JarvisBuilder":
         load_dotenv()
         api_key = os.getenv(api_key_env)
+        hue_bridge_ip = os.getenv(hue_bridge_ip_env)
         if not api_key:
             raise ValueError(f"Missing API key. Set {api_key_env} in your environment.")
 
@@ -107,6 +109,7 @@ class JarvisBuilder:
             response_timeout=response_timeout,
             repo_path=repo_path,
             intent_timeout=intent_timeout,
+            hue_bridge_ip=hue_bridge_ip,
         )
         b = JarvisBuilder(cfg)
         b._dotenv_loaded = True
