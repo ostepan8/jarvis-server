@@ -85,15 +85,7 @@ class JarvisSystem:
         self.night_controller = refs.get("night_controller")
         self.night_agents = refs.get("night_agents", [])
 
-        self.protocol_runtime = ProtocolRuntime(
-            self.network, self.logger, usage_logger=self.usage_logger
-        )
-        self.protocol_runtime.initialize(
-            load_protocol_directory,
-            Path(__file__).parent / "protocols" / "defaults" / "definitions",
-        )
-        self.protocol_registry = self.protocol_runtime.registry
-        self.voice_matcher = self.protocol_runtime.voice_matcher
+        self._setup_protocol_system(load_protocol_directory)
         await self._start_network()
 
         loaded = (
@@ -151,15 +143,20 @@ class JarvisSystem:
             return []
         return self.protocol_runtime.list_protocols(allowed_agents)
 
-    def _setup_protocol_system(self, load_protocol_directory: bool = False) -> None:
+    def _setup_protocol_system(
+        self,
+        load_protocol_directory: bool = False,
+        definition_dir: Path | None = None,
+    ) -> None:
         """Initialize the protocol runtime and related helpers."""
+        if definition_dir is None:
+            definition_dir = (
+                Path(__file__).parent / "protocols" / "defaults" / "definitions"
+            )
         self.protocol_runtime = ProtocolRuntime(
             self.network, self.logger, usage_logger=self.usage_logger
         )
-        self.protocol_runtime.initialize(
-            load_protocol_directory,
-            Path(__file__).parent / "protocols" / "defaults" / "definitions",
-        )
+        self.protocol_runtime.initialize(load_protocol_directory, definition_dir)
         self.protocol_registry = self.protocol_runtime.registry
         self.voice_matcher = self.protocol_runtime.voice_matcher
 
