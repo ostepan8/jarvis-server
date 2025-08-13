@@ -6,15 +6,42 @@ import json
 import threading
 from contextlib import contextmanager
 
-from ..core.constants import LOG_DB_PATH
+# Default SQLite database for logs.  Defined here to avoid importing
+# ``jarvis.core`` at module import time, which previously caused a
+# circular import when ``JarvisLogger`` was imported by modules that
+# themselves were loaded during ``jarvis.core`` initialization.
+# The central constant still lives in ``jarvis.core.constants`` but we
+# lazily import it in ``JarvisLogger.__init__`` if needed.
+DEFAULT_LOG_DB_PATH = "jarvis_logs.db"
 
 
 class JarvisLogger:
     """Thread-safe logger that writes to stdout and a SQLite database."""
 
     def __init__(
-        self, db_path: str = LOG_DB_PATH, log_level: int = logging.INFO
+        self, db_path: str | None = None, log_level: int = logging.INFO
     ) -> None:
+        """Create a new logger.
+
+        Parameters
+        ----------
+        db_path:
+            Path to the SQLite database used for log storage.  If ``None``,
+            the value from ``jarvis.core.constants.LOG_DB_PATH`` is used when
+            available, otherwise ``DEFAULT_LOG_DB_PATH`` is applied.  The lazy
+            import prevents circular imports during package initialization.
+        log_level:
+            Standard library logging level for console output.
+        """
+
+        if db_path is None:
+            try:  # Import lazily to avoid triggering jarvis.core import
+                from ..core.constants import LOG_DB_PATH  # type: ignore
+
+                db_path = LOG_DB_PATH
+            except Exception:
+                db_path = DEFAULT_LOG_DB_PATH
+
         self.db_path = db_path
         self.log_level = log_level
         self._lock = threading.RLock()  # Reentrant lock for thread safety
