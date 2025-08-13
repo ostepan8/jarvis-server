@@ -171,7 +171,9 @@ class JarvisBuilder:
         jarvis.night_agents = refs.get("night_agents", [])
 
         # Protocol runtime (matcher/executor) + optional file loading
-        jarvis._setup_protocol_system(self._opts.load_protocol_directory)
+        jarvis._setup_protocol_system(
+            load_protocol_directory=self._opts.load_protocol_directory
+        )
 
         # Start network
         await jarvis._start_network()
