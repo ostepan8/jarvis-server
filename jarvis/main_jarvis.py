@@ -26,7 +26,6 @@ from .profile import AgentProfile
 from .services.vector_memory import VectorMemoryService
 from .services.calendar_service import CalendarService
 from .services.canvas_service import CanvasService  # ← NEW
-from .agents.canvas import CanvasAgent
 from .night_agents import (
     NightAgent,
     TriggerPhraseSuggesterAgent,
@@ -588,87 +587,3 @@ class JarvisSystem:
             await self.usage_logger.close()
         self.logger.log("INFO", "Jarvis system shutdown complete")
         self.logger.close()
-
-
-# Example usage and demo
-async def demo():
-    load_dotenv()
-    config = {
-        "ai_provider": "openai",
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "calendar_api_url": "http://localhost:8080",
-    }
-
-    jarvis = JarvisSystem(config)
-    await jarvis.initialize()
-
-    from tzlocal import get_localzone_name
-
-    # Demo voice trigger
-    print("\n=== Testing Voice Trigger ===")
-    user_input = "blue lights"
-    print(f"User: {user_input}")
-    result = await jarvis.process_request(
-        user_input, get_localzone_name(), {}, allowed_agents=None
-    )
-    print(f"Jarvis: {result['response']}")
-    if "protocol_executed" in result:
-        print(f"(Executed via protocol: {result['protocol_executed']})")
-
-    print("\n=== Testing NLU Routing ===")
-    user_input = "What's on my calendar tomorrow?"
-    print(f"User: {user_input}")
-    result = await jarvis.process_request(
-        user_input, get_localzone_name(), {}, allowed_agents=None
-    )
-    print(f"Jarvis: {result['response']}")
-
-    print("\n=== Available Voice Commands ===")
-    commands = jarvis.get_available_commands()
-    for protocol, triggers in commands.items():
-        print(f"{protocol}: {', '.join(triggers)}")
-
-    await jarvis.shutdown()
-
-
-async def create_collaborative_jarvis(
-    api_key: Optional[str] = None,
-    repo_path: str = ".",
-    intent_timeout: float = 5.0,
-) -> JarvisSystem:
-    """
-    Create and initialize a JarvisSystem instance with default configuration.
-
-    Args:
-        api_key (Optional[str]): API key for the AI provider. If not provided, it will be loaded from environment variables.
-        repo_path (str): Path to the local repository used by the SoftwareEngineeringAgent.
-        intent_timeout (float): Seconds to wait for the NLU classification step before timing out.
-
-    Returns:
-        JarvisSystem: A fully initialized Jarvis system instance.
-    """
-    load_dotenv()
-    api_key = api_key or os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        raise ValueError(
-            "Missing API key for AI provider. Set OPENAI_API_KEY in your environment."
-        )
-
-    config = JarvisConfig(
-        ai_provider="openai",
-        api_key=api_key,
-        calendar_api_url="http://localhost:8080",
-        response_timeout=60.0,
-        repo_path=repo_path,
-        intent_timeout=intent_timeout,
-    )
-
-    jarvis = JarvisSystem(config)
-    await jarvis.initialize()
-    return jarvis
-
-
-if __name__ == "__main__":
-    # Run the demo
-    asyncio.run(demo())

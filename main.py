@@ -2,11 +2,14 @@ import argparse
 import asyncio
 import os
 from typing import Optional
-from dotenv import load_dotenv
 
-from jarvis.main_jarvis import create_collaborative_jarvis
+from dotenv import load_dotenv
 from tzlocal import get_localzone_name
 from colorama import Fore, Style, init as colorama_init
+
+# NEW: use the builder
+from jarvis.builder import JarvisBuilder
+
 from jarvis.io import (
     InputHandler,
     OutputHandler,
@@ -17,8 +20,24 @@ from jarvis.io.input.wakeword import PicovoiceWakeWordListener
 from jarvis.io.input import VoiceInputSystem
 from jarvis.io.output.tts import ElevenLabsTTSEngine
 
-# Load environment variables from .env file
+# Load environment variables from .env file (once)
 load_dotenv()
+
+
+async def build_jarvis():
+    """
+    Build a Jarvis instance using the new builder style.
+    Toggle features here as you like without touching the rest of main.
+    """
+    # Example toggles:
+    # builder = (JarvisBuilder.from_env()
+    #               .lights(True)
+    #               .weather(True)
+    #               .protocol_directory(True)
+    #               .night_agents(True))
+    builder = JarvisBuilder.from_env()
+    jarvis = await builder.build()
+    return jarvis
 
 
 async def _display_result(result: dict, output: OutputHandler) -> None:
@@ -51,7 +70,6 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
 
                 if isinstance(result_value, dict):
                     for key, value in result_value.items():
-                        # Truncate long values
                         str_value = str(value)
                         if len(str_value) > 100:
                             str_value = str_value[:97] + "..."
@@ -59,7 +77,6 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
                             f"    - {key}: {Fore.MAGENTA}{str_value}{Style.RESET_ALL}"
                         )
                 elif isinstance(result_value, list):
-                    # Limit number of items shown
                     shown_items = result_value[:5]
                     for item in shown_items:
                         str_item = str(item)
@@ -92,20 +109,22 @@ async def demo(
 ) -> None:
     colorama_init(autoreset=True)
 
-    jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
+    # NEW: build with the builder
+    jarvis = await build_jarvis()
     tz_name = get_localzone_name()
 
-    while True:
-        user_command = await input_handler.get_input("Jarvis> ")
-        if user_command.strip().lower() in {"exit", "quit"}:
-            break
+    try:
+        while True:
+            user_command = await input_handler.get_input("Jarvis> ")
+            if user_command.strip().lower() in {"exit", "quit"}:
+                break
 
-        result = await jarvis.process_request(
-            user_command, tz_name, {}, allowed_agents=None
-        )
-        await _display_result(result, output_handler)
-
-    await jarvis.shutdown()
+            result = await jarvis.process_request(
+                user_command, tz_name, {}, allowed_agents=None
+            )
+            await _display_result(result, output_handler)
+    finally:
+        await jarvis.shutdown()
 
 
 async def run_console() -> None:
@@ -115,8 +134,8 @@ async def run_console() -> None:
 
 async def run_voice() -> None:
     """Run the demo using wake word detection, speech recognition, and TTS."""
-
-    jarvis = await create_collaborative_jarvis(os.getenv("OPENAI_API_KEY"))
+    # NEW: build with the builder
+    jarvis = await build_jarvis()
     tz_name = get_localzone_name()
 
     # Initialize components
