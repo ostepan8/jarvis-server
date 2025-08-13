@@ -1,11 +1,9 @@
 # jarvis/main_network.py
 
 import asyncio
-import json
 import os
 from os import getenv
 import uuid
-import random
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
@@ -35,11 +33,8 @@ from .night_agents import (
 from .ai_clients import AIClientFactory, BaseAIClient
 from .logger import JarvisLogger
 from .config import JarvisConfig
-from .protocols.registry import ProtocolRegistry
-from .protocols.executor import ProtocolExecutor
 from .protocols.loggers import ProtocolUsageLogger
-from .protocols.voice_trigger import VoiceTriggerMatcher
-from .protocols.models import Protocol, ResponseMode
+from .protocols.runtime import ProtocolRuntime
 from .performance import PerfTracker, get_tracker
 
 
@@ -75,10 +70,10 @@ class JarvisSystem:
         self.night_agents: list[NightAgent] = []
         self.night_controller: NightModeControllerAgent | None = None
 
-        # Protocol system components
-        self.protocol_registry = ProtocolRegistry()
-        self.protocol_executor = None  # Will be initialized after network is ready
-        self.voice_matcher = None  # Will be initialized after protocols are loaded
+        # Protocol runtime
+        self.protocol_runtime: ProtocolRuntime | None = None
+        self.protocol_registry = None  # backward compatibility
+        self.voice_matcher = None  # backward compatibility
         self.usage_logger = ProtocolUsageLogger(
             mongo_uri=getenv("MONGO_URI", "mongodb://localhost:27017/"),
             db_name="protocals",
@@ -89,14 +84,27 @@ class JarvisSystem:
         ai_client = self._create_ai_client()
         await self._connect_usage_logger()
         self._register_agents(ai_client)
-        self._setup_protocol_system(load_protocol_directory)
+        self.protocol_runtime = ProtocolRuntime(
+            self.network, self.logger, usage_logger=self.usage_logger
+        )
+        self.protocol_runtime.initialize(
+            load_protocol_directory,
+            Path(__file__).parent / "protocols" / "defaults" / "definitions",
+        )
+        self.protocol_registry = self.protocol_runtime.registry
+        self.voice_matcher = self.protocol_runtime.voice_matcher
         await self._start_network()
 
+        loaded = (
+            len(self.protocol_runtime.registry.protocols)
+            if self.protocol_runtime
+            else 0
+        )
         self.logger.log(
             "INFO",
             "Jarvis system initialized",
             f"Active agents: {list(self.network.agents.keys())}, "
-            f"Loaded protocols: {len(self.protocol_registry.protocols)}",
+            f"Loaded protocols: {loaded}",
         )
 
     def _create_ai_client(self) -> BaseAIClient:
@@ -232,30 +240,11 @@ class JarvisSystem:
             "status": "active" if agent_name in self.network.agents else "inactive",
         }
 
-    def list_protocols(self, allowed_agents: set[str] | None = None) -> list[Protocol]:
-        """Return protocols whose required agents are available and allowed."""
-        available = set(self.network.agents.keys())
-        protocols = []
-        for proto in self.protocol_registry.protocols.values():
-            required = {step.agent for step in proto.steps}
-            if not required.issubset(available):
-                continue
-            if allowed_agents is not None and not required.issubset(allowed_agents):
-                continue
-            protocols.append(proto)
-        return protocols
-
-    def _setup_protocol_system(self, load_protocol_directory) -> None:
-        """Initialize protocol executor and load protocol definitions."""
-        self.protocol_executor = ProtocolExecutor(
-            self.network, self.logger, usage_logger=self.usage_logger
-        )
-
-        protocols_dir = Path(__file__).parent / "protocols" / "defaults" / "definitions"
-        if protocols_dir.exists():
-            self._load_protocols_from_directory(protocols_dir)
-
-        self.voice_matcher = VoiceTriggerMatcher(self.protocol_registry.protocols)
+    def list_protocols(self, allowed_agents: set[str] | None = None):
+        """Delegate to protocol runtime to list protocols."""
+        if not self.protocol_runtime:
+            return []
+        return self.protocol_runtime.list_protocols(allowed_agents)
 
     async def _start_network(self) -> None:
         await self.network.start()
@@ -273,29 +262,6 @@ class JarvisSystem:
         for agent in self.night_agents:
             agent.deactivate_capabilities()
             await agent.stop_background_tasks()
-
-    def _load_protocols_from_directory(self, directory: Path):
-        """Load all protocol definitions from JSON files in the directory"""
-        for json_file in directory.glob("*.json"):
-            try:
-                protocol = Protocol.from_file(json_file)
-                result = self.protocol_registry.register(protocol)
-                if result.get("success") is True:
-                    self.logger.log(
-                        "INFO",
-                        f"Loaded protocol: {protocol.name}",
-                        f"Triggers: {protocol.trigger_phrases}",
-                    )
-                elif result.get("success") is False:
-                    self.logger.log(
-                        "WARNING",
-                        f"Failed to register protocol: {protocol.name}.",
-                        result,
-                    )
-            except Exception as e:
-                self.logger.log(
-                    "ERROR", f"Failed to load protocol from {json_file}", str(e)
-                )
 
     async def process_request(
         self,
@@ -329,27 +295,20 @@ class JarvisSystem:
                 raise RuntimeError("System not initialized")
 
             if self.night_mode:
-                if self.voice_matcher:
-                    match_result = self.voice_matcher.match_command(user_input)
+                match_result = (
+                    self.protocol_runtime.try_match(user_input)
+                    if self.protocol_runtime
+                    else None
+                )
                 if not match_result or match_result["protocol"].name != "wake_up":
                     return {"response": "Jarvis is in maintenance mode"}
 
             # 1) First check for protocol matches (fast path)
-            match_result = None
-            if self.voice_matcher:
-                match_result = self.voice_matcher.match_command(user_input)
-
-            if not match_result:
-                # Fallback to registry for simple matching
-                matched_protocol = self.protocol_registry.find_matching_protocol(
-                    user_input
-                )
-                if matched_protocol:
-                    match_result = {
-                        "protocol": matched_protocol,
-                        "arguments": {},
-                        "matched_phrase": user_input,
-                    }
+            match_result = (
+                self.protocol_runtime.try_match(user_input)
+                if self.protocol_runtime
+                else None
+            )
 
             if match_result:
                 protocol = match_result["protocol"]
@@ -363,19 +322,14 @@ class JarvisSystem:
 
                 try:
                     async with tracker.timer(
-                        "protocol_execution",
-                        metadata={"protocol": protocol.name},
+                        "protocol_execution", metadata={"protocol": protocol.name}
                     ):
-                        results = await self.protocol_executor.run_protocol_with_match(
+                        response = await self.protocol_runtime.run_and_format(
                             match_result,
                             trigger_phrase=user_input,
                             metadata=metadata,
                             allowed_agents=allowed_agents,
                         )
-
-                    response = await self._format_protocol_response(
-                        protocol, results, arguments
-                    )
 
                     return {
                         "response": response,
@@ -479,105 +433,16 @@ class JarvisSystem:
                 tracker.save()
                 self.logger.log("INFO", "Performance summary", tracker.summary())
 
-    async def _format_protocol_response(
-        self,
-        protocol: Protocol,
-        results: Dict[str, Any],
-        arguments: Dict[str, Any] | None = None,
-    ) -> str:
-        """Format protocol execution results in Jarvis style"""
-        # Check if any step had an error
-        errors = []
-        successes = []
-
-        for step_id, result in results.items():
-            if isinstance(result, dict) and "error" in result:
-                errors.append(result["error"])
-            else:
-                successes.append(step_id)
-
-        if errors:
-            return f"I encountered some issues executing that command, sir. {'. '.join(errors)}"
-
-        response_cfg = protocol.response
-
-        # Default fallback
-        if response_cfg is None:
-            resp = f"{protocol.name} completed successfully, sir."
-            if arguments:
-                for k, v in arguments.items():
-                    resp = resp.replace(f"{{{k}}}", str(v))
-            return resp
-
-        if response_cfg.mode == ResponseMode.STATIC:
-            if not response_cfg.phrases:
-                return ""
-            resp = random.choice(response_cfg.phrases)
-            if arguments:
-                for k, v in arguments.items():
-                    resp = resp.replace(f"{{{k}}}", str(v))
-            return resp
-
-        if response_cfg.mode == ResponseMode.AI:
-            # Build comprehensive prompt with protocol and result context
-            base_prompt = response_cfg.prompt or ""
-
-            # Get current time for context
-            from datetime import datetime
-
-            current_time = datetime.now().strftime("%I:%M %p")  # 12-hour format
-            current_date = datetime.now().strftime("%Y-%m-%d")
-
-            # Create structured context for the AI
-            context_prompt = f"""You are Jarvis, Tony Stark's AI assistant. Your job is to communicate ONLY the actual results and information from the protocol execution to the user. Do not mention that data was "retrieved" or "fetched" - just communicate the actual content/results directly.
-
-    Protocol Data:
-    - Current Time: {current_time}
-    - Current Date: {current_date}
-    - Results: {json.dumps(results, indent=2)}
-    - User Arguments: {json.dumps(arguments or {}, indent=2)}
-
-    Instructions: {base_prompt}
-
-    IMPORTANT RULES:
-    1. Do NOT say things like "retrieved", "fetched", "successfully obtained", "data shows", etc.
-    2. Communicate the ACTUAL information/results directly to the user
-    3. Use Jarvis's polite, butler-like tone with "sir"
-    4. Focus on what the user actually needs to know from the results
-    5. Use 12-hour time format only
-    6. If there's no meaningful data to report, say so directly (e.g., "You have nothing scheduled today, sir")"""
-
-            # Replace argument placeholders in the base prompt
-            if arguments:
-                for k, v in arguments.items():
-                    context_prompt = context_prompt.replace(f"{{{k}}}", str(v))
-                    base_prompt = base_prompt.replace(f"{{{k}}}", str(v))
-
-            print("Full AI Prompt:", context_prompt)
-
-            if self.chat_agent is None:
-                return base_prompt
-
-            message, _ = await self.chat_agent.ai_client.weak_chat(
-                [{"role": "user", "content": context_prompt}],
-                [],
-            )
-            return message.content
-
-        return ""
 
     def get_available_commands(
         self, allowed_agents: set[str] | None = None
     ) -> Dict[str, List[str]]:
         """Get all available voice trigger commands organized by protocol."""
-        if not self.voice_matcher:
+        if not self.protocol_runtime:
             return {}
-
-        commands = {}
-        for protocol in self.list_protocols(allowed_agents=allowed_agents):
-            commands[protocol.name] = protocol.trigger_phrases
-
-        return commands
+        return self.protocol_runtime.get_available_commands(
+            allowed_agents
+        )
 
     async def shutdown(self):
         """Shutdown the system"""
