@@ -5,8 +5,8 @@ import sqlite3
 from typing import List, Optional, Set
 
 from .base import NightAgent
-from ..loggers.jarvis_logger import JarvisLogger
-from ..constants import LOG_DB_PATH
+from ..logging import JarvisLogger
+from ..core.constants import LOG_DB_PATH
 from ..agents.message import Message
 
 

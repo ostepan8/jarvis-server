@@ -1,7 +1,7 @@
 # jarvis/agents/calendar_agent/function_registry.py
 from typing import Dict, Callable
 from ...services.calendar_service import CalendarService
-from ...registry import FunctionRegistry
+from ...core.registry import FunctionRegistry
 
 
 class CalendarFunctionRegistry(FunctionRegistry):

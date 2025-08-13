@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 from .message import Message
 
 if TYPE_CHECKING:

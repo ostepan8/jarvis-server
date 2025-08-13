@@ -6,24 +6,24 @@ import uuid
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
-from .agents.agent_network import AgentNetwork
-from .agents.nlu_agent import NLUAgent
-from .agents.protocol_agent import ProtocolAgent
-from .agents.lights_agent import PhillipsHueAgent
-from .agents.orchestrator_agent import OrchestratorAgent
-from .agents.chat_agent import ChatAgent
+from ..agents.agent_network import AgentNetwork
+from ..agents.nlu_agent import NLUAgent
+from ..agents.protocol_agent import ProtocolAgent
+from ..agents.lights_agent import PhillipsHueAgent
+from ..agents.orchestrator_agent import OrchestratorAgent
+from ..agents.chat_agent import ChatAgent
 from .profile import AgentProfile
-from .services.vector_memory import VectorMemoryService
-from .services.calendar_service import CalendarService
-from .services.canvas_service import CanvasService  # ← NEW
-from .night_agents import NightAgent, NightModeControllerAgent
-from .ai_clients import AIClientFactory, BaseAIClient
-from .logger import JarvisLogger
+from ..services.vector_memory import VectorMemoryService
+from ..services.calendar_service import CalendarService
+from ..services.canvas_service import CanvasService  # ← NEW
+from ..night_agents import NightAgent, NightModeControllerAgent
+from ..ai_clients import AIClientFactory, BaseAIClient
+from ..logging import JarvisLogger
 from .config import JarvisConfig
-from .protocols.loggers import ProtocolUsageLogger
-from .protocols.runtime import ProtocolRuntime
-from .performance import PerfTracker, get_tracker
-from .agents.factory import AgentFactory
+from ..protocols.loggers import ProtocolUsageLogger
+from ..protocols.runtime import ProtocolRuntime
+from ..utils.performance import PerfTracker, get_tracker
+from ..agents.factory import AgentFactory
 
 
 class JarvisSystem:

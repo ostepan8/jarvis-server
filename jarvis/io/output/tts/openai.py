@@ -6,9 +6,9 @@ import os
 import openai
 
 from ...utils.audio import play_audio_bytes
-from ....logger import JarvisLogger
+from ....logging import JarvisLogger
 from .base import TextToSpeechEngine
-from ....performance import get_tracker
+from ....utils.performance import get_tracker
 
 
 class OpenAITTSEngine(TextToSpeechEngine):

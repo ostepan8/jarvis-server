@@ -9,8 +9,8 @@ import asyncio
 from .. import Protocol
 from ..registry import ProtocolRegistry
 from ..executor import ProtocolExecutor
-from ...main_jarvis import create_collaborative_jarvis
-from ...logger import JarvisLogger
+from ...core.system import create_collaborative_jarvis
+from ...logging import JarvisLogger
 
 
 def register_protocols_from_directory(

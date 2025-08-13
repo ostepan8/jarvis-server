@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Coroutine, Optional
 
 from ..agents.base import NetworkAgent
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 
 
 class NightAgent(NetworkAgent):

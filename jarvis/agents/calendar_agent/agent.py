@@ -8,7 +8,7 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...services.calendar_service import CalendarService
 from ...ai_clients import BaseAIClient
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from .function_registry import CalendarFunctionRegistry
 from .command_processor import CalendarCommandProcessor
 # Import the tools list explicitly from the tools module. Using

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from ..config import JarvisConfig
-from ..logger import JarvisLogger
+from ..core import JarvisConfig
+from ..logging import JarvisLogger
 from ..ai_clients import BaseAIClient
 from ..agents.agent_network import AgentNetwork
 from ..agents.nlu_agent import NLUAgent
@@ -21,7 +21,7 @@ from ..services.canvas_service import CanvasService
 from ..night_agents import NightAgent, TriggerPhraseSuggesterAgent, NightModeControllerAgent
 
 if TYPE_CHECKING:
-    from ..main_jarvis import JarvisSystem
+    from ..core import JarvisSystem
 
 
 class AgentFactory:

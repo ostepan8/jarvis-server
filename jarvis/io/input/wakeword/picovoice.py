@@ -8,7 +8,7 @@ import numpy as np
 import sounddevice as sd
 import pvporcupine
 
-from ....logger import JarvisLogger
+from ....logging import JarvisLogger
 from .base import WakeWordListener
 
 

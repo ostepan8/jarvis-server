@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 from openai import AsyncOpenAI
 
 from .base import BaseAIClient
-from ..performance import track_async
+from ..utils.performance import track_async
 
 
 class OpenAIClient(BaseAIClient):

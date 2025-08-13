@@ -5,12 +5,12 @@ import asyncio
 from functools import partial
 from typing import Any, Callable, Dict, Optional, Set
 
-from ..profile import AgentProfile
+from ..core.profile import AgentProfile
 from ..services.vector_memory import VectorMemoryService
 
 from .message import Message
 from .agent_network import AgentNetwork
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 
 
 class NetworkAgent:

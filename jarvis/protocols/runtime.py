@@ -4,7 +4,7 @@ import random
 from pathlib import Path
 from typing import Any, Dict
 
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 from ..agents.agent_network import AgentNetwork
 from .loggers import ProtocolUsageLogger
 from .models import Protocol, ResponseMode

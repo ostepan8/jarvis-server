@@ -1,8 +1,8 @@
 import asyncio
 import pytest
 
-from jarvis.main_jarvis import JarvisSystem
-from jarvis.config import JarvisConfig
+from jarvis.core import JarvisSystem
+from jarvis.core import JarvisConfig
 from jarvis.agents.base import NetworkAgent
 
 class SilentNLUAgent(NetworkAgent):

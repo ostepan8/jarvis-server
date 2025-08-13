@@ -17,7 +17,7 @@ class FeatureFlags:
 
 @dataclass
 class JarvisConfig:
-    """Configuration options for :class:`~jarvis.main_jarvis.JarvisSystem`."""
+    """Configuration options for :class:`~jarvis.core.system.JarvisSystem`."""
 
     ai_provider: str = "openai"
     api_key: Optional[str] = None

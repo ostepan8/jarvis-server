@@ -87,7 +87,7 @@ Input and output handling is implemented via pluggable classes in
 Agent activity is stored in `jarvis_logs.db`. Launch the interactive viewer with:
 
 ```bash
-python -m jarvis.log_viewer
+python -m jarvis.logging.log_viewer
 ```
 
 ## Default protocols
@@ -130,7 +130,7 @@ Manually executing this protocol:
 ```python
 from jarvis.protocols import ProtocolExecutor, Protocol
 from jarvis.agents.agent_network import AgentNetwork
-from jarvis.logger import JarvisLogger
+from jarvis.logging import JarvisLogger
 
 network = AgentNetwork()
 # register agents with `intent_map` entries...

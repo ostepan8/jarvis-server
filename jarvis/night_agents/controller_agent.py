@@ -4,10 +4,10 @@ from typing import Any, Optional, Set, TYPE_CHECKING
 
 from ..agents.base import NetworkAgent
 from ..agents.message import Message
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 
 if TYPE_CHECKING:
-    from ..main_jarvis import JarvisSystem
+    from ..core import JarvisSystem
 
 
 class NightModeControllerAgent(NetworkAgent):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 from .models import Protocol
 from .registry import ProtocolRegistry
 

@@ -11,9 +11,9 @@ import numpy as np
 import sounddevice as sd
 import openai
 
-from ....logger import JarvisLogger
+from ....logging import JarvisLogger
 from .base import SpeechToTextEngine
-from ....performance import get_tracker
+from ....utils.performance import get_tracker
 
 
 class OpenAISTTEngine(SpeechToTextEngine):

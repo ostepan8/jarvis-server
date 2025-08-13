@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 from phue import Bridge
 from ..base import NetworkAgent
 from ..message import Message
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from ...ai_clients.base import BaseAIClient
 from .tools import tools as hue_tools
 

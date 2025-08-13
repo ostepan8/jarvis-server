@@ -33,10 +33,10 @@ Additional Python packages used by the project:
 - **App**: FastAPI server exposing AI agents for calendar management.
 - **Key modules**:
   - `jarvis/agents/` – agent implementations and network infrastructure.
-  - `jarvis/main_network.py` – creates the `JarvisSystem` using the agent network.
+  - `jarvis/core/system.py` – creates the `JarvisSystem` using the agent network.
   - `jarvis/ai_clients/` – wrappers for OpenAI and Anthropic APIs.
   - `jarvis/services/` – service layer utilities like the calendar API client.
-  - `jarvis/logger.py` – writes logs to stdout and SQLite.
+  - `jarvis/logging/jarvis_logger.py` – writes logs to stdout and SQLite.
   - `server.py` – FastAPI entrypoint exposing the `/jarvis` endpoint.
 
 ## Running the server
@@ -63,7 +63,7 @@ python -m asyncio run main.py
 ## Logs
 Logs are stored in `jarvis_logs.db`. Use the log viewer:
 ```bash
-python -m jarvis.log_viewer
+python -m jarvis.logging.log_viewer
 ```
 
 ## Orchestrator prompts

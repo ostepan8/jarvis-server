@@ -7,8 +7,8 @@ import types
 
 import httpx
 
-from ..logger import JarvisLogger
-from ..performance import track_async
+from ..logging import JarvisLogger
+from ..utils.performance import track_async
 
 
 class CalendarService:
