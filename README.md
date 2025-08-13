@@ -145,7 +145,7 @@ results = await executor.execute(proto, {"name": "Alice"})
 
 - `jarvis/` – main package with agent implementations and utilities
 - `server/main.py` – FastAPI entrypoint (run with `python -m server.main`)
-- `main.py` – simple demo using `create_collaborative_jarvis`
+- `main.py` – simple demo using
 
 ## Running tests
 

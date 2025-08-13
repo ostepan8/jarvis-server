@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from .config import JarvisConfig
 from .system import JarvisSystem
 from ..agents.factory import AgentFactory
-from ..logging import JarvisLogger
 
 
 @dataclass

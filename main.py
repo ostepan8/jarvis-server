@@ -8,7 +8,7 @@ from tzlocal import get_localzone_name
 from colorama import Fore, Style, init as colorama_init
 
 # NEW: use the builder
-from jarvis.builder import JarvisBuilder
+from jarvis.core import JarvisBuilder
 
 from jarvis.io import (
     InputHandler,

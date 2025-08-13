@@ -9,8 +9,8 @@ import asyncio
 from .. import Protocol
 from ..registry import ProtocolRegistry
 from ..executor import ProtocolExecutor
-from ...core.system import create_collaborative_jarvis
 from ...logging import JarvisLogger
+from jarvis.core import JarvisBuilder
 
 
 def register_protocols_from_directory(
@@ -78,7 +78,8 @@ async def execute_protocol_file(
     """
     logger = logger or JarvisLogger()
     logger.log("INFO", f"Loading protocol from {file_path}...")
-    jarvis = await create_collaborative_jarvis()
+    builder = JarvisBuilder.from_env()
+    jarvis = await builder.build()
     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
     proto = Protocol.from_file(file_path)
     logger.log("INFO", f"Executing protocol: {proto.name}")
@@ -97,7 +98,8 @@ async def execute_protocol_by_name(
         name: Protocol name or voice trigger phrase
     """
     logger = logger or JarvisLogger()
-    jarvis = await create_collaborative_jarvis()
+    builder = JarvisBuilder.from_env()
+    jarvis = await builder.build()
 
     # Try to find a matching protocol using the enhanced matcher
     match_result = jarvis.voice_matcher.match_command(name)
@@ -236,7 +238,8 @@ def launch_protocol_management_cli() -> None:
                             arguments[arg_def.name] = value
 
                 async def run_protocol():
-                    jarvis = await create_collaborative_jarvis()
+                    builder = JarvisBuilder.from_env()
+                    jarvis = await builder.build()
                     executor = ProtocolExecutor(jarvis.network, jarvis.logger)
                     results = await executor.execute(
                         proto, context=arguments, allowed_agents=None

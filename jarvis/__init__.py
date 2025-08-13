@@ -5,7 +5,6 @@ from .logging import JarvisLogger, LogViewerGUI
 from .core import (
     JarvisConfig,
     JarvisSystem,
-    create_collaborative_jarvis,
     DEFAULT_PORT,
     LOG_DB_PATH,
     ExecutionResult,
@@ -42,7 +41,6 @@ __all__ = [
     "AgentNetwork",
     "CollaborativeCalendarAgent",
     "JarvisSystem",
-    "create_collaborative_jarvis",
     "JarvisConfig",
     "Protocol",
     "ProtocolStep",
