@@ -1,8 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import os
+
+
+@dataclass
+class FeatureFlags:
+    """Feature toggles controlling optional subsystems."""
+
+    enable_weather: bool = True
+    enable_lights: bool = True
+    enable_canvas: bool = True
+    enable_night_mode: bool = True
 
 
 @dataclass
@@ -20,6 +30,7 @@ class JarvisConfig:
     weather_api_key: Optional[str] = None
     hue_bridge_ip: Optional[str] = None
     hue_username: Optional[str] = None
+    flags: FeatureFlags = field(default_factory=FeatureFlags)
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
     # ).lower() == "true"

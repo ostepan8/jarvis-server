@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from jarvis.config import JarvisConfig
 from jarvis.main_jarvis import JarvisSystem
+from jarvis.agents.factory import AgentFactory
 
 
 @dataclass
@@ -127,27 +128,40 @@ class JarvisBuilder:
         ai_client = jarvis._create_ai_client()
         await jarvis._connect_usage_logger()
 
-        # Selective agent/service creation
+        factory = AgentFactory(jarvis.config, jarvis.logger)
+        refs = {}
         if self._opts.with_memory:
-            jarvis._create_memory_agent(ai_client)
+            refs.update(factory._build_memory(jarvis.network, ai_client))
         if self._opts.with_nlu:
-            jarvis._create_nlu_agent(ai_client)
+            refs.update(factory._build_nlu(jarvis.network, ai_client))
         if self._opts.with_orchestrator:
-            jarvis._create_orchestrator(ai_client)
+            refs.update(factory._build_orchestrator(jarvis.network, ai_client))
         if self._opts.with_calendar:
-            jarvis._create_calendar_agent(ai_client)
+            refs.update(factory._build_calendar(jarvis.network, ai_client))
         if self._opts.with_chat:
-            jarvis._create_chat_agent(ai_client)
-        if self._opts.with_weather:
-            jarvis._create_weather_agent(ai_client)
+            refs.update(factory._build_chat(jarvis.network, ai_client))
+        if self._opts.with_weather and jarvis.config.flags.enable_weather:
+            refs.update(factory._build_weather(jarvis.network, ai_client))
         if self._opts.with_protocols:
-            jarvis._create_protocol_agent()
-        if self._opts.with_lights:
-            jarvis._create_lights_agent(ai_client)
+            refs.update(factory._build_protocol(jarvis.network))
+        if self._opts.with_lights and jarvis.config.flags.enable_lights:
+            refs.update(factory._build_lights(jarvis.network, ai_client))
         if self._opts.with_software:
-            jarvis._create_software_agent(ai_client)
-        if self._opts.with_night_agents:
-            jarvis._create_night_agents()
+            # Placeholder for future implementation
+            pass
+        if self._opts.with_night_agents and jarvis.config.flags.enable_night_mode:
+            refs.update(factory._build_night_agents(jarvis.network, jarvis))
+
+        jarvis.vector_memory = refs.get("vector_memory")
+        jarvis.nlu_agent = refs.get("nlu_agent")
+        jarvis.orchestrator = refs.get("orchestrator")
+        jarvis.calendar_service = refs.get("calendar_service")
+        jarvis.chat_agent = refs.get("chat_agent")
+        jarvis.protocol_agent = refs.get("protocol_agent")
+        jarvis.lights_agent = refs.get("lights_agent")
+        jarvis.canvas_service = refs.get("canvas_service")
+        jarvis.night_controller = refs.get("night_controller")
+        jarvis.night_agents = refs.get("night_agents", [])
 
         # Protocol runtime (matcher/executor) + optional file loading
         jarvis._setup_protocol_system(self._opts.load_protocol_directory)
