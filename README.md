@@ -31,7 +31,7 @@ Create a `.env` file or export the following variables before running the server
 Start the FastAPI application on port 8000:
 
 ```bash
-python server.py
+python -m server.main
 ```
 
 The `/jarvis` endpoint accepts a JSON body with a `command` field describing the calendar request.
@@ -142,7 +142,7 @@ results = await executor.execute(proto, {"name": "Alice"})
 ## Project structure
 
 - `jarvis/` – main package with agent implementations and utilities
-- `server.py` – FastAPI entrypoint
+- `server/main.py` – FastAPI entrypoint (run with `python -m server.main`)
 - `main.py` – simple demo using `create_collaborative_jarvis`
 
 ## Running tests

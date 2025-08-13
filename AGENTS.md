@@ -37,11 +37,12 @@ Additional Python packages used by the project:
   - `jarvis/ai_clients/` – wrappers for OpenAI and Anthropic APIs.
   - `jarvis/services/` – service layer utilities like the calendar API client.
   - `jarvis/logging/jarvis_logger.py` – writes logs to stdout and SQLite.
-  - `server.py` – FastAPI entrypoint exposing the `/jarvis` endpoint.
+  - `server/main.py` – FastAPI entrypoint exposing the `/jarvis` endpoint. Run with `python -m server.main`.
+
 
 ## Running the server
 ```bash
-python server.py
+python -m server.main
 ```
 The API will listen on port 8000.
 

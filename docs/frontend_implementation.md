@@ -9,7 +9,7 @@ The FastAPI server exposes collaborative AI agents that can process natural lang
 Start the server with:
 
 ```bash
-python server.py
+python -m server.main
 ```
 
 The default port is `8000`.
