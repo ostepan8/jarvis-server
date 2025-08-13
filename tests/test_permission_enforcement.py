@@ -11,8 +11,8 @@ from jarvis.protocols.executor import ProtocolExecutor
 from jarvis.protocols.voice_trigger import VoiceTriggerMatcher
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
-from jarvis.logger import JarvisLogger
-from jarvis.main_jarvis import JarvisSystem, JarvisConfig
+from jarvis.logging import JarvisLogger
+from jarvis.core import JarvisSystem, JarvisConfig
 from jarvis.protocols.registry import ProtocolRegistry
 
 

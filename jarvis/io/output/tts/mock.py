@@ -10,7 +10,7 @@ class MockTTSEngine(TextToSpeechEngine):
         self.spoken: list[str] = []
 
     async def speak(self, text: str) -> None:
-        from ....performance import get_tracker
+        from ....utils.performance import get_tracker
 
         tracker = get_tracker()
         if tracker and tracker.enabled:

@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, Set
 from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients.base import BaseAIClient
-from ...logger import JarvisLogger
-from ...profile import AgentProfile
+from ...logging import JarvisLogger
+from ...core.profile import AgentProfile
 from .tools import tools as chat_tools
 
 

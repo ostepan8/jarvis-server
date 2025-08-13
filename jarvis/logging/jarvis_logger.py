@@ -6,7 +6,7 @@ import json
 import threading
 from contextlib import contextmanager
 
-from ..constants import LOG_DB_PATH
+from ..core.constants import LOG_DB_PATH
 
 
 class JarvisLogger:

@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Set
 
 from ..base import NetworkAgent
 from ..message import Message
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from ...protocols import Protocol, ProtocolStep
 from ...protocols.registry import ProtocolRegistry
 from ...protocols.executor import ProtocolExecutor

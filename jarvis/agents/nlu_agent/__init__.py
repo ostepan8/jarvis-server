@@ -6,9 +6,9 @@ from typing import Any, Dict, List, Optional, Set
 from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients import BaseAIClient
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from ...utils import extract_json_from_text
-from ...performance import track_async
+from ...utils.performance import track_async
 
 
 class NLUAgent(NetworkAgent):

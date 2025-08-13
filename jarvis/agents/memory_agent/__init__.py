@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Set
 from ..base import NetworkAgent
 from ..message import Message
 from ...services.vector_memory import VectorMemoryService
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from ...ai_clients.base import BaseAIClient
 
 

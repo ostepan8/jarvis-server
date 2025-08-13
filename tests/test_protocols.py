@@ -5,7 +5,7 @@ from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
 from jarvis.protocols import Protocol, ProtocolStep
 from jarvis.protocols.executor import ProtocolExecutor
-from jarvis.logger import JarvisLogger
+from jarvis.logging import JarvisLogger
 
 
 class DummyAgent(NetworkAgent):

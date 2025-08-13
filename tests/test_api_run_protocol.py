@@ -9,7 +9,7 @@ import server
 from server.dependencies import get_user_allowed_agents
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
-from jarvis.logger import JarvisLogger
+from jarvis.logging import JarvisLogger
 from jarvis.protocols import Protocol, ProtocolStep
 from jarvis.protocols.executor import ProtocolExecutor
 from jarvis.protocols.registry import ProtocolRegistry

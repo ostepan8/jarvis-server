@@ -8,8 +8,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 
-from ..logger import JarvisLogger
-from ..registry import BaseRegistry
+from ..logging import JarvisLogger
+from ..core.registry import BaseRegistry
 from .models import Protocol, ProtocolStep, ProtocolResponse
 
 

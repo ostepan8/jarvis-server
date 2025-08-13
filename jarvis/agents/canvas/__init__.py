@@ -7,7 +7,7 @@ from ..base import NetworkAgent
 from ..message import Message
 from ...services.canvas_service import CanvasService
 from ...ai_clients import BaseAIClient
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 
 
 class CanvasAgent(NetworkAgent):

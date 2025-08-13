@@ -4,7 +4,7 @@ import asyncio
 import functools
 from typing import Dict, Any, List
 from ...ai_clients.base import BaseAIClient
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from .function_registry import WeatherFunctionRegistry
 from .prompt import get_weather_enhanced_prompt
 from .tools.tools import tools as weather_tools

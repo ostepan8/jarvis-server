@@ -1,12 +1,12 @@
 import pytest
 
 import server
-from jarvis.main_jarvis import JarvisSystem, JarvisConfig
+from jarvis.core import JarvisSystem, JarvisConfig
 from jarvis.protocols import Protocol, ProtocolStep
 from jarvis.protocols.registry import ProtocolRegistry
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
-from jarvis.logger import JarvisLogger
+from jarvis.logging import JarvisLogger
 
 
 class DummyAgent(NetworkAgent):

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 import httpx
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 
 
 class CanvasService:

@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import json
 from ...ai_clients import BaseAIClient
 from ...services.calendar_service import CalendarService
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from .prompt import get_calendar_system_prompt
 from .function_registry import CalendarFunctionRegistry
 

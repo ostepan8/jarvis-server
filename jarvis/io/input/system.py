@@ -27,7 +27,7 @@ class VoiceInputSystem:
         handler: Optional[Callable[[str], Awaitable[str]]] = None,
     ) -> None:
         """Wait for the wake word, then listen for speech and respond."""
-        from ...performance import PerfTracker
+        from ...utils.performance import PerfTracker
 
         tracker = PerfTracker()
         tracker.start()

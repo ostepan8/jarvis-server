@@ -5,8 +5,8 @@ from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.memory_agent import MemoryAgent
 from jarvis.agents.nlu_agent import NLUAgent
 from jarvis.agents.base import NetworkAgent
-from jarvis.main_jarvis import JarvisSystem
-from jarvis.config import JarvisConfig
+from jarvis.core import JarvisSystem
+from jarvis.core import JarvisConfig
 from jarvis.ai_clients.base import BaseAIClient
 
 

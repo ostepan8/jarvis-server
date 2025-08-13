@@ -7,9 +7,9 @@ from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
-from jarvis.config import JarvisConfig
-from jarvis.main_jarvis import JarvisSystem
-from jarvis.agents.factory import AgentFactory
+from .config import JarvisConfig
+from .system import JarvisSystem
+from ..agents.factory import AgentFactory
 
 
 @dataclass

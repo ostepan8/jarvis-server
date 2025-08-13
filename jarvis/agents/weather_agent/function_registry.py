@@ -1,7 +1,7 @@
 # jarvis/agents/weather_agent/function_registry.py
 from typing import Dict, Callable
 from ...services.weather_service import WeatherService
-from ...registry import FunctionRegistry
+from ...core.registry import FunctionRegistry
 
 
 class WeatherFunctionRegistry(FunctionRegistry):

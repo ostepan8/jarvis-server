@@ -4,9 +4,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import time
 
-from ..logger import JarvisLogger
+from ..logging import JarvisLogger
 from ..agents.agent_network import AgentNetwork
-from ..constants import ExecutionResult
+from ..core.constants import ExecutionResult
 from . import Protocol
 from .loggers import ProtocolUsageLogger, generate_protocol_log
 

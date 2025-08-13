@@ -12,8 +12,8 @@ import sounddevice as sd
 from vosk import KaldiRecognizer, Model
 from colorama import Fore, Style
 
-from ....logger import JarvisLogger
-from ....performance import get_tracker
+from ....logging import JarvisLogger
+from ....utils.performance import get_tracker
 from .base import SpeechToTextEngine
 
 

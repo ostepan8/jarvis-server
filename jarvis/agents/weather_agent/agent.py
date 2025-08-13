@@ -5,7 +5,7 @@ import functools
 
 from ..base import NetworkAgent
 from ..message import Message
-from ...logger import JarvisLogger
+from ...logging import JarvisLogger
 from ...ai_clients.base import BaseAIClient
 from ...services.weather_service import WeatherService
 from .function_registry import WeatherFunctionRegistry
