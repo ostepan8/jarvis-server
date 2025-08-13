@@ -1,6 +1,7 @@
 # jarvis/app/builder.py
 
 from __future__ import annotations
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -101,6 +102,10 @@ class JarvisBuilder:
         hue_bridge_ip = os.getenv(hue_bridge_ip_env)
         if not api_key:
             raise ValueError(f"Missing API key. Set {api_key_env} in your environment.")
+        if not hue_bridge_ip:
+            logging.getLogger("jarvis").info(
+                "%s not set; Philips Hue integration disabled", hue_bridge_ip_env
+            )
 
         cfg = JarvisConfig(
             ai_provider=ai_provider,

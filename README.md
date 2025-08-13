@@ -25,6 +25,8 @@ Create a `.env` file or export the following variables before running the server
 - `REPO_PATH` – path to the repository used by the SoftwareEngineeringAgent (defaults to `.`)
 - `WEATHER_API_KEY` – API key for OpenWeatherMap used by `WeatherAgent`
 - `CONFIG_SECRET` – 32-byte base64 key used to encrypt user configuration
+- `JWT_SECRET` – secret key for signing authentication tokens (required)
+- `PHILLIPS_HUE_BRIDGE_IP` – IP address of the Philips Hue Bridge for light control (optional)
 
 ## Running the server
 
