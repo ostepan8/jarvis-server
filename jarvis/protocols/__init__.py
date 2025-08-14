@@ -8,6 +8,7 @@ from .models import (
     ProtocolResponse,
     ResponseMode,
 )
+from .instruction_protocol import InstructionProtocol
 from .loggers import (
     ProtocolUsageLogger,
     ExecutionMetadata,
@@ -23,6 +24,7 @@ __all__ = [
     "ArgumentType",
     "ProtocolResponse",
     "ResponseMode",
+    "InstructionProtocol",
     "ProtocolUsageLogger",
     "ExecutionMetadata",
     "ProtocolLogEntry",
