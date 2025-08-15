@@ -198,6 +198,10 @@ class JarvisSystem:
         allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
+        if self.network.method_recorder:
+            self.network.start_method_recording(
+                f"req_{uuid.uuid4()}", user_input
+            )
         tracker = get_tracker()
         new_tracker = False
         if tracker is None:
@@ -355,6 +359,7 @@ class JarvisSystem:
 
             return {"response": "Sorry, I didn't understand that."}
         finally:
+            self.network.stop_method_recording()
             if new_tracker:
                 tracker.stop()
                 tracker.save()
