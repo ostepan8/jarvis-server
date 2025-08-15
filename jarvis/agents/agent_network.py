@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..logging import JarvisLogger
 from ..protocols import InstructionProtocol
+from ..core.method_recorder import MethodRecorder
 from .message import Message
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ class AgentNetwork:
         queue_maxsize: int = 1000,
         record_methods: bool = False,
         recorder: "MethodRecorderBase | None" = None,
+
     ) -> None:
         self.agents: Dict[str, NetworkAgent] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
@@ -41,9 +42,9 @@ class AgentNetwork:
         # Reusable JARVIS protocols registry
         self.protocol_registry: List[str] = []
 
-        # Recording state for building instruction protocols
-        self.recording: bool = False
-        self.current_protocol: InstructionProtocol | None = None
+        self.method_recorder: MethodRecorder | None = (
+            recorder if recorder is not None else (MethodRecorder() if record_methods else None)
+        )
 
         # Method recording via MethodRecorder
         self.record_methods = record_methods
@@ -124,33 +125,24 @@ class AgentNetwork:
         self.logger.log("INFO", "Network stopped")
 
     # ------------------------------------------------------------------
-    # Protocol recording helpers
+    # Method recording helpers
     # ------------------------------------------------------------------
-    def start_protocol_recording(self, name: str, description: str = "") -> None:
-        """Begin recording capability calls into an InstructionProtocol."""
-        self.current_protocol = InstructionProtocol(
-            id=str(uuid.uuid4()), name=name, description=description
-        )
-        self.recording = True
+    def start_method_recording(
+        self, name: str, description: str = ""
+    ) -> InstructionProtocol | None:
+        if not self.method_recorder:
+            self.method_recorder = MethodRecorder()
+        return self.method_recorder.start(name, description)
 
-    def add_instruction(
-        self,
-        agent: str,
-        function: str,
-        params: dict,
-        mappings: dict | None = None,
-    ) -> None:
-        """Append a step to the current recording protocol."""
-        if not self.recording or not self.current_protocol:
-            return
-        self.current_protocol.add_step(agent, function, params, mappings)
+    def stop_method_recording(self) -> InstructionProtocol | None:
+        if not self.method_recorder:
+            return None
+        return self.method_recorder.stop()
 
-    def finalize_protocol(self) -> InstructionProtocol | None:
-        """Finish recording and return the built protocol."""
-        protocol = self.current_protocol
-        self.current_protocol = None
-        self.recording = False
-        return protocol
+    def get_recorded_protocol(self) -> InstructionProtocol | None:
+        if not self.method_recorder:
+            return None
+        return self.method_recorder.get_protocol()
 
     async def _process_messages(self) -> None:
         """Internal loop: dispatch messages, broadcast requests, fulfill responses."""
@@ -201,12 +193,17 @@ class AgentNetwork:
                     allowed = message.content.get("allowed_agents")
                     if allowed:
                         providers = [p for p in providers if p in allowed]
-                    if self.recording:
+                    if (
+                        self.method_recorder
+                        and self.method_recorder.recording
+                    ):
                         provider = providers[0] if providers else None
                         if provider:
                             params = message.content.get("data", {})
                             mappings = message.content.get("mappings")
-                            self.add_instruction(provider, capability, params, mappings)
+                            self.method_recorder.record_step(
+                                provider, capability, params, mappings
+                            )
                     else:
                         if self.record_methods and self.recorder:
                             provider = providers[0] if providers else None
@@ -260,10 +257,10 @@ class AgentNetwork:
         if allowed_agents is not None:
             providers = [p for p in providers if p in allowed_agents]
 
-        if self.recording:
+        if self.method_recorder and self.method_recorder.recording:
             provider = providers[0] if providers else None
             if provider:
-                self.add_instruction(provider, capability, data)
+                self.method_recorder.record_step(provider, capability, data)
             return providers
 
         # Create and store the Future
