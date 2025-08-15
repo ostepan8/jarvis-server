@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 
 from ..protocols.instruction_protocol import InstructionProtocol
 from ..protocols.models import ProtocolStep
+
+if TYPE_CHECKING:  # pragma: no cover - for type checkers only
+    from ..agents.agent_network import AgentNetwork
+    from ..logging import JarvisLogger
+    from ..protocols.loggers import ProtocolUsageLogger
+    from ..protocols.executor import ProtocolExecutor
 
 from .method_recorder_base import MethodRecorderBase
 
@@ -64,6 +70,23 @@ class MethodRecorder(MethodRecorderBase):
             parameters=params,
             parameter_mappings=mappings or {},
         )
+
+    async def replay_last_protocol(
+        self,
+        network: AgentNetwork,
+        logger: JarvisLogger,
+        *,
+        arguments: Dict[str, Any] | None = None,
+        usage_logger: ProtocolUsageLogger | None = None,
+    ) -> Dict[str, Any] | None:
+        """Execute the currently recorded protocol without saving it."""
+        protocol = self.get_protocol()
+        if not protocol:
+            return None
+        from ..protocols.executor import ProtocolExecutor
+
+        executor = ProtocolExecutor(network, logger, usage_logger=usage_logger)
+        return await executor.run_protocol(protocol, arguments)
 
     def stop(self) -> InstructionProtocol | None:
         """Finalize recording and return the completed protocol."""

@@ -141,6 +141,26 @@ proto = Protocol.from_file("greet.json")
 results = await executor.execute(proto, {"name": "Alice"})
 ```
 
+## Recording and replaying protocols
+
+The `MethodRecorder` can capture capability calls into an `InstructionProtocol` and replay them later. Steps may be tweaked before replay using `replace_step`:
+
+```python
+from jarvis.core import MethodRecorder
+
+recorder = MethodRecorder()
+recorder.start("demo")
+recorder.record_step("dummy", "dummy_cap", {"msg": "hi"})
+
+# Adjust the recorded step before executing
+recorder.replace_step(0, "dummy", "dummy_cap", {"msg": "hello"})
+
+# Run the recorded protocol
+await recorder.replay_last_protocol(network, logger)
+```
+
+`replay_last_protocol` executes the currently recorded protocol using a `ProtocolExecutor`. This allows quick iteration on protocol steps without persisting them first.
+
 ## Project structure
 
 - `jarvis/` – main package with agent implementations and utilities
