@@ -12,6 +12,7 @@ from .message import Message
 
 if TYPE_CHECKING:
     from .base import NetworkAgent  # for type hints only
+    from ..core.method_recorder_base import MethodRecorderBase
 
 
 class AgentNetwork:
@@ -22,7 +23,8 @@ class AgentNetwork:
         logger: Optional[JarvisLogger] = None,
         queue_maxsize: int = 1000,
         record_methods: bool = False,
-        recorder: MethodRecorder | None = None,
+        recorder: "MethodRecorderBase | None" = None,
+
     ) -> None:
         self.agents: Dict[str, NetworkAgent] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
@@ -43,6 +45,10 @@ class AgentNetwork:
         self.method_recorder: MethodRecorder | None = (
             recorder if recorder is not None else (MethodRecorder() if record_methods else None)
         )
+
+        # Method recording via MethodRecorder
+        self.record_methods = record_methods
+        self.recorder = recorder
 
     def register_agent(
         self,
@@ -199,6 +205,14 @@ class AgentNetwork:
                                 provider, capability, params, mappings
                             )
                     else:
+                        if self.record_methods and self.recorder:
+                            provider = providers[0] if providers else None
+                            if provider:
+                                params = message.content.get("data", {})
+                                mappings = message.content.get("mappings")
+                                self.recorder.record_step(
+                                    provider, capability, params, mappings
+                                )
                         for provider in providers:
                             cloned = Message(
                                 from_agent=message.from_agent,
