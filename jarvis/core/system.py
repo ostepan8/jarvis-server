@@ -20,6 +20,7 @@ from ..night_agents import NightAgent, NightModeControllerAgent
 from ..ai_clients import AIClientFactory, BaseAIClient
 from ..logging import JarvisLogger
 from .config import JarvisConfig
+from .method_recorder import MethodRecorder
 from ..protocols.loggers import ProtocolUsageLogger
 from ..protocols.runtime import ProtocolRuntime
 from ..utils.performance import PerfTracker, get_tracker
@@ -29,15 +30,27 @@ from ..agents.factory import AgentFactory
 class JarvisSystem:
     """Main Jarvis system that manages the agent network."""
 
-    def __init__(self, config: JarvisConfig | Dict[str, Any]):
+    def __init__(
+        self,
+        config: JarvisConfig | Dict[str, Any],
+        record_network_methods: bool = False,
+        method_recorder: MethodRecorder | None = None,
+    ):
         """Create a new Jarvis system."""
         if isinstance(config, dict):
             self.config = JarvisConfig(**config)
         else:
             self.config = config
 
+        if not record_network_methods:
+            record_network_methods = self.config.record_network_methods
+
         self.logger = JarvisLogger()
-        self.network = AgentNetwork(self.logger)
+        self.network = AgentNetwork(
+            self.logger,
+            record_methods=record_network_methods,
+            recorder=method_recorder,
+        )
         self.perf_enabled = self.config.perf_tracking
         self._tracker: PerfTracker | None = None
 

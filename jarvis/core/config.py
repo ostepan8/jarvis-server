@@ -26,6 +26,10 @@ class JarvisConfig:
     response_timeout: float = 15.0
     intent_timeout: float = 5.0
     perf_tracking: bool = True
+    record_network_methods: bool = field(
+        default_factory=lambda: os.getenv("RECORD_NETWORK_METHODS", "false").lower()
+        == "true"
+    )
     memory_dir: Optional[str] = None
     weather_api_key: Optional[str] = None
     hue_bridge_ip: Optional[str] = None
