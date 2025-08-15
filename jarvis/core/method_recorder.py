@@ -3,7 +3,9 @@ from __future__ import annotations
 """Helpers for recording method invocations into protocols."""
 
 from dataclasses import dataclass
+import json
 import uuid
+from pathlib import Path
 from typing import Any, Dict, TYPE_CHECKING
 
 from ..protocols.instruction_protocol import InstructionProtocol
@@ -93,8 +95,6 @@ class MethodRecorder(MethodRecorderBase):
         proto = self.protocol
         if proto:
             self.save(proto)
-        self.protocol = None
-        self.recording = False
         return proto
 
     def clear(self) -> None:
@@ -103,9 +103,10 @@ class MethodRecorder(MethodRecorderBase):
         self.recording = False
 
     def save(self, protocol: InstructionProtocol) -> None:  # pragma: no cover - override
-        """Persist the completed protocol.
-
-        Default implementation does nothing. Override in subclasses to
-        provide custom persistence.
-        """
-        return None
+        """Persist the completed protocol to JSON and reset state."""
+        recorded_dir = Path(__file__).resolve().parent.parent / "protocols" / "recorded"
+        recorded_dir.mkdir(parents=True, exist_ok=True)
+        file_path = recorded_dir / f"{protocol.id}.json"
+        with file_path.open("w", encoding="utf-8") as fh:
+            json.dump(protocol.to_dict(), fh, indent=2)
+        self.clear()

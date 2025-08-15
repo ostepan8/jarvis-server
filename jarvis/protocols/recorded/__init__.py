@@ -1,0 +1,1 @@
+"""Recorded protocol JSON storage."""
