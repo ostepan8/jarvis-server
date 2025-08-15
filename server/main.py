@@ -88,7 +88,18 @@ app = create_app()
 
 
 def run():
+    import argparse
     import uvicorn
+
+    parser = argparse.ArgumentParser(description="Run Jarvis API server")
+    parser.add_argument(
+        "--verbose-logs",
+        action="store_true",
+        help="Enable verbose capability logging",
+    )
+    args = parser.parse_args()
+    if args.verbose_logs:
+        os.environ["JARVIS_VERBOSE_LOGS"] = "1"
 
     uvicorn.run(app, host="0.0.0.0", port=DEFAULT_PORT)
 

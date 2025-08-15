@@ -1,6 +1,7 @@
 # jarvis/main_network.py
 
 import asyncio
+import logging
 from os import getenv
 import uuid
 from typing import Any, Dict, List, Optional
@@ -106,12 +107,14 @@ class JarvisSystem:
             if self.protocol_runtime
             else 0
         )
-        self.logger.log(
-            "INFO",
-            "Jarvis system initialized",
-            f"Active agents: {list(self.network.agents.keys())}, "
-            f"Loaded protocols: {loaded}",
-        )
+        self.logger.log("INFO", "Jarvis system initialized")
+        if self.logger.logger.isEnabledFor(logging.DEBUG):
+            self.logger.log(
+                "DEBUG",
+                "Initialization details",
+                f"Active agents: {list(self.network.agents.keys())}, "
+                f"Loaded protocols: {loaded}",
+            )
 
     def _create_ai_client(self) -> BaseAIClient:
         """Instantiate the configured AI client."""

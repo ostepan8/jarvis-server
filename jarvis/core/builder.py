@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import os
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -178,10 +179,12 @@ class JarvisBuilder:
         # Start network
         await jarvis._start_network()
 
-        jarvis.logger.log(
-            "INFO",
-            "Jarvis built via JarvisBuilder",
-            f"Active agents: {list(jarvis.network.agents.keys())}, "
-            f"Protocols loaded: {len(jarvis.protocol_registry.protocols)}",
-        )
+        jarvis.logger.log("INFO", "Jarvis built via JarvisBuilder")
+        if jarvis.logger.logger.isEnabledFor(logging.DEBUG):
+            jarvis.logger.log(
+                "DEBUG",
+                "Build details",
+                f"Active agents: {list(jarvis.network.agents.keys())}, "
+                f"Protocols loaded: {len(jarvis.protocol_registry.protocols)}",
+            )
         return jarvis
