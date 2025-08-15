@@ -24,7 +24,6 @@ class AgentNetwork:
         queue_maxsize: int = 1000,
         record_methods: bool = False,
         recorder: "MethodRecorderBase | None" = None,
-
     ) -> None:
         self.agents: Dict[str, NetworkAgent] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
@@ -43,8 +42,16 @@ class AgentNetwork:
         self.protocol_registry: List[str] = []
 
         self.method_recorder: MethodRecorder | None = (
-            recorder if recorder is not None else (MethodRecorder() if record_methods else None)
+            recorder
+            if recorder is not None
+            else (MethodRecorder() if record_methods else None)
         )
+        if self.method_recorder:
+            self.logger.log(
+                "INFO",
+                "Method recording enabled",
+                f"Recorder: {self.method_recorder.__class__.__name__}",
+            )
 
         # Method recording via MethodRecorder
         self.record_methods = record_methods
@@ -62,7 +69,9 @@ class AgentNetwork:
             self.night_agents[agent.name] = agent
             # Always remember night capabilities for later activation
             for capability in agent.capabilities:
-                self.night_capability_registry.setdefault(capability, []).append(agent.name)
+                self.night_capability_registry.setdefault(capability, []).append(
+                    agent.name
+                )
         agent.set_network(self)
 
         if include_capabilities:
@@ -193,10 +202,7 @@ class AgentNetwork:
                     allowed = message.content.get("allowed_agents")
                     if allowed:
                         providers = [p for p in providers if p in allowed]
-                    if (
-                        self.method_recorder
-                        and self.method_recorder.recording
-                    ):
+                    if self.method_recorder and self.method_recorder.recording:
                         provider = providers[0] if providers else None
                         if provider:
                             params = message.content.get("data", {})
@@ -206,6 +212,11 @@ class AgentNetwork:
                             )
                     else:
                         if self.record_methods and self.recorder:
+                            self.logger.log(
+                                "INFO",
+                                "Recording method call",
+                                f"Capability: {capability}",
+                            )
                             provider = providers[0] if providers else None
                             if provider:
                                 params = message.content.get("data", {})
