@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+import asyncio
 import pytest
 
 # Dynamically load modules to avoid heavy package-level imports
@@ -66,6 +67,7 @@ sys.modules["jarvis.protocols"].Protocol = Protocol
 JarvisLogger = load("jarvis.logging", logging_path / "__init__.py").JarvisLogger
 MethodRecorder = load("jarvis.core.method_recorder", core_path / "method_recorder.py").MethodRecorder
 AgentNetwork = load("jarvis.agents.agent_network", agents_path / "agent_network.py").AgentNetwork
+Message = load("jarvis.agents.message", agents_path / "message.py").Message
 
 
 class DummyAgent:
@@ -105,3 +107,82 @@ async def test_replay_last_protocol():
     await network.stop()
 
     assert result["step_0_dummy_cap"]["echo"] == {"msg": "hello"}
+
+
+class _NLUAgent:
+    def __init__(self) -> None:
+        self.name = "NLUAgent"
+        self.network = None
+
+    @property
+    def capabilities(self):
+        return {"intent_matching"}
+
+    def set_network(self, network):
+        self.network = network
+
+    async def receive_message(self, message):
+        if message.message_type == "capability_request":
+            await self.network.send_message(
+                Message(
+                    from_agent=self.name,
+                    to_agent=message.from_agent,
+                    message_type="capability_response",
+                    content={"intent": "dummy"},
+                    request_id=message.request_id,
+                    reply_to=message.id,
+                )
+            )
+
+
+class _EchoAgent:
+    def __init__(self) -> None:
+        self.name = "EchoAgent"
+        self.network = None
+
+    @property
+    def capabilities(self):
+        return {"echo"}
+
+    def set_network(self, network):
+        self.network = network
+
+    async def receive_message(self, message):
+        if message.message_type == "capability_request":
+            await self.network.send_message(
+                Message(
+                    from_agent=self.name,
+                    to_agent=message.from_agent,
+                    message_type="capability_response",
+                    content={"echo": message.content.get("data")},
+                    request_id=message.request_id,
+                    reply_to=message.id,
+                )
+            )
+
+
+@pytest.mark.asyncio
+async def test_intent_matching_not_recorded():
+    network = AgentNetwork(record_methods=True)
+    nlu = _NLUAgent()
+    echo = _EchoAgent()
+    network.register_agent(nlu)
+    network.register_agent(echo)
+
+    await network.start()
+    network.start_method_recording("demo")
+
+    await network.request_capability("user", "intent_matching", {"input": "hi"})
+    await asyncio.sleep(0.1)
+
+    proto = network.get_recorded_protocol()
+    assert proto is not None
+    assert proto.steps == []
+
+    await network.request_capability("user", "echo", {"msg": "hi"})
+    await asyncio.sleep(0.1)
+    proto = network.get_recorded_protocol()
+    assert len(proto.steps) == 1
+    assert proto.steps[0].function == "echo"
+
+    await network.stop()
