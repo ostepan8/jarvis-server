@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..logging import JarvisLogger
+from ..protocols import InstructionProtocol
 from .message import Message
 
 if TYPE_CHECKING:
@@ -35,6 +37,10 @@ class AgentNetwork:
 
         # Reusable JARVIS protocols registry
         self.protocol_registry: List[str] = []
+
+        # Recording state for building instruction protocols
+        self.recording: bool = False
+        self.current_protocol: InstructionProtocol | None = None
 
     def register_agent(
         self,
@@ -110,6 +116,35 @@ class AgentNetwork:
             await self._processor_task
         self.logger.log("INFO", "Network stopped")
 
+    # ------------------------------------------------------------------
+    # Protocol recording helpers
+    # ------------------------------------------------------------------
+    def start_protocol_recording(self, name: str, description: str = "") -> None:
+        """Begin recording capability calls into an InstructionProtocol."""
+        self.current_protocol = InstructionProtocol(
+            id=str(uuid.uuid4()), name=name, description=description
+        )
+        self.recording = True
+
+    def add_instruction(
+        self,
+        agent: str,
+        function: str,
+        params: dict,
+        mappings: dict | None = None,
+    ) -> None:
+        """Append a step to the current recording protocol."""
+        if not self.recording or not self.current_protocol:
+            return
+        self.current_protocol.add_step(agent, function, params, mappings)
+
+    def finalize_protocol(self) -> InstructionProtocol | None:
+        """Finish recording and return the built protocol."""
+        protocol = self.current_protocol
+        self.current_protocol = None
+        self.recording = False
+        return protocol
+
     async def _process_messages(self) -> None:
         """Internal loop: dispatch messages, broadcast requests, fulfill responses."""
         while self._running:
@@ -159,18 +194,25 @@ class AgentNetwork:
                     allowed = message.content.get("allowed_agents")
                     if allowed:
                         providers = [p for p in providers if p in allowed]
-                    for provider in providers:
-                        cloned = Message(
-                            from_agent=message.from_agent,
-                            to_agent=provider,
-                            message_type=message.message_type,
-                            content=message.content,
-                            request_id=message.request_id,
-                            reply_to=message.reply_to,
-                        )
-                        asyncio.create_task(
-                            self.agents[provider].receive_message(cloned)
-                        )
+                    if self.recording:
+                        provider = providers[0] if providers else None
+                        if provider:
+                            params = message.content.get("data", {})
+                            mappings = message.content.get("mappings")
+                            self.add_instruction(provider, capability, params, mappings)
+                    else:
+                        for provider in providers:
+                            cloned = Message(
+                                from_agent=message.from_agent,
+                                to_agent=provider,
+                                message_type=message.message_type,
+                                content=message.content,
+                                request_id=message.request_id,
+                                reply_to=message.reply_to,
+                            )
+                            asyncio.create_task(
+                                self.agents[provider].receive_message(cloned)
+                            )
                     continue
 
             except asyncio.TimeoutError:
@@ -199,6 +241,16 @@ class AgentNetwork:
             f"From: {from_agent}, Capability: {capability}, Request ID: {request_id}",
         )
 
+        providers = self.capability_registry.get(capability, [])
+        if allowed_agents is not None:
+            providers = [p for p in providers if p in allowed_agents]
+
+        if self.recording:
+            provider = providers[0] if providers else None
+            if provider:
+                self.add_instruction(provider, capability, data)
+            return providers
+
         # Create and store the Future
         loop = asyncio.get_event_loop()
         fut = loop.create_future()
@@ -219,9 +271,6 @@ class AgentNetwork:
         await self.send_message(msg)
 
         # Get providers and log them
-        providers = self.capability_registry.get(capability, [])
-        if allowed_agents is not None:
-            providers = [p for p in providers if p in allowed_agents]
         self.logger.log(
             "INFO",
             f"Capability request broadcast",
