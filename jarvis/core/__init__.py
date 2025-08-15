@@ -4,6 +4,8 @@ from .system import JarvisSystem
 from .constants import DEFAULT_PORT, LOG_DB_PATH, ExecutionResult
 from .profile import AgentProfile
 from .registry import BaseRegistry, FunctionRegistry
+from .method_recorder_base import MethodRecorderBase
+from .method_recorder import MethodRecorder
 
 __all__ = [
     "JarvisConfig",
@@ -18,4 +20,6 @@ __all__ = [
     "AgentProfile",
     "BaseRegistry",
     "FunctionRegistry",
+    "MethodRecorderBase",
+    "MethodRecorder",
 ]
