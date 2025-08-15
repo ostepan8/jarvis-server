@@ -210,7 +210,6 @@ class AgentNetwork:
                             self.method_recorder.record_step(
                                 provider, capability, params, mappings
                             )
-                        continue
 
                     for provider in providers:
                         cloned = Message(
@@ -255,12 +254,6 @@ class AgentNetwork:
         providers = self.capability_registry.get(capability, [])
         if allowed_agents is not None:
             providers = [p for p in providers if p in allowed_agents]
-
-        if self.method_recorder and self.method_recorder.recording:
-            provider = providers[0] if providers else None
-            if provider:
-                self.method_recorder.record_step(provider, capability, data)
-            return providers
 
         # Create and store the Future
         loop = asyncio.get_event_loop()
