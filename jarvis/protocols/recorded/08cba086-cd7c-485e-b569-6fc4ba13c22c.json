@@ -1,0 +1,19 @@
+{
+  "id": "08cba086-cd7c-485e-b569-6fc4ba13c22c",
+  "name": "req_e3c1459a-1864-4580-8754-a746a45e5c25",
+  "description": "turn the lights all red please",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "NLUAgent",
+      "function": "intent_matching",
+      "parameters": {
+        "input": "turn the lights all red please"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

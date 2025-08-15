@@ -1,0 +1,19 @@
+{
+  "id": "d509d3e8-a1c4-4964-946f-7fa8a31182a9",
+  "name": "req_d4eedc29-acf3-4503-99e6-37dba572873e",
+  "description": "turn the lights all blue please",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "NLUAgent",
+      "function": "intent_matching",
+      "parameters": {
+        "input": "turn the lights all blue please"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

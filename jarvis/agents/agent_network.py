@@ -210,32 +210,20 @@ class AgentNetwork:
                             self.method_recorder.record_step(
                                 provider, capability, params, mappings
                             )
-                    else:
-                        if self.record_methods and self.recorder:
-                            self.logger.log(
-                                "INFO",
-                                "Recording method call",
-                                f"Capability: {capability}",
-                            )
-                            provider = providers[0] if providers else None
-                            if provider:
-                                params = message.content.get("data", {})
-                                mappings = message.content.get("mappings")
-                                self.recorder.record_step(
-                                    provider, capability, params, mappings
-                                )
-                        for provider in providers:
-                            cloned = Message(
-                                from_agent=message.from_agent,
-                                to_agent=provider,
-                                message_type=message.message_type,
-                                content=message.content,
-                                request_id=message.request_id,
-                                reply_to=message.reply_to,
-                            )
-                            asyncio.create_task(
-                                self.agents[provider].receive_message(cloned)
-                            )
+                        continue
+
+                    for provider in providers:
+                        cloned = Message(
+                            from_agent=message.from_agent,
+                            to_agent=provider,
+                            message_type=message.message_type,
+                            content=message.content,
+                            request_id=message.request_id,
+                            reply_to=message.reply_to,
+                        )
+                        asyncio.create_task(
+                            self.agents[provider].receive_message(cloned)
+                        )
                     continue
 
             except asyncio.TimeoutError:
