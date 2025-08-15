@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..logging import JarvisLogger
@@ -78,11 +79,9 @@ class AgentNetwork:
             for capability in agent.capabilities:
                 self.capability_registry.setdefault(capability, []).append(agent.name)
 
-        self.logger.log(
-            "INFO",
-            f"Agent registered: {agent.name}",
-            f"Capabilities: {agent.capabilities}",
-        )
+        self.logger.log("INFO", f"Agent registered: {agent.name}")
+        if self.logger.logger.isEnabledFor(logging.DEBUG):
+            self.logger.log("DEBUG", "Capabilities", list(agent.capabilities))
 
         # If this agent has a 'protocols' attribute, register them
         if hasattr(agent, "protocols"):

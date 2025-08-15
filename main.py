@@ -189,11 +189,18 @@ def _parse_args() -> argparse.Namespace:
         default="console",
         help="Run in text console mode or voice mode",
     )
+    parser.add_argument(
+        "--verbose-logs",
+        action="store_true",
+        help="Enable verbose capability logging",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
+    if args.verbose_logs:
+        os.environ["JARVIS_VERBOSE_LOGS"] = "1"
     if args.mode == "voice":
         asyncio.run(run_voice())
     else:

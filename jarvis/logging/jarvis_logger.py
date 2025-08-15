@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import os
 from datetime import datetime
 from typing import Any, Optional
 import json
@@ -43,6 +44,16 @@ class JarvisLogger:
                 db_path = DEFAULT_LOG_DB_PATH
 
         self.db_path = db_path
+
+        # Allow verbose logging via environment flag
+        if os.getenv("JARVIS_VERBOSE_LOGS", "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            log_level = logging.DEBUG
+
         self.log_level = log_level
         self._lock = threading.RLock()  # Reentrant lock for thread safety
         self._local = threading.local()  # Thread-local storage for connections
@@ -52,8 +63,8 @@ class JarvisLogger:
 
         # Set up console logging
         self.logger = logging.getLogger("jarvis")
+        self.logger.setLevel(log_level)
         if not self.logger.handlers:
-            self.logger.setLevel(log_level)
             handler = logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
             handler.setFormatter(formatter)
