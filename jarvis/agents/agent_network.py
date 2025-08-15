@@ -202,7 +202,11 @@ class AgentNetwork:
                     allowed = message.content.get("allowed_agents")
                     if allowed:
                         providers = [p for p in providers if p in allowed]
-                    if self.method_recorder and self.method_recorder.recording:
+                    if (
+                        self.method_recorder
+                        and self.method_recorder.recording
+                        and capability != "intent_matching"
+                    ):
                         provider = providers[0] if providers else None
                         if provider:
                             params = message.content.get("data", {})
