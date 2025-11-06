@@ -21,7 +21,7 @@ from ..ai_clients import AIClientFactory, BaseAIClient
 from ..logging import JarvisLogger
 from .config import JarvisConfig
 from .method_recorder import MethodRecorder
-from ..protocols.loggers import ProtocolUsageLogger
+from ..protocols.loggers import ProtocolUsageLogger, InteractionLogger
 from ..protocols.runtime import ProtocolRuntime
 from ..utils.performance import PerfTracker, get_tracker
 from ..agents.factory import AgentFactory
@@ -45,7 +45,9 @@ class JarvisSystem:
         if not record_network_methods:
             record_network_methods = self.config.record_network_methods
 
-        self.logger = JarvisLogger()
+        # Check environment variable for verbose mode
+        verbose = getenv("JARVIS_VERBOSE", "false").lower() in ("true", "1", "yes")
+        self.logger = JarvisLogger(verbose=verbose)
         self.network = AgentNetwork(
             self.logger,
             record_methods=record_network_methods,
@@ -79,7 +81,11 @@ class JarvisSystem:
         self.voice_matcher = None  # backward compatibility
         self.usage_logger = ProtocolUsageLogger(
             mongo_uri=getenv("MONGO_URI", "mongodb://localhost:27017/"),
-            db_name="protocals",
+            db_name=getenv("MONGO_DB_NAME", "protocol"),
+        )
+        self.interaction_logger = InteractionLogger(
+            mongo_uri=getenv("MONGO_URI", "mongodb://localhost:27017/"),
+            db_name=getenv("MONGO_DB_NAME", "protocol"),
         )
 
     async def initialize(self, load_protocol_directory: bool = False) -> None:
@@ -201,6 +207,22 @@ class JarvisSystem:
         allowed_agents: set[str] | None = None,
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
+        import time
+
+        # Track interaction for logging
+        start_time = time.time()
+        user_id = metadata.get("user_id") if metadata else None
+        device = metadata.get("device") if metadata else None
+        location = metadata.get("location") if metadata else None
+        source = metadata.get("source") if metadata else None
+
+        # Track intent and other details for logging
+        captured_intent = None
+        captured_capability = None
+        captured_protocol = None
+        captured_agent_results = None
+        captured_tool_calls = None
+
         if self.network.method_recorder:
             self.network.start_method_recording(f"req_{uuid.uuid4()}", user_input)
         tracker = get_tracker()
@@ -210,7 +232,9 @@ class JarvisSystem:
             tracker.start()
             new_tracker = True
         if metadata:
-            user_id = metadata.get("user_id")
+            # Update user_id if it was provided in metadata (overwrites earlier extraction)
+            if metadata.get("user_id") is not None:
+                user_id = metadata.get("user_id")
             profile_data = metadata.get("profile")
             profile_obj = None
             if user_id is not None:
@@ -233,7 +257,23 @@ class JarvisSystem:
                     else None
                 )
                 if not match_result or match_result["protocol"].name != "wake_up":
-                    return {"response": "Jarvis is in maintenance mode"}
+                    maintenance_response = "Jarvis is in maintenance mode"
+                    # Log interaction
+                    latency_ms = (time.time() - start_time) * 1000
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=maintenance_response,
+                            intent="maintenance",
+                            latency_ms=latency_ms,
+                            success=False,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
+                    )
+                    return {"response": maintenance_response}
 
             # 1) First check for protocol matches (fast path)
             match_result = (
@@ -245,6 +285,8 @@ class JarvisSystem:
             if match_result:
                 protocol = match_result["protocol"]
                 arguments = match_result["arguments"]
+                captured_protocol = protocol.name
+                captured_intent = "protocol"
 
                 self.logger.log(
                     "INFO",
@@ -263,16 +305,56 @@ class JarvisSystem:
                             allowed_agents=allowed_agents,
                         )
 
-                    return {
+                    result_dict = {
                         "response": response,
                         "protocol_executed": protocol.name,
                         "execution_time": "fast",
                     }
+
+                    # Log interaction
+                    latency_ms = (time.time() - start_time) * 1000
+                    if isinstance(response, dict):
+                        response_text = response.get("response", str(response))
+                    else:
+                        response_text = str(response)
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=response_text,
+                            intent=captured_intent,
+                            protocol_executed=captured_protocol,
+                            latency_ms=latency_ms,
+                            success=True,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
+                    )
+
+                    return result_dict
                 except Exception as e:
                     self.logger.log(
                         "ERROR",
                         f"Protocol execution failed for '{protocol.name}'",
                         str(e),
+                    )
+                    # Log failed protocol execution
+                    latency_ms = (time.time() - start_time) * 1000
+                    error_response = f"Protocol execution failed: {str(e)}"
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=error_response,
+                            intent=captured_intent,
+                            protocol_executed=captured_protocol,
+                            latency_ms=latency_ms,
+                            success=False,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
                     )
                     # Fall through to NLU on error
 
@@ -314,6 +396,31 @@ class JarvisSystem:
                         if "response" in result:
                             response_text = result["response"]
                             response_dict = {"response": response_text}
+                            # Extract additional information for logging
+                            if "results" in result:
+                                captured_agent_results = result["results"]
+                                # Try to extract intent and capability from agent results
+                                if captured_agent_results:
+                                    first_result = None
+                                    if isinstance(captured_agent_results, list):
+                                        first_result = captured_agent_results[0]
+                                    if first_result and isinstance(first_result, dict):
+                                        captured_capability = first_result.get(
+                                            "capability"
+                                        )
+                                        if not captured_intent:
+                                            intent_default = (
+                                                "perform_capability"
+                                                if captured_capability
+                                                else "chat"
+                                            )
+                                            captured_intent = first_result.get(
+                                                "intent", intent_default
+                                            )
+                            if "intent" in result:
+                                captured_intent = result["intent"]
+                            if "capability" in result:
+                                captured_capability = result["capability"]
                         else:
                             # Fallback for old format
                             response_dict = result
@@ -321,6 +428,10 @@ class JarvisSystem:
                     else:
                         response_text = str(result)
                         response_dict = {"response": response_text}
+
+                    # Default intent if not captured
+                    if not captured_intent:
+                        captured_intent = "chat"
 
                     # Store conversation history
                     if response_text:
@@ -339,6 +450,25 @@ class JarvisSystem:
                             f"History now has {len(self.conversation_history[user_id])} turns",
                         )
 
+                    # Log interaction
+                    latency_ms = (time.time() - start_time) * 1000
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=response_text or "",
+                            intent=captured_intent,
+                            capability=captured_capability,
+                            agent_results=captured_agent_results,
+                            tool_calls=captured_tool_calls,
+                            latency_ms=latency_ms,
+                            success=True,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
+                    )
+
                     return response_dict
 
                 except asyncio.TimeoutError:
@@ -347,12 +477,44 @@ class JarvisSystem:
                         "NLU routing timed out",
                         f"request_id={request_id}",
                     )
-                    return {
-                        "response": "The request took too long to complete. Please try again.",
-                    }
+                    error_response = (
+                        "The request took too long to complete. Please try again."
+                    )
+                    # Log failed interaction
+                    latency_ms = (time.time() - start_time) * 1000
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=error_response,
+                            intent=captured_intent or "timeout",
+                            latency_ms=latency_ms,
+                            success=False,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
+                    )
+                    return {"response": error_response}
                 except Exception as e:
                     self.logger.log("ERROR", "Error in NLU routing", str(e))
-                    return {"response": f"Sorry, I encountered an error: {str(e)}"}
+                    error_response = f"Sorry, I encountered an error: {str(e)}"
+                    # Log failed interaction
+                    latency_ms = (time.time() - start_time) * 1000
+                    asyncio.create_task(
+                        self.interaction_logger.log_interaction(
+                            user_input=user_input,
+                            response=error_response,
+                            intent=captured_intent or "error",
+                            latency_ms=latency_ms,
+                            success=False,
+                            user_id=user_id,
+                            device=device,
+                            location=location,
+                            source=source,
+                        )
+                    )
+                    return {"response": error_response}
         finally:
             self.network.stop_method_recording()
             if new_tracker:

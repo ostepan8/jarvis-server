@@ -67,6 +67,8 @@ python -m asyncio run main.py
 - `ROKU_IP_ADDRESS` – IP address of the Roku device for TV control (e.g., `192.168.1.150`).
 - `ROKU_USERNAME` – optional username for Roku authentication.
 - `ROKU_PASSWORD` – optional password for Roku authentication.
+- `JARVIS_VERBOSE` – enable verbose logging mode. When set to `true`, `1`, or `yes`, all log levels (DEBUG, INFO, WARNING, ERROR) are written to console and database. When `false` (default), only WARNING and ERROR level logs are written to reduce console spam and database bloat.
+- `JARVIS_LOG_LEVEL` – standard logging level for console output (defaults to `INFO`). Only applies when `JARVIS_VERBOSE=true`.
 
 ## JarvisSystem options
 
@@ -81,6 +83,8 @@ Logs are stored in `jarvis_logs.db`. Use the log viewer:
 ```bash
 python -m jarvis.logging.log_viewer
 ```
+
+By default, logging operates in **non-verbose mode** to reduce console output and database size. In this mode, only WARNING and ERROR level messages are written to both console and database. Set `JARVIS_VERBOSE=true` to enable full logging of all levels (DEBUG, INFO, WARNING, ERROR).
 
 ## Orchestrator prompts
 

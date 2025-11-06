@@ -14,12 +14,26 @@ from contextlib import contextmanager
 # lazily import it in ``JarvisLogger.__init__`` if needed.
 DEFAULT_LOG_DB_PATH = "jarvis_logs.db"
 
+# Actions/patterns that are routine initialization/shutdown and don't need to be saved to database
+_DB_SKIP_PATTERNS = [
+    "Agent registered",
+    "Network started",
+    "Network stopped",
+    "Jarvis system initialized",
+    "Jarvis system shutdown complete",
+    "Jarvis built via JarvisBuilder",
+    "Method recording enabled",
+]
+
 
 class JarvisLogger:
     """Thread-safe logger that writes to stdout and a SQLite database."""
 
     def __init__(
-        self, db_path: str | None = None, log_level: int = logging.INFO
+        self,
+        db_path: str | None = None,
+        log_level: int = logging.INFO,
+        verbose: bool = False,
     ) -> None:
         """Create a new logger.
 
@@ -32,6 +46,12 @@ class JarvisLogger:
             import prevents circular imports during package initialization.
         log_level:
             Standard library logging level for console output.
+        verbose:
+            If False (default), only WARNING and ERROR level logs are written
+            to console and database. If True, all log levels are written
+            according to log_level for console. Database still skips DEBUG
+            logs and routine initialization messages (e.g., "Agent registered",
+            "Network started") even in verbose mode to reduce bloat.
         """
 
         if db_path is None:
@@ -44,6 +64,7 @@ class JarvisLogger:
 
         self.db_path = db_path
         self.log_level = log_level
+        self.verbose = verbose
         self._lock = threading.RLock()  # Reentrant lock for thread safety
         self._local = threading.local()  # Thread-local storage for connections
 
@@ -53,7 +74,9 @@ class JarvisLogger:
         # Set up console logging
         self.logger = logging.getLogger("jarvis")
         if not self.logger.handlers:
-            self.logger.setLevel(log_level)
+            # In non-verbose mode, only show warnings and errors
+            console_level = logging.WARNING if not verbose else log_level
+            self.logger.setLevel(console_level)
             handler = logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
             handler.setFormatter(formatter)
@@ -104,10 +127,32 @@ class JarvisLogger:
                 """
             )
 
+    def _should_skip_db_log(self, level: str, action: str) -> bool:
+        """Check if this log should be skipped for database storage."""
+        numeric_level = getattr(logging, level.upper(), logging.INFO)
+
+        # Always skip DEBUG level logs for database (too verbose)
+        if numeric_level == logging.DEBUG:
+            return True
+
+        # Skip routine initialization/status messages
+        for pattern in _DB_SKIP_PATTERNS:
+            if action.startswith(pattern):
+                return True
+
+        return False
+
     def log(self, level: str, action: str, details: Optional[Any] = None) -> None:
         """Thread-safe log method that writes to stdout and SQLite database."""
         try:
             level_name = level.upper()
+
+            # In non-verbose mode, only log WARNING and ERROR level messages
+            if not self.verbose:
+                numeric_level = getattr(logging, level_name, logging.INFO)
+                # Only proceed if it's WARNING or ERROR
+                if numeric_level < logging.WARNING:
+                    return  # Skip DEBUG and INFO in non-verbose mode
 
             # Format details
             if details is not None and not isinstance(details, str):
@@ -122,14 +167,19 @@ class JarvisLogger:
             message = f"{action}: {details_str}" if details_str else action
             self.logger.log(getattr(logging, level_name, logging.INFO), message)
 
-            # Log to database (made thread-safe with our context manager)
-            timestamp = datetime.now().isoformat()
+            # Check if we should skip database logging (even in verbose mode)
+            skip_db = self._should_skip_db_log(level_name, action)
 
-            with self._db_context() as conn:
-                conn.execute(
-                    "INSERT INTO logs (timestamp, level, action, details) VALUES (?, ?, ?, ?)",
-                    (timestamp, level_name, action, details_str),
-                )
+            # Log to database (made thread-safe with our context manager)
+            # Skip routine initialization messages and DEBUG logs even in verbose mode
+            if not skip_db:
+                timestamp = datetime.now().isoformat()
+
+                with self._db_context() as conn:
+                    conn.execute(
+                        "INSERT INTO logs (timestamp, level, action, details) VALUES (?, ?, ?, ?)",
+                        (timestamp, level_name, action, details_str),
+                    )
 
         except Exception as e:
             # Fallback: if database logging fails, at least log to console

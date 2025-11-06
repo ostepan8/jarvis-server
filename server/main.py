@@ -59,7 +59,8 @@ def create_app() -> FastAPI:
         # Already loaded at module import; idempotent if called again.
         level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
         level = getattr(logging, level_name, logging.INFO)
-        app.state.logger = JarvisLogger(log_level=level)
+        verbose = os.getenv("JARVIS_VERBOSE", "false").lower() in ("true", "1", "yes")
+        app.state.logger = JarvisLogger(log_level=level, verbose=verbose)
 
         lighting_backend = os.getenv("LIGHTING_BACKEND", "phillips_hue")
         yeelight_bulb_ips_str = os.getenv("YEELIGHT_BULB_IPS", "")
