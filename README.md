@@ -17,7 +17,8 @@ If you prefer Poetry, run `poetry install` instead.
 
 ## Environment variables
 
-Create a `.env` file or export the following variables before running the server:
+Create a `.env` file or export the following variables before running the server.
+See `env.example` for a complete example configuration file.
 
 - `OPENAI_API_KEY` – API key for OpenAI based clients
 - `ANTHROPIC_API_KEY` – key for Anthropic clients (optional)
@@ -26,7 +27,10 @@ Create a `.env` file or export the following variables before running the server
 - `WEATHER_API_KEY` – API key for OpenWeatherMap used by `WeatherAgent`
 - `CONFIG_SECRET` – 32-byte base64 key used to encrypt user configuration
 - `JWT_SECRET` – secret key for signing authentication tokens (required)
-- `PHILLIPS_HUE_BRIDGE_IP` – IP address of the Philips Hue Bridge for light control (optional)
+- `LIGHTING_BACKEND` – Lighting backend to use: `"phillips_hue"` or `"yeelight"` (default: `"phillips_hue"`)
+- `PHILLIPS_HUE_BRIDGE_IP` – IP address of the Philips Hue Bridge (required if using `phillips_hue` backend)
+- `PHILLIPS_HUE_USERNAME` – Username for Philips Hue Bridge authentication (optional)
+- `YEELIGHT_BULB_IPS` – Comma-separated list of Yeelight bulb IP addresses (optional, auto-discovers if empty)
 
 ## Running the server
 

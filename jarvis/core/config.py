@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 import os
 
 
@@ -32,8 +32,22 @@ class JarvisConfig:
     )
     memory_dir: Optional[str] = None
     weather_api_key: Optional[str] = None
-    hue_bridge_ip: Optional[str] = None
-    hue_username: Optional[str] = None
+    hue_bridge_ip: Optional[str] = field(
+        default_factory=lambda: os.getenv("PHILLIPS_HUE_BRIDGE_IP")
+    )
+    hue_username: Optional[str] = field(
+        default_factory=lambda: os.getenv("PHILLIPS_HUE_USERNAME")
+    )
+    lighting_backend: str = field(
+        default_factory=lambda: os.getenv("LIGHTING_BACKEND", "phillips_hue")
+    )
+    yeelight_bulb_ips: Optional[List[str]] = field(
+        default_factory=lambda: (
+            [ip.strip() for ip in os.getenv("YEELIGHT_BULB_IPS", "").split(",")]
+            if os.getenv("YEELIGHT_BULB_IPS", "").strip()
+            else None
+        )
+    )
     flags: FeatureFlags = field(default_factory=FeatureFlags)
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")

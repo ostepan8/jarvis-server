@@ -10,6 +10,7 @@ from ..agents.agent_network import AgentNetwork
 from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
 from ..agents.lights_agent import PhillipsHueAgent
+from ..agents.lights_agent.lighting_agent import LightingAgent
 from ..agents.orchestrator_agent import OrchestratorAgent
 from ..agents.chat_agent import ChatAgent
 from .profile import AgentProfile
@@ -59,7 +60,7 @@ class JarvisSystem:
         self.orchestrator: OrchestratorAgent | None = None
         self.calendar_service: CalendarService | None = None
         self.canvas_service: CanvasService | None = None  # ← NEW
-        self.lights_agent: PhillipsHueAgent | None = None
+        self.lights_agent: LightingAgent | PhillipsHueAgent | None = None
         self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
         self.vector_memory: VectorMemoryService | None = None
@@ -199,9 +200,7 @@ class JarvisSystem:
     ) -> Dict[str, Any]:
         """Process a user request through the network via voice trigger or NLU routing."""
         if self.network.method_recorder:
-            self.network.start_method_recording(
-                f"req_{uuid.uuid4()}", user_input
-            )
+            self.network.start_method_recording(f"req_{uuid.uuid4()}", user_input)
         tracker = get_tracker()
         new_tracker = False
         if tracker is None:
@@ -365,16 +364,13 @@ class JarvisSystem:
                 tracker.save()
                 self.logger.log("INFO", "Performance summary", tracker.summary())
 
-
     def get_available_commands(
         self, allowed_agents: set[str] | None = None
     ) -> Dict[str, List[str]]:
         """Get all available voice trigger commands organized by protocol."""
         if not self.protocol_runtime:
             return {}
-        return self.protocol_runtime.get_available_commands(
-            allowed_agents
-        )
+        return self.protocol_runtime.get_available_commands(allowed_agents)
 
     async def shutdown(self):
         """Shutdown the system"""

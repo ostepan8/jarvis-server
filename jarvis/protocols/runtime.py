@@ -83,7 +83,9 @@ class ProtocolRuntime:
             allowed_agents=allowed_agents,
         )
         protocol = match["protocol"]
-        return await self._format_protocol_response(protocol, results, match.get("arguments"))
+        return await self._format_protocol_response(
+            protocol, results, match.get("arguments")
+        )
 
     # ------------------------------------------------------------------
     # Listing helpers
@@ -101,7 +103,9 @@ class ProtocolRuntime:
             protocols.append(proto)
         return protocols
 
-    def get_available_commands(self, allowed_agents: set[str] | None = None) -> Dict[str, list[str]]:
+    def get_available_commands(
+        self, allowed_agents: set[str] | None = None
+    ) -> Dict[str, list[str]]:
         """Return available trigger phrases grouped by protocol name."""
         commands: Dict[str, list[str]] = {}
         for proto in self.list_protocols(allowed_agents):
@@ -121,8 +125,16 @@ class ProtocolRuntime:
         errors = []
         successes = []
         for step_id, result in results.items():
+            # Check for dict-based errors
             if isinstance(result, dict) and "error" in result:
                 errors.append(result["error"])
+            # Check for string-based failures (backup detection)
+            elif isinstance(result, str) and result.lower().startswith("failed to"):
+                errors.append(result)
+            # Check for tuple-based errors
+            elif isinstance(result, tuple) and len(result) == 2 and result[0] is None:
+                error_msg = result[1] or "Unknown error"
+                errors.append(error_msg)
             else:
                 successes.append(step_id)
 
@@ -160,7 +172,8 @@ class ProtocolRuntime:
             if chat_agent is None:
                 return base_prompt
             message, _ = await chat_agent.ai_client.weak_chat(
-                [{"role": "user", "content": context_prompt}], [],
+                [{"role": "user", "content": context_prompt}],
+                [],
             )
             return message.content
 

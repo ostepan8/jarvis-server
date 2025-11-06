@@ -55,6 +55,8 @@ python -m asyncio run main.py
 ## Environment variables
 - `OPENAI_API_KEY` – key for OpenAI based clients.
 - `ANTHROPIC_API_KEY` – key for Anthropic based clients.
+- `JWT_SECRET` – secret key for signing authentication tokens (required).
+- `AUTH_DB_PATH` – path to the SQLite auth database (defaults to `auth.db`).
 
 ## JarvisSystem options
 - `response_timeout` – number of seconds the orchestrator waits for

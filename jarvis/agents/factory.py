@@ -9,6 +9,7 @@ from ..agents.agent_network import AgentNetwork
 from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
 from ..agents.lights_agent import PhillipsHueAgent
+from ..agents.lights_agent.lighting_agent import create_lighting_agent
 from ..agents.calendar_agent.agent import CollaborativeCalendarAgent
 from ..agents.orchestrator_agent import OrchestratorAgent
 from ..agents.weather_agent import WeatherAgent
@@ -18,7 +19,11 @@ from ..agents.canvas import CanvasAgent
 from ..services.vector_memory import VectorMemoryService
 from ..services.calendar_service import CalendarService
 from ..services.canvas_service import CanvasService
-from ..night_agents import NightAgent, TriggerPhraseSuggesterAgent, NightModeControllerAgent
+from ..night_agents import (
+    NightAgent,
+    TriggerPhraseSuggesterAgent,
+    NightModeControllerAgent,
+)
 
 if TYPE_CHECKING:
     from ..core import JarvisSystem
@@ -127,18 +132,56 @@ class AgentFactory:
     def _build_lights(
         self, network: AgentNetwork, ai_client: BaseAIClient
     ) -> Dict[str, Any]:
-        if not self.config.hue_bridge_ip:
+        backend_type = self.config.lighting_backend.lower()
+        backend_kwargs = {}
+        if backend_type == "phillips_hue":
+            if not self.config.hue_bridge_ip:
+                self.logger.log(
+                    "INFO", "Skipping lights agent", "No Hue bridge IP configured"
+                )
+                return {}
+            backend_kwargs = {
+                "bridge_ip": self.config.hue_bridge_ip,
+                "username": self.config.hue_username,
+            }
+        elif backend_type == "yeelight":
+            backend_kwargs = {
+                "bulb_ips": self.config.yeelight_bulb_ips,
+            }
+        else:
             self.logger.log(
-                "INFO", "Skipping lights agent", "No Hue bridge IP configured"
+                "WARNING",
+                "Unknown lighting backend",
+                f"Using 'phillips_hue' as fallback. Got: {backend_type}",
+            )
+            if not self.config.hue_bridge_ip:
+                return {}
+            backend_type = "phillips_hue"
+            backend_kwargs = {
+                "bridge_ip": self.config.hue_bridge_ip,
+                "username": self.config.hue_username,
+            }
+
+        try:
+            lights_agent = create_lighting_agent(
+                backend_type=backend_type,
+                ai_client=ai_client,
+                logger=self.logger,
+                **backend_kwargs,
+            )
+            network.register_agent(lights_agent)
+            network.agents["PhillipsHueAgent"] = lights_agent
+            network.logger.log(
+                "INFO",
+                "Registered LightingAgent with alias",
+                f"PhillipsHueAgent (backend: {backend_type})",
+            )
+            return {"lights_agent": lights_agent}
+        except Exception as exc:
+            self.logger.log(
+                "ERROR", f"Failed to create {backend_type} lighting agent", str(exc)
             )
             return {}
-        lights_agent = PhillipsHueAgent(
-            ai_client=ai_client,
-            bridge_ip=self.config.hue_bridge_ip,
-            username=self.config.hue_username,
-        )
-        network.register_agent(lights_agent)
-        return {"lights_agent": lights_agent}
 
     def _build_canvas(
         self, network: AgentNetwork, ai_client: BaseAIClient

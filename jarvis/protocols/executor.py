@@ -150,7 +150,31 @@ class ProtocolExecutor:
 
                 result = await agent.run_capability(step.function, **params)
 
-                results[step_id] = result
+                # Detect string-based failures (common pattern in agent methods)
+                if isinstance(result, str) and result.lower().startswith("failed to"):
+                    self.logger.log(
+                        "WARNING",
+                        f"Step {step_id} returned failure string",
+                        result,
+                    )
+                    results[step_id] = {"error": result}
+                # Detect tuple-based errors (some methods return (None, error_message))
+                elif isinstance(result, tuple) and len(result) == 2:
+                    first, second = result
+                    # Check if first element is falsy (None, False, empty string, etc.)
+                    # and second is an error message string
+                    if not first and isinstance(second, str):
+                        error_msg = second if second else "Unknown error"
+                        self.logger.log(
+                            "WARNING",
+                            f"Step {step_id} returned error tuple",
+                            error_msg,
+                        )
+                        results[step_id] = {"error": error_msg}
+                    else:
+                        results[step_id] = result
+                else:
+                    results[step_id] = result
                 self.logger.log("INFO", f"Step {step_id} completed", str(result))
 
             except NotImplementedError:
