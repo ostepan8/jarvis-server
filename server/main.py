@@ -20,6 +20,7 @@ from server.routers.protocols import router as protocol_router
 from server.routers.users import router as users_router
 from server.routers.agents import router as agents_router
 from server.routers.goodmorning import router as goodmorning_router
+from server.routers.admin import router as admin_router
 
 
 def create_app() -> FastAPI:
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(protocol_router, prefix="/protocols", tags=["protocols"])
     app.include_router(users_router, prefix="/users", tags=["users"])
     app.include_router(goodmorning_router, prefix="/goodmorning", tags=["goodmorning"])
+    app.include_router(admin_router)
 
     # Add startup and shutdown events
     @app.on_event("startup")
@@ -108,7 +110,10 @@ app = create_app()
 def run():
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=DEFAULT_PORT)
+    # Allow PORT environment variable to override default port
+    port = int(os.getenv("PORT", DEFAULT_PORT))
+    print(f"Starting Jarvis server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

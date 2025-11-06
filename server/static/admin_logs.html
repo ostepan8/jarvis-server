@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. - Interaction Log</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        @keyframes scan {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        body {
+            font-family: 'Rajdhani', 'Courier New', monospace;
+            background: #0a0e27;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 145, 0, 0.03) 0%, transparent 50%),
+                linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #00f0ff;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 240, 255, 0.03) 2px,
+                    rgba(0, 240, 255, 0.03) 4px
+                );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-link {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: #00f0ff;
+            padding: 10px 20px;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-decoration: none;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .nav-link:hover {
+            border-color: #00f0ff;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+            background: rgba(0, 240, 255, 0.15);
+        }
+        
+        .nav-link.active {
+            border-color: #ff9100;
+            color: #ff9100;
+            box-shadow: 0 0 15px rgba(255, 145, 0, 0.5);
+        }
+        
+        header {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.1) 0%, rgba(255, 145, 0, 0.1) 100%);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 0;
+            padding: 30px 40px;
+            margin-bottom: 30px;
+            position: relative;
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 0 20px rgba(0, 240, 255, 0.2),
+                inset 0 0 20px rgba(0, 240, 255, 0.05);
+        }
+        
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.4), transparent);
+            animation: scan 3s infinite;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-size: 2em;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00f0ff 0%, #ff9100 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .filter-group label {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.8em;
+            color: rgba(0, 240, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        select, input {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: #00f0ff;
+            padding: 8px 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #00f0ff;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(255, 145, 0, 0.2) 100%);
+            border: 1px solid rgba(0, 240, 255, 0.5);
+            color: #00f0ff;
+            padding: 10px 25px;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            border-color: #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
+        
+        .logs-container {
+            background: rgba(0, 240, 255, 0.05);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .log-entry {
+            background: rgba(0, 240, 255, 0.03);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 20px;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .log-entry:hover {
+            border-color: rgba(0, 240, 255, 0.5);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+            background: rgba(0, 240, 255, 0.08);
+        }
+        
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .log-id {
+            color: rgba(0, 240, 255, 0.6);
+            font-size: 0.85em;
+        }
+        
+        .log-timestamp {
+            color: #ff9100;
+            font-weight: 600;
+        }
+        
+        .log-level {
+            padding: 4px 12px;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.75em;
+            font-weight: 700;
+            text-transform: uppercase;
+            border: 1px solid;
+            letter-spacing: 1px;
+        }
+        
+        .log-level.INFO {
+            color: #00ff88;
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .log-level.WARNING {
+            color: #ff9100;
+            border-color: #ff9100;
+            background: rgba(255, 145, 0, 0.1);
+        }
+        
+        .log-level.ERROR {
+            color: #ff4444;
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .log-level.DEBUG {
+            color: #00bfff;
+            border-color: #00bfff;
+            background: rgba(0, 191, 255, 0.1);
+        }
+        
+        .log-action {
+            color: #00f0ff;
+            font-weight: 700;
+            margin: 10px 0;
+            text-transform: uppercase;
+        }
+        
+        .log-details {
+            color: rgba(0, 240, 255, 0.7);
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 30px;
+            font-family: 'Orbitron', monospace;
+        }
+        
+        .pagination-btn {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: #00f0ff;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+            border-color: #00f0ff;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 80px 20px;
+            color: rgba(0, 240, 255, 0.6);
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .error {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.5);
+            color: #ff4444;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+        }
+        
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 240, 255, 0.05);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 240, 255, 0.3);
+            border: 1px solid rgba(0, 240, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin/dashboard/html" class="nav-link">DASHBOARD</a>
+            <a href="/admin/logs/html" class="nav-link active">INTERACTION LOG</a>
+            <a href="/admin/memories/html" class="nav-link">MEMORY BANK</a>
+        </div>
+        
+        <header>
+            <div class="header-content">
+                <div class="logo">INTERACTION LOG</div>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="levelFilter">LEVEL:</label>
+                        <select id="levelFilter">
+                            <option value="">ALL</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="DEBUG">DEBUG</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="limitInput">LIMIT:</label>
+                        <input type="number" id="limitInput" value="100" min="10" max="1000" step="10">
+                    </div>
+                    <button class="btn" onclick="loadLogs()">LOAD</button>
+                </div>
+            </div>
+        </header>
+        
+        <div id="errorContainer"></div>
+        
+        <div class="logs-container" id="logsContainer">
+            <div class="loading">LOADING LOGS</div>
+        </div>
+        
+        <div class="pagination" id="pagination"></div>
+    </div>
+    
+    <script>
+        let currentOffset = 0;
+        let currentLimit = 100;
+        let currentLevel = '';
+        
+        function getApiBase() {
+            const stored = localStorage.getItem('jarvis_api_base');
+            return stored || window.location.origin;
+        }
+        
+        async function fetchAPI(endpoint) {
+            const apiBase = getApiBase();
+            const url = `${apiBase}${endpoint}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        }
+        
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error">ERROR: ${message}</div>`;
+        }
+        
+        function renderLog(log) {
+            const levelClass = log.level || 'INFO';
+            return `
+                <div class="log-entry">
+                    <div class="log-header">
+                        <span class="log-id">ID: ${log.id}</span>
+                        <span class="log-timestamp">${log.timestamp}</span>
+                        <span class="log-level ${levelClass}">${levelClass}</span>
+                    </div>
+                    <div class="log-action">${log.action || 'N/A'}</div>
+                    ${log.details ? `<div class="log-details">${escapeHtml(log.details)}</div>` : ''}
+                </div>
+            `;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function renderPagination(total, limit, offset) {
+            const currentPage = Math.floor(offset / limit) + 1;
+            const totalPages = Math.ceil(total / limit);
+            const container = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.innerHTML = `
+                <button class="pagination-btn" onclick="previousPage()" ${offset === 0 ? 'disabled' : ''}>
+                    PREV
+                </button>
+                <span style="color: #00f0ff; font-size: 0.9em;">
+                    PAGE ${currentPage} OF ${totalPages} (${total} TOTAL)
+                </span>
+                <button class="pagination-btn" onclick="nextPage()" ${offset + limit >= total ? 'disabled' : ''}>
+                    NEXT
+                </button>
+            `;
+        }
+        
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '';
+            
+            currentLevel = document.getElementById('levelFilter').value;
+            currentLimit = parseInt(document.getElementById('limitInput').value) || 100;
+            
+            container.innerHTML = '<div class="loading">LOADING LOGS</div>';
+            
+            try {
+                let url = `/admin/logs?limit=${currentLimit}&offset=${currentOffset}`;
+                if (currentLevel) {
+                    url += `&level=${currentLevel}`;
+                }
+                
+                const data = await fetchAPI(url);
+                
+                if (data.logs && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(renderLog).join('');
+                    renderPagination(data.total, data.limit, data.offset);
+                } else {
+                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(0, 240, 255, 0.5); font-family: \'Orbitron\', monospace;">NO LOGS FOUND</div>';
+                    renderPagination(0, 0, 0);
+                }
+            } catch (error) {
+                showError(error.message);
+                container.innerHTML = '<div class="error">FAILED TO LOAD LOGS</div>';
+            }
+        }
+        
+        function nextPage() {
+            currentOffset += currentLimit;
+            loadLogs();
+        }
+        
+        function previousPage() {
+            currentOffset = Math.max(0, currentOffset - currentLimit);
+            loadLogs();
+        }
+        
+        // Load logs on page load
+        window.addEventListener('DOMContentLoaded', loadLogs);
+        
+        // Auto-reload every 30 seconds
+        setInterval(loadLogs, 30000);
+    </script>
+</body>
+</html>
+
