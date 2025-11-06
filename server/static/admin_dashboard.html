@@ -565,7 +565,7 @@
                 </div>
                 <div class="api-base">
                     <label for="apiBase">API ENDPOINT:</label>
-                    <input type="text" id="apiBase" value="http://localhost:8051" placeholder="http://localhost:8051">
+                    <input type="text" id="apiBase" placeholder="Auto-detect">
                     <button class="refresh-btn" onclick="loadDashboard()">SYNC</button>
                 </div>
             </div>
@@ -579,8 +579,21 @@
     </div>
     
     <script>
+        function getApiBase() {
+            const stored = localStorage.getItem('jarvis_api_base');
+            return stored || window.location.origin;
+        }
+        
+        function setApiBase(value) {
+            if (value && value !== window.location.origin) {
+                localStorage.setItem('jarvis_api_base', value);
+            } else {
+                localStorage.removeItem('jarvis_api_base');
+            }
+        }
+        
         async function fetchAPI(endpoint) {
-            const apiBase = document.getElementById('apiBase').value || window.location.origin;
+            const apiBase = getApiBase();
             const url = `${apiBase}${endpoint}`;
             const response = await fetch(url);
             if (!response.ok) {
@@ -792,8 +805,22 @@
             }
         }
         
-        // Load dashboard on page load
-        window.addEventListener('DOMContentLoaded', loadDashboard);
+        // Initialize API base input on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const apiBaseInput = document.getElementById('apiBase');
+            const stored = localStorage.getItem('jarvis_api_base');
+            if (stored) {
+                apiBaseInput.value = stored;
+            }
+            
+            // Update localStorage when input changes
+            apiBaseInput.addEventListener('change', () => {
+                setApiBase(apiBaseInput.value);
+            });
+            
+            // Load dashboard
+            loadDashboard();
+        });
     </script>
 </body>
 </html>
