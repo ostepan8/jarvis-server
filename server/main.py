@@ -7,6 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 
+# Load environment variables as early as possible so modules depending on env
+# (e.g., auth with JWT configuration) see them during import time.
+load_dotenv()
+
 from jarvis import JarvisLogger, JarvisSystem, JarvisConfig
 from jarvis.core import DEFAULT_PORT
 from server.database import init_database, close_database
@@ -15,6 +19,7 @@ from server.routers.auth import router as auth_router
 from server.routers.protocols import router as protocol_router
 from server.routers.users import router as users_router
 from server.routers.agents import router as agents_router
+from server.routers.goodmorning import router as goodmorning_router
 
 
 def create_app() -> FastAPI:
@@ -43,22 +48,35 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/auth", tags=["auth"])
     app.include_router(protocol_router, prefix="/protocols", tags=["protocols"])
     app.include_router(users_router, prefix="/users", tags=["users"])
+    app.include_router(goodmorning_router, prefix="/goodmorning", tags=["goodmorning"])
 
     # Add startup and shutdown events
     @app.on_event("startup")
     async def startup_event() -> None:
         """Initialize the collaborative Jarvis system."""
-        load_dotenv()
+        # Already loaded at module import; idempotent if called again.
         level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
         level = getattr(logging, level_name, logging.INFO)
         app.state.logger = JarvisLogger(log_level=level)
+
+        lighting_backend = os.getenv("LIGHTING_BACKEND", "phillips_hue")
+        yeelight_bulb_ips_str = os.getenv("YEELIGHT_BULB_IPS", "")
+        yeelight_bulb_ips = (
+            [ip.strip() for ip in yeelight_bulb_ips_str.split(",")]
+            if yeelight_bulb_ips_str.strip()
+            else None
+        )
 
         config = JarvisConfig(
             ai_provider="openai",
             api_key=os.getenv("OPENAI_API_KEY"),
             calendar_api_url=os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
-            repo_path=os.getenv("REPO_PATH", "."),
             response_timeout=float(os.getenv("JARVIS_RESPONSE_TIMEOUT", 15.0)),
+            weather_api_key=os.getenv("WEATHER_API_KEY"),
+            hue_bridge_ip=os.getenv("PHILLIPS_HUE_BRIDGE_IP"),
+            hue_username=os.getenv("PHILLIPS_HUE_USERNAME"),
+            lighting_backend=lighting_backend,
+            yeelight_bulb_ips=yeelight_bulb_ips,
         )
 
         jarvis_system = JarvisSystem(config)

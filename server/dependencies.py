@@ -23,7 +23,9 @@ def get_auth_db(request: Request) -> sqlite3.Connection:
     return request.app.state.auth_db
 
 
-async def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_auth_db)) -> dict:
+async def get_current_user(
+    request: Request, db: sqlite3.Connection = Depends(get_auth_db)
+) -> dict:
     """Return the authenticated user from the Authorization header."""
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
@@ -77,8 +79,8 @@ async def get_user_jarvis(
             or user_conf.get("anthropic_api_key")
             or base.config.api_key
         ),
-        calendar_api_url=user_conf.get("calendar_api_url") or base.config.calendar_api_url,
-        repo_path=base.config.repo_path,
+        calendar_api_url=user_conf.get("calendar_api_url")
+        or base.config.calendar_api_url,
         response_timeout=base.config.response_timeout,
         intent_timeout=base.config.intent_timeout,
         perf_tracking=base.config.perf_tracking,

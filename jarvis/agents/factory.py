@@ -11,7 +11,6 @@ from ..agents.protocol_agent import ProtocolAgent
 from ..agents.lights_agent import PhillipsHueAgent
 from ..agents.lights_agent.lighting_agent import create_lighting_agent
 from ..agents.calendar_agent.agent import CollaborativeCalendarAgent
-from ..agents.orchestrator_agent import OrchestratorAgent
 from ..agents.weather_agent import WeatherAgent
 from ..agents.memory_agent import MemoryAgent
 from ..agents.chat_agent import ChatAgent
@@ -46,7 +45,6 @@ class AgentFactory:
         refs: Dict[str, Any] = {}
         refs.update(self._build_memory(network, ai_client))
         refs.update(self._build_nlu(network, ai_client))
-        refs.update(self._build_orchestrator(network, ai_client))
         refs.update(self._build_calendar(network, ai_client))
         refs.update(self._build_chat(network, ai_client))
 
@@ -82,15 +80,6 @@ class AgentFactory:
         nlu_agent = NLUAgent(ai_client, self.logger)
         network.register_agent(nlu_agent)
         return {"nlu_agent": nlu_agent}
-
-    def _build_orchestrator(
-        self, network: AgentNetwork, ai_client: BaseAIClient
-    ) -> Dict[str, Any]:
-        orchestrator = OrchestratorAgent(
-            ai_client, self.logger, response_timeout=self.config.response_timeout
-        )
-        network.register_agent(orchestrator)
-        return {"orchestrator": orchestrator}
 
     def _build_calendar(
         self, network: AgentNetwork, ai_client: BaseAIClient

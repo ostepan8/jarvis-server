@@ -1,0 +1,19 @@
+{
+  "id": "b80fa095-d033-436b-a6d3-773810e06587",
+  "name": "req_58c55cbb-9d8a-4c68-ad80-e3de803cbcf8",
+  "description": "my friends are very mad at you please do a better job",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "ChatAgent",
+      "function": "chat",
+      "parameters": {
+        "prompt": "my friends are very mad at you please do a better job"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

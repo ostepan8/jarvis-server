@@ -213,3 +213,65 @@ class NetworkAgent:
         for key, value in fields.items():
             if hasattr(self.profile, key):
                 setattr(self.profile, key, value)
+
+    # ------------------------------------------------------------------
+    # Autonomous routing helpers
+    # ------------------------------------------------------------------
+    async def _decide_next_step(
+        self, result: Dict[str, Any], context: Dict[str, Any], original_prompt: str
+    ) -> Dict[str, Any]:
+        """
+        Decide what to do next after completing a task.
+        Returns: {"action": "complete" | "route_to_agent" | "route_to_nlu",
+                  "capability": str (if routing), "prompt": str (if routing),
+                  "target_agent": str (optional)}
+        """
+        # Default: complete the task
+        return {"action": "complete"}
+
+    async def _request_and_wait_for_agent(
+        self,
+        capability: str,
+        data: Any,
+        request_id: str,
+        timeout: float = 30.0,
+        allowed_agents: Optional[set[str]] = None,
+    ) -> Any:
+        """
+        Request a capability from another agent and wait for the response.
+        Returns the result from the agent.
+        """
+        if not self.network:
+            raise RuntimeError("Agent not connected to network")
+
+        req_id = await self.request_capability(
+            capability=capability,
+            data=data,
+            request_id=request_id,
+            allowed_agents=allowed_agents,
+        )
+
+        return await self.network.wait_for_response(req_id, timeout=timeout)
+
+    async def _route_to_nlu_for_reclassification(
+        self, user_input: str, context: Dict[str, Any], request_id: str
+    ) -> str:
+        """
+        Route back to NLU for re-classification. This allows NLU to handle
+        complex multi-step requests that agents discover during execution.
+        """
+        if not self.network:
+            raise RuntimeError("Agent not connected to network")
+
+        # Add context to the input for NLU
+        enhanced_input = f"{user_input}\n\nContext from previous step: {context}"
+
+        new_request_id = str(uuid.uuid4())
+        await self.network.request_capability(
+            from_agent=self.name,
+            capability="intent_matching",
+            data={"input": enhanced_input, "context": context},
+            request_id=new_request_id,
+        )
+
+        return new_request_id

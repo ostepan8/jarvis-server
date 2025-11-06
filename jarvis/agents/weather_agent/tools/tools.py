@@ -11,7 +11,10 @@ tools: List[Dict[str, Any]] = [
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "Specific city name, e.g., 'Chicago', 'New York', 'London'. Never use 'current location' - always ask user for city name if unclear.",
+                        "description": (
+                            "Specific city name, e.g., 'Chicago', 'New York', 'London'. "
+                            "Never use 'current location' - always ask user for city name if unclear."
+                        ),
                     }
                 },
                 "required": ["location"],
@@ -28,7 +31,10 @@ tools: List[Dict[str, Any]] = [
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "Specific city name, e.g., 'Chicago', 'New York', 'London'. Never use 'current location'.",
+                        "description": (
+                            "Specific city name, e.g., 'Chicago', 'New York', 'London'. "
+                            "Never use 'current location'."
+                        ),
                     },
                     "days": {
                         "type": "integer",

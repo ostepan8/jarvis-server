@@ -11,7 +11,6 @@ from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
 from ..agents.lights_agent import PhillipsHueAgent
 from ..agents.lights_agent.lighting_agent import LightingAgent
-from ..agents.orchestrator_agent import OrchestratorAgent
 from ..agents.chat_agent import ChatAgent
 from .profile import AgentProfile
 from ..services.vector_memory import VectorMemoryService
@@ -57,7 +56,6 @@ class JarvisSystem:
 
         # Placeholders for your agents
         self.nlu_agent: NLUAgent | None = None
-        self.orchestrator: OrchestratorAgent | None = None
         self.calendar_service: CalendarService | None = None
         self.canvas_service: CanvasService | None = None  # ← NEW
         self.lights_agent: LightingAgent | PhillipsHueAgent | None = None
@@ -90,7 +88,6 @@ class JarvisSystem:
 
         self.vector_memory = refs.get("vector_memory")
         self.nlu_agent = refs.get("nlu_agent")
-        self.orchestrator = refs.get("orchestrator")
         self.calendar_service = refs.get("calendar_service")
         self.chat_agent = refs.get("chat_agent")
         self.protocol_agent = refs.get("protocol_agent")
@@ -164,8 +161,9 @@ class JarvisSystem:
     ) -> None:
         """Initialize the protocol runtime and related helpers."""
         if definition_dir is None:
+            # Path from jarvis/core/system.py to jarvis/protocols/defaults/definitions
             definition_dir = (
-                Path(__file__).parent / "protocols" / "defaults" / "definitions"
+                Path(__file__).parent.parent / "protocols" / "defaults" / "definitions"
             )
         self.protocol_runtime = ProtocolRuntime(
             self.network, self.logger, usage_logger=self.usage_logger
@@ -274,89 +272,46 @@ class JarvisSystem:
                     )
                     # Fall through to NLU on error
 
-            # 2) No protocol match or protocol failed - use NLU agent
+            # 2) No protocol match or protocol failed - use NLU agent for routing
             request_id = str(uuid.uuid4())
-            async with tracker.timer("nlu_classification"):
+
+            # Use "JarvisSystem" as the from_agent so NLU knows we're the original requester
+            async with tracker.timer("nlu_routing"):
                 await self.network.request_capability(
-                    from_agent=self.nlu_agent.name,
+                    from_agent="JarvisSystem",
                     capability="intent_matching",
                     data={"input": user_input},
                     request_id=request_id,
-                    allowed_agents=allowed_agents,
+                    allowed_agents=allowed_agents if allowed_agents else None,
                 )
 
                 try:
-                    classification = await self.network.wait_for_response(
-                        request_id, timeout=self.config.intent_timeout
+                    # NLU now handles routing directly and will respond when complete
+                    result = await self.network.wait_for_response(
+                        request_id, timeout=self.config.response_timeout
                     )
+
+                    # Result should have "response" key from NLU's formatted response
+                    if isinstance(result, dict):
+                        if "response" in result:
+                            return {"response": result["response"]}
+                        # Fallback for old format
+                        return result
+
+                    return {"response": str(result)}
+
                 except asyncio.TimeoutError:
                     self.logger.log(
                         "ERROR",
-                        "NLU classification timed out",
+                        "NLU routing timed out",
                         f"request_id={request_id}",
                     )
                     return {
                         "response": "The request took too long to complete. Please try again.",
                     }
-            if not isinstance(classification, dict) or "intent" not in classification:
-                self.logger.log("ERROR", "Error from NLUAgent", str(classification))
-                return {
-                    "response": "Sorry sir, It appears I had trouble understanding that. Error: "
-                    + str(classification)
-                }
-            intent = classification["intent"]
-            target = classification["target_agent"]
-            proto = classification.get("protocol_name")
-            cap = classification.get("capability")
-
-            self.logger.log(
-                "INFO",
-                "Routing after NLU",
-                f"intent={intent}, target={target}, cap={cap}, proto={proto}",
-            )
-
-            # 4) Route to the appropriate agent
-            if intent == "perform_capability" and cap:
-                request_id = str(uuid.uuid4())
-                payload = {"prompt": user_input}
-                async with tracker.timer(
-                    "agent_response", metadata={"agent": target or cap}
-                ):
-                    providers = await self.network.request_capability(
-                        from_agent=None,
-                        capability=cap,
-                        data=payload,
-                        request_id=request_id,
-                        allowed_agents=allowed_agents,
-                    )
-                    self.logger.log(
-                        "DEBUG", f"Requested '{cap}' from {providers}", payload
-                    )
-                    if not providers:
-                        self.logger.log(
-                            "WARNING",
-                            "No providers found for requested capability",
-                            cap,
-                        )
-                        return {
-                            "response": "No agent is available to handle that request."
-                        }
-
-                    result = await self.network.wait_for_response(
-                        request_id, timeout=self.config.response_timeout
-                    )
-
-                return result
-
-            if intent == "orchestrate_tasks":
-                async with tracker.timer(
-                    "agent_response", metadata={"agent": "orchestrator"}
-                ):
-                    return await self.orchestrator.process_user_request(
-                        user_input, tz_name
-                    )
-
-            return {"response": "Sorry, I didn't understand that."}
+                except Exception as e:
+                    self.logger.log("ERROR", "Error in NLU routing", str(e))
+                    return {"response": f"Sorry, I encountered an error: {str(e)}"}
         finally:
             self.network.stop_method_recording()
             if new_tracker:

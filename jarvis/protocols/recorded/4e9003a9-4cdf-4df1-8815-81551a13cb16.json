@@ -1,0 +1,19 @@
+{
+  "id": "4e9003a9-4cdf-4df1-8815-81551a13cb16",
+  "name": "req_e62d0582-1114-4a3c-ad2f-c5c1b9f4dfb5",
+  "description": "jarvis make the lights green",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "lights_color",
+      "parameters": {
+        "prompt": "jarvis make the lights green"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

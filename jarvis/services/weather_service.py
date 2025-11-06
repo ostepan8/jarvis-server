@@ -1,4 +1,3 @@
-import asyncio
 import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -18,7 +17,10 @@ class WeatherService:
                 "Weather API key required. Set WEATHER_API_KEY or OPENWEATHER_API_KEY"
             )
 
-        self.client = httpx.AsyncClient(timeout=10.0)
+        # Use sync client for sync methods to avoid asyncio.run() issues
+        self._sync_client = httpx.Client(timeout=10.0)
+        # Keep async client for async close method
+        self._async_client = httpx.AsyncClient(timeout=10.0)
 
         # Simple cache to avoid repeated API calls
         self.weather_cache = {}
@@ -26,12 +28,18 @@ class WeatherService:
 
     async def close(self) -> None:
         """Clean up resources"""
-        await self.client.aclose()
+        self._sync_client.close()
+        await self._async_client.aclose()
 
-    async def _make_api_request(
+    @property
+    def client(self):
+        """Expose async client for backwards compatibility"""
+        return self._async_client
+
+    def _make_sync_api_request(
         self, endpoint: str, params: Dict[str, Any], cache_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Make API request with caching and error handling"""
+        """Make synchronous API request with caching and error handling"""
         # Check cache first
         if cache_key and cache_key in self.weather_cache:
             cached_data, cached_time = self.weather_cache[cache_key]
@@ -43,7 +51,46 @@ class WeatherService:
         params["units"] = "imperial"  # Use Fahrenheit instead of Celsius
 
         try:
-            response = await self.client.get(
+            response = self._sync_client.get(
+                f"https://api.openweathermap.org/data/2.5/{endpoint}", params=params
+            )
+
+            if response.status_code == 404:
+                raise ValueError(f"Location not found: {params.get('q', 'unknown')}")
+            elif response.status_code == 401:
+                raise ValueError("Invalid API key")
+            elif response.status_code != 200:
+                raise ValueError(f"Weather service error: {response.status_code}")
+
+            data = response.json()
+
+            # Cache successful response
+            if cache_key:
+                self.weather_cache[cache_key] = (data, datetime.now())
+
+            return data
+
+        except httpx.TimeoutException:
+            raise ValueError("Weather service timeout")
+        except Exception as e:
+            raise ValueError(f"Weather API error: {str(e)}")
+
+    async def _make_api_request(
+        self, endpoint: str, params: Dict[str, Any], cache_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Make async API request with caching and error handling"""
+        # Check cache first
+        if cache_key and cache_key in self.weather_cache:
+            cached_data, cached_time = self.weather_cache[cache_key]
+            if datetime.now() - cached_time < timedelta(seconds=self.cache_duration):
+                return cached_data
+
+        # Add API key to params and use imperial units (Fahrenheit)
+        params["appid"] = self.api_key
+        params["units"] = "imperial"  # Use Fahrenheit instead of Celsius
+
+        try:
+            response = await self._async_client.get(
                 f"https://api.openweathermap.org/data/2.5/{endpoint}", params=params
             )
 
@@ -147,13 +194,14 @@ class WeatherService:
         """Get comprehensive current weather data in Fahrenheit"""
         try:
             cache_key = f"current_{location}"
-            data = asyncio.run(
-                self._make_api_request("weather", {"q": location}, cache_key)
-            )
+            data = self._make_sync_api_request("weather", {"q": location}, cache_key)
 
             # Extract and format weather data - now in Fahrenheit
             main = data.get("main", {})
-            weather = data.get("weather", [{}])[0]
+            weather_list = data.get("weather", [])
+            if not weather_list:
+                return {"error": f"Invalid weather data for {location}"}
+            weather = weather_list[0]
             wind = data.get("wind", {})
             sys = data.get("sys", {})
 
@@ -191,6 +239,9 @@ class WeatherService:
                 "timestamp": datetime.now().isoformat(),
             }
 
+        except ValueError as e:
+            # User-friendly error messages already set by _make_sync_api_request
+            return {"error": str(e)}
         except Exception as e:
             return {"error": f"Could not get weather for {location}: {str(e)}"}
 
@@ -198,33 +249,49 @@ class WeatherService:
         """Get weather forecast for multiple days in Fahrenheit"""
         try:
             cache_key = f"forecast_{location}_{days}"
-            data = asyncio.run(
-                self._make_api_request(
-                    "forecast", {"q": location, "cnt": days * 8}, cache_key
-                )
+            data = self._make_sync_api_request(
+                "forecast", {"q": location, "cnt": days * 8}, cache_key
             )
 
             # Process forecast data - now in Fahrenheit
+            forecast_list = data.get("list", [])
+            if not forecast_list:
+                return {"error": f"No forecast data available for {location}"}
+
             daily_forecasts = {}
             hourly_forecasts = []
 
-            for item in data.get("list", []):
+            for item in forecast_list:
+                if "dt" not in item or "main" not in item:
+                    continue  # Skip invalid items
+
                 dt = datetime.fromtimestamp(item["dt"])
                 date_key = dt.date().isoformat()
+                item_main = item.get("main", {})
+                item_weather = item.get("weather", [])
+                item_wind = item.get("wind", {})
 
                 forecast_item = {
                     "datetime": dt.isoformat(),
                     "date": date_key,
                     "time": self._format_time_for_speech(dt.timestamp()),
-                    "temperature": round(item["main"]["temp"]),
-                    "feels_like": round(item["main"]["feels_like"]),
-                    "min_temp": round(item["main"]["temp_min"]),
-                    "max_temp": round(item["main"]["temp_max"]),
-                    "humidity": item["main"]["humidity"],
-                    "description": item["weather"][0]["description"].title(),
-                    "condition": item["weather"][0]["main"].lower(),
+                    "temperature": round(item_main.get("temp", 0)),
+                    "feels_like": round(item_main.get("feels_like", 0)),
+                    "min_temp": round(item_main.get("temp_min", 0)),
+                    "max_temp": round(item_main.get("temp_max", 0)),
+                    "humidity": item_main.get("humidity", 0),
+                    "description": (
+                        item_weather[0]["description"].title()
+                        if item_weather and "description" in item_weather[0]
+                        else "Unknown"
+                    ),
+                    "condition": (
+                        item_weather[0]["main"].lower()
+                        if item_weather and "main" in item_weather[0]
+                        else "unknown"
+                    ),
                     "precipitation_chance": round(item.get("pop", 0) * 100),
-                    "wind_speed": round(item["wind"]["speed"], 1),  # mph
+                    "wind_speed": round(item_wind.get("speed", 0), 1),  # mph
                 }
 
                 hourly_forecasts.append(forecast_item)
@@ -256,13 +323,17 @@ class WeatherService:
                     }
                 )
 
+            city_name = data.get("city", {}).get("name", location)
             return {
-                "location": data["city"]["name"],
+                "location": city_name,
                 "daily_forecast": daily_summaries,
                 "hourly_forecast": hourly_forecasts,
                 "forecast_days": len(daily_summaries),
             }
 
+        except ValueError as e:
+            # User-friendly error messages already set by _make_sync_api_request
+            return {"error": str(e)}
         except Exception as e:
             return {"error": f"Could not get forecast for {location}: {str(e)}"}
 
@@ -411,11 +482,9 @@ class WeatherService:
     def search_locations_for_weather_service(self, query: str) -> Dict[str, Any]:
         """Search for locations matching the query"""
         try:
-            response = asyncio.run(
-                self.client.get(
-                    "https://api.openweathermap.org/geo/1.0/direct",
-                    params={"q": query, "limit": 5, "appid": self.api_key},
-                )
+            response = self._sync_client.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params={"q": query, "limit": 5, "appid": self.api_key},
             )
 
             if response.status_code == 200:
@@ -434,7 +503,9 @@ class WeatherService:
 
                 return {"query": query, "locations": locations, "count": len(locations)}
 
-            return {"error": "Location search failed"}
+            if response.status_code == 404:
+                return {"error": f"No locations found for: {query}"}
+            return {"error": "Location search failed. Please try again."}
 
         except Exception as e:
             return {"error": f"Could not search locations: {str(e)}"}
@@ -443,25 +514,30 @@ class WeatherService:
         """Get air quality information for a location"""
         try:
             # First get coordinates
-            geocode_response = asyncio.run(
-                self.client.get(
-                    "https://api.openweathermap.org/geo/1.0/direct",
-                    params={"q": location, "limit": 1, "appid": self.api_key},
-                )
+            geocode_response = self._sync_client.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params={"q": location, "limit": 1, "appid": self.api_key},
             )
 
-            if geocode_response.status_code != 200 or not geocode_response.json():
+            if geocode_response.status_code != 200:
+                if geocode_response.status_code == 404:
+                    return {"error": f"Location not found: {location}"}
                 return {"error": f"Could not find coordinates for {location}"}
 
-            coords = geocode_response.json()[0]
-            lat, lon = coords["lat"], coords["lon"]
+            geocode_data = geocode_response.json()
+            if not geocode_data:
+                return {"error": f"Location not found: {location}"}
+
+            coords = geocode_data[0]
+            lat = coords.get("lat")
+            lon = coords.get("lon")
+            if lat is None or lon is None:
+                return {"error": f"Invalid coordinates for {location}"}
 
             # Get air quality data
-            aqi_response = asyncio.run(
-                self.client.get(
-                    "https://api.openweathermap.org/data/2.5/air_pollution",
-                    params={"lat": lat, "lon": lon, "appid": self.api_key},
-                )
+            aqi_response = self._sync_client.get(
+                "https://api.openweathermap.org/data/2.5/air_pollution",
+                params={"lat": lat, "lon": lon, "appid": self.api_key},
             )
 
             if aqi_response.status_code == 200:

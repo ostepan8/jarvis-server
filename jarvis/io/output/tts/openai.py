@@ -34,20 +34,46 @@ class OpenAITTSEngine(TextToSpeechEngine):
         """Convert ``text`` to speech and play it asynchronously."""
         tracker = get_tracker()
         try:
+            # Request audio from OpenAI; SDK may return bytes or a stream-like object
             if tracker and tracker.enabled:
                 async with tracker.timer(
                     "tts_synthesis",
-                    metadata={"engine": "openai_tts", "model": self.model, "voice": self.voice},
+                    metadata={
+                        "engine": "openai_tts",
+                        "model": self.model,
+                        "voice": self.voice,
+                    },
                 ):
                     response = await self.client.audio.speech.create(
                         model=self.model, voice=self.voice, input=text
                     )
-                    audio_bytes = await response.read()
             else:
                 response = await self.client.audio.speech.create(
                     model=self.model, voice=self.voice, input=text
                 )
-                audio_bytes = await response.read()
+
+            # Normalize various SDK response shapes to raw bytes
+            audio_bytes = None
+            if isinstance(response, (bytes, bytearray)):
+                audio_bytes = bytes(response)
+            elif hasattr(response, "read"):
+                maybe = response.read()
+                if asyncio.iscoroutine(maybe):
+                    audio_bytes = await maybe
+                else:
+                    audio_bytes = maybe
+            elif hasattr(response, "content"):
+                audio_bytes = response.content  # type: ignore[attr-defined]
+            elif hasattr(response, "data"):
+                audio_bytes = response.data  # type: ignore[attr-defined]
+            else:  # Fallback: try to_bytes()
+                try:
+                    audio_bytes = response.to_bytes()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
+            if not audio_bytes:
+                raise RuntimeError("OpenAI TTS returned no audio bytes")
 
             if tracker and tracker.enabled:
                 async with tracker.timer(

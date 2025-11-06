@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import os
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -17,7 +18,6 @@ class BuilderOptions:
     load_protocol_directory: bool = True
     with_memory: bool = True
     with_nlu: bool = True
-    with_orchestrator: bool = True
     with_calendar: bool = True
     with_chat: bool = True
     with_weather: bool = True
@@ -56,10 +56,6 @@ class JarvisBuilder:
         self._opts.with_nlu = enabled
         return self
 
-    def orchestrator(self, enabled: bool = True) -> "JarvisBuilder":
-        self._opts.with_orchestrator = enabled
-        return self
-
     def calendar(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_calendar = enabled
         return self
@@ -94,7 +90,6 @@ class JarvisBuilder:
         response_timeout: float = 60.0,
         intent_timeout: float = 5.0,
         hue_bridge_ip_env: Optional[str] = "PHILLIPS_HUE_BRIDGE_IP",
-        repo_path: str = ".",
     ) -> "JarvisBuilder":
         load_dotenv()
         api_key = os.getenv(api_key_env)
@@ -106,14 +101,25 @@ class JarvisBuilder:
                 "%s not set; Philips Hue integration disabled", hue_bridge_ip_env
             )
 
+        lighting_backend = os.getenv("LIGHTING_BACKEND", "phillips_hue")
+        yeelight_bulb_ips_str = os.getenv("YEELIGHT_BULB_IPS", "")
+        yeelight_bulb_ips = (
+            [ip.strip() for ip in yeelight_bulb_ips_str.split(",")]
+            if yeelight_bulb_ips_str.strip()
+            else None
+        )
+        hue_username = os.getenv("PHILLIPS_HUE_USERNAME")
+
         cfg = JarvisConfig(
             ai_provider=ai_provider,
             api_key=api_key,
             calendar_api_url=calendar_api_url,
             response_timeout=response_timeout,
-            repo_path=repo_path,
             intent_timeout=intent_timeout,
             hue_bridge_ip=hue_bridge_ip,
+            hue_username=hue_username,
+            lighting_backend=lighting_backend,
+            yeelight_bulb_ips=yeelight_bulb_ips,
         )
         b = JarvisBuilder(cfg)
         b._dotenv_loaded = True
@@ -141,8 +147,6 @@ class JarvisBuilder:
             refs.update(factory._build_memory(jarvis.network, ai_client))
         if self._opts.with_nlu:
             refs.update(factory._build_nlu(jarvis.network, ai_client))
-        if self._opts.with_orchestrator:
-            refs.update(factory._build_orchestrator(jarvis.network, ai_client))
         if self._opts.with_calendar:
             refs.update(factory._build_calendar(jarvis.network, ai_client))
         if self._opts.with_chat:
@@ -161,7 +165,6 @@ class JarvisBuilder:
 
         jarvis.vector_memory = refs.get("vector_memory")
         jarvis.nlu_agent = refs.get("nlu_agent")
-        jarvis.orchestrator = refs.get("orchestrator")
         jarvis.calendar_service = refs.get("calendar_service")
         jarvis.chat_agent = refs.get("chat_agent")
         jarvis.protocol_agent = refs.get("protocol_agent")

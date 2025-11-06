@@ -1,0 +1,19 @@
+{
+  "id": "a4b47df8-a4a5-457c-848c-9da740b27678",
+  "name": "req_4eb70da6-bf8a-41ed-a16c-ceede2d8d902",
+  "description": "make the lights read it'd be good",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "lights_list",
+      "parameters": {
+        "prompt": "make the lights read it'd be good"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

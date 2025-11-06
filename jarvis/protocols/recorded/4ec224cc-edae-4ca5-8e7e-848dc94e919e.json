@@ -1,0 +1,19 @@
+{
+  "id": "4ec224cc-edae-4ca5-8e7e-848dc94e919e",
+  "name": "req_4ffb4ba8-b436-47e2-bb41-5ac10e2af007",
+  "description": "color",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "lights_color",
+      "parameters": {
+        "prompt": "color"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

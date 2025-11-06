@@ -10,7 +10,9 @@ from .registry import ProtocolRegistry
 class ProtocolLoader:
     """Load protocol definition files into a registry."""
 
-    def __init__(self, registry: ProtocolRegistry, logger: JarvisLogger | None = None) -> None:
+    def __init__(
+        self, registry: ProtocolRegistry, logger: JarvisLogger | None = None
+    ) -> None:
         self.registry = registry
         self.logger = logger or JarvisLogger()
 
@@ -24,20 +26,32 @@ class ProtocolLoader:
         for json_file in sorted(directory.glob("*.json")):
             try:
                 protocol = Protocol.from_file(json_file)
-                result = self.registry.register(protocol)
+                result = self.registry.register(protocol, replace_duplicates=True)
                 if result.get("success"):
-                    self.logger.log(
-                        "INFO",
-                        "Loaded protocol",
-                        f"{protocol.name}",
-                        f"Triggers: {protocol.trigger_phrases}",
-                    )
+                    if result.get("replaced"):
+                        details = (
+                            f"{protocol.name} - Triggers: {protocol.trigger_phrases}"
+                        )
+                        self.logger.log(
+                            "INFO",
+                            "Replaced protocol",
+                            details,
+                        )
+                    else:
+                        details = (
+                            f"{protocol.name} - Triggers: {protocol.trigger_phrases}"
+                        )
+                        self.logger.log(
+                            "INFO",
+                            "Loaded protocol",
+                            details,
+                        )
                 else:
+                    details = f"{protocol.name} - {str(result)}"
                     self.logger.log(
                         "WARNING",
                         "Failed to register protocol",
-                        f"{protocol.name}",
-                        str(result),
+                        details,
                     )
             except Exception as exc:  # pragma: no cover - logging only
                 self.logger.log(

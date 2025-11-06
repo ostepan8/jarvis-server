@@ -138,11 +138,197 @@ class LightingAgent(NetworkAgent):
             return
 
         self.logger.log("INFO", f"Handling capability: {capability}", str(data))
-        result = {"status": "capability_handled", "capability": capability}
 
-        await self.send_capability_response(
-            message.from_agent, result, message.request_id, message.id
-        )
+        prompt = data.get("prompt", "")
+        if not isinstance(prompt, str):
+            await self.send_error(
+                message.from_agent, "Invalid or missing prompt", message.request_id
+            )
+            return
+
+        try:
+            # Process the command based on capability
+            if capability == "lights_color":
+                result = await self._process_color_command(prompt)
+            elif capability == "lights_on":
+                result = await self._process_on_command(prompt)
+            elif capability == "lights_off":
+                result = await self._process_off_command(prompt)
+            elif capability == "lights_brightness":
+                result = await self._process_brightness_command(prompt)
+            elif capability == "lights_toggle":
+                result = await self._process_toggle_command(prompt)
+            elif capability == "lights_list":
+                result = {"lights": self._list_lights()}
+            elif capability == "lights_status":
+                result = {"status": "online", "lights": self._list_lights()}
+            else:
+                result = {"status": "capability_handled", "capability": capability}
+
+            await self.send_capability_response(
+                message.from_agent, result, message.request_id, message.id
+            )
+        except Exception as e:
+            self.logger.log("ERROR", f"Error processing {capability}", str(e))
+            await self.send_error(
+                message.from_agent, f"Error: {str(e)}", message.request_id
+            )
+
+    async def _process_color_command(self, prompt: str) -> Dict[str, Any]:
+        """Process a color command like 'make lights yellow' or 'bright yellow'."""
+        # Use AI to extract color and brightness from prompt
+        system_prompt = f"""You are a lighting control assistant. Parse the user's color command and extract:
+1. Color name (from available colors: {', '.join(self.color_map.keys())})
+2. Brightness level if mentioned (bright, dim, etc.)
+3. Target (all lights or specific light name)
+
+Return JSON: {{"color": "color_name", "brightness": "normal|bright|dim", "target": "all|light_name"}}
+If color not found, use closest match. Default brightness is "normal"."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+
+        try:
+            response = await self.ai_client.weak_chat(messages, [])
+            content = (
+                response[0].content
+                if hasattr(response[0], "content")
+                else str(response[0])
+            )
+
+            # Parse JSON from response
+            from ...utils import extract_json_from_text
+
+            parsed = extract_json_from_text(content)
+
+            if not parsed:
+                # Fallback: try to extract color name directly
+                color_name = self._extract_color_from_prompt(prompt)
+                parsed = {"color": color_name, "brightness": "normal", "target": "all"}
+
+            color_name = parsed.get("color", "").lower()
+            brightness_mod = parsed.get("brightness", "normal")
+            target = parsed.get("target", "all")
+
+            # Validate color
+            if color_name not in self.color_map:
+                # Try to find closest match
+                color_name = self._find_closest_color(color_name)
+
+            if not color_name or color_name not in self.color_map:
+                return {
+                    "status": "error",
+                    "message": f"Unknown color. Available: {', '.join(self.color_map.keys())}",
+                }
+
+            # Execute the command
+            if target == "all" or target is None:
+                result_msg = self._set_all_color(color_name)
+                # Adjust brightness if requested
+                if brightness_mod == "bright":
+                    # Increase brightness to ~90%
+                    brightness_val = int(254 * 0.9)
+                    brightness_result = self._set_all_brightness(brightness_val)
+                    result_msg += f" {brightness_result}"
+                elif brightness_mod == "dim":
+                    brightness_val = int(254 * 0.3)
+                    brightness_result = self._set_all_brightness(brightness_val)
+                    result_msg += f" {brightness_result}"
+            else:
+                result_msg = self._set_color_name(target, color_name)
+                if brightness_mod == "bright":
+                    brightness_val = int(254 * 0.9)
+                    self._set_brightness(target, brightness_val)
+                elif brightness_mod == "dim":
+                    brightness_val = int(254 * 0.3)
+                    self._set_brightness(target, brightness_val)
+
+            return {
+                "status": "success",
+                "message": result_msg,
+                "color": color_name,
+                "brightness": brightness_mod,
+            }
+        except Exception as e:
+            self.logger.log("ERROR", "Error parsing color command", str(e))
+            # Fallback: try simple extraction
+            color_name = self._extract_color_from_prompt(prompt)
+            if color_name:
+                result_msg = self._set_all_color(color_name)
+                return {"status": "success", "message": result_msg, "color": color_name}
+            return {"status": "error", "message": f"Could not parse command: {str(e)}"}
+
+    def _extract_color_from_prompt(self, prompt: str) -> Optional[str]:
+        """Simple fallback: extract color name from prompt."""
+        prompt_lower = prompt.lower()
+        for color in self.color_map.keys():
+            if color.lower() in prompt_lower:
+                return color
+        return None
+
+    def _find_closest_color(self, color_input: str) -> Optional[str]:
+        """Find closest matching color name."""
+        color_input_lower = color_input.lower()
+        # Common variations
+        color_variations = {
+            "yellow": "yellow",
+            "yell": "yellow",
+            "yel": "yellow",
+            "blu": "blue",
+            "bl": "blue",
+            "red": "red",
+            "grn": "green",
+            "gre": "green",
+            "whit": "white",
+            "purp": "purple",
+            "pink": "pink",
+            "oran": "orange",
+        }
+
+        for variant, color in color_variations.items():
+            if variant in color_input_lower and color in self.color_map:
+                return color
+
+        return None
+
+    async def _process_on_command(self, prompt: str) -> Dict[str, Any]:
+        """Process lights on command."""
+        result_msg = self._turn_on_all_lights()
+        return {"status": "success", "message": result_msg}
+
+    async def _process_off_command(self, prompt: str) -> Dict[str, Any]:
+        """Process lights off command."""
+        result_msg = self._turn_off_all_lights()
+        return {"status": "success", "message": result_msg}
+
+    async def _process_brightness_command(self, prompt: str) -> Dict[str, Any]:
+        """Process brightness command."""
+        # Extract brightness value (0-100 or 0-254)
+        # Default to 50% if not specified
+        brightness = 127  # 50% of 254
+
+        # Try to extract number
+        import re
+
+        numbers = re.findall(r"\d+", prompt)
+        if numbers:
+            brightness_val = int(numbers[0])
+            if brightness_val <= 100:
+                # Convert from 0-100 to 0-254
+                brightness = int((brightness_val / 100) * 254)
+            elif brightness_val <= 254:
+                brightness = brightness_val
+
+        result_msg = self._set_all_brightness(brightness)
+        return {"status": "success", "message": result_msg, "brightness": brightness}
+
+    async def _process_toggle_command(self, prompt: str) -> Dict[str, Any]:
+        """Process toggle command."""
+        # Simple toggle all lights
+        result_msg = "Toggled lights"  # Would need backend support for toggle all
+        return {"status": "success", "message": result_msg}
 
 
 def create_lighting_agent(

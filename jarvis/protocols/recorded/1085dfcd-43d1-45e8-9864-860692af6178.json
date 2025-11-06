@@ -1,0 +1,19 @@
+{
+  "id": "1085dfcd-43d1-45e8-9864-860692af6178",
+  "name": "req_ec69028e-148c-402d-b815-b81208e5cb70",
+  "description": "make the lights cyan blue",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "lights_color",
+      "parameters": {
+        "prompt": "make the lights cyan blue"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

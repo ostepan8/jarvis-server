@@ -1,0 +1,19 @@
+{
+  "id": "b239b518-bb70-42b1-8d4c-94fe3c702456",
+  "name": "req_334d5f3b-b213-40cb-8c76-b3723731adb2",
+  "description": "set all the lights to cyan blue",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "PhillipsHueAgent",
+      "function": "lights_color",
+      "parameters": {
+        "prompt": "set all the lights to cyan blue"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

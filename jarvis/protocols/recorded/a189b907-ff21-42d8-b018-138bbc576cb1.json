@@ -1,0 +1,19 @@
+{
+  "id": "a189b907-ff21-42d8-b018-138bbc576cb1",
+  "name": "req_f83083ef-bbad-4c04-ade9-b7a479ad1a72",
+  "description": "your not being a good boy my friends are mad",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "ChatAgent",
+      "function": "chat",
+      "parameters": {
+        "prompt": "your not being a good boy my friends are mad"
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

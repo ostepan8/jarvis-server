@@ -167,8 +167,26 @@ class AgentNetwork:
                 # 1) If it's a response to a capability_request, fulfill the Future
                 if message.message_type == "capability_response":
                     fut = self._response_futures.get(message.request_id)
-                    if fut and not fut.done():
-                        fut.set_result(message.content)
+                    if fut:
+                        if not fut.done():
+                            self.logger.log(
+                                "DEBUG",
+                                f"Fulfilling future for request {message.request_id}",
+                                f"from={message.from_agent}, to={message.to_agent}",
+                            )
+                            fut.set_result(message.content)
+                        else:
+                            self.logger.log(
+                                "DEBUG",
+                                f"Future already done for request {message.request_id}",
+                                "",
+                            )
+                    else:
+                        self.logger.log(
+                            "WARNING",
+                            f"No future found for capability_response",
+                            f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}",
+                        )
                     if message.to_agent and message.to_agent in self.agents:
                         asyncio.create_task(
                             self.agents[message.to_agent].receive_message(message)

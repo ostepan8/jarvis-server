@@ -92,7 +92,8 @@ class ProtocolRegistry(BaseRegistry[Protocol]):
             return
 
         rows = self.conn.execute(
-            "SELECT id, name, description, arguments, steps, trigger_phrases, argument_definitions, response FROM protocols"
+            """SELECT id, name, description, arguments, steps, 
+            trigger_phrases, argument_definitions, response FROM protocols"""
         ).fetchall()
 
         for row in rows:
@@ -173,22 +174,46 @@ class ProtocolRegistry(BaseRegistry[Protocol]):
                 return True
         return False
 
-    def register(self, protocol: Protocol) -> dict:
-        """Register a protocol if not a duplicate."""
+    def register(self, protocol: Protocol, replace_duplicates: bool = False) -> dict:
+        """Register a protocol, optionally replacing duplicates."""
         name_key = protocol.name.strip().lower()
         triggers_key = self.normalize_trigger_phrases(protocol.trigger_phrases)
 
-        for proto in self.protocols.values():
+        # Check for duplicate name
+        duplicate_id = None
+        for proto_id, proto in self.protocols.items():
             if proto.name.strip().lower() == name_key:
-                return {"success": False, "reason": "Duplicate name"}
+                if replace_duplicates:
+                    duplicate_id = proto_id
+                else:
+                    return {"success": False, "reason": "Duplicate name"}
 
-        for proto in self.protocols.values():
-            if self.normalize_trigger_phrases(proto.trigger_phrases) == triggers_key:
-                return {"success": False, "reason": "Duplicate trigger phrases"}
+        # Check for duplicate trigger phrases
+        if duplicate_id is None:
+            for proto_id, proto in self.protocols.items():
+                if (
+                    self.normalize_trigger_phrases(proto.trigger_phrases)
+                    == triggers_key
+                ):
+                    if replace_duplicates:
+                        duplicate_id = proto_id
+                    else:
+                        return {"success": False, "reason": "Duplicate trigger phrases"}
+
+        # Replace duplicate if found
+        if duplicate_id is not None:
+            del self.protocols[duplicate_id]
+            # Also remove from database
+            with self.conn:
+                self.conn.execute("DELETE FROM protocols WHERE id = ?", (duplicate_id,))
 
         self.protocols[protocol.id] = protocol
         self.save()
-        return {"success": True, "id": protocol.id}
+        return {
+            "success": True,
+            "id": protocol.id,
+            "replaced": duplicate_id is not None,
+        }
 
     @staticmethod
     def _normalize_text(text: str) -> str:
