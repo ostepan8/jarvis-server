@@ -2,26 +2,29 @@ from __future__ import annotations
 
 import json
 import datetime
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from ..base import NetworkAgent
 from ..message import Message
 from ...services.vector_memory import VectorMemoryService
+from ...services.fact_memory import FactMemoryService, UserFact
 from ...logging import JarvisLogger
 from ...ai_clients.base import BaseAIClient
 
 
 class MemoryAgent(NetworkAgent):
-    """Agent providing shared vector memory services."""
+    """Agent providing shared vector memory services and structured fact storage."""
 
     def __init__(
         self,
         memory_service: VectorMemoryService,
+        fact_service: Optional[FactMemoryService] = None,
         logger: Optional[JarvisLogger] = None,
         ai_client: Optional[BaseAIClient] = None,
     ) -> None:
         super().__init__("MemoryAgent", logger, memory=memory_service)
         self.vector_memory = memory_service
+        self.fact_service = fact_service or FactMemoryService()
         self.ai_client = ai_client
 
     @property
@@ -30,7 +33,14 @@ class MemoryAgent(NetworkAgent):
 
     @property
     def capabilities(self) -> Set[str]:
-        return {"add_to_memory", "recall_from_memory"}
+        return {
+            "add_to_memory",
+            "recall_from_memory",
+            "store_fact",
+            "get_facts",
+            "extract_facts",
+            "search_facts",
+        }
 
     def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Convert metadata to ChromaDB-compatible format (str, int, float only)."""
@@ -56,6 +66,7 @@ class MemoryAgent(NetworkAgent):
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
         data = message.content.get("data", {})
+        user_id = data.get("user_id")  # Extract user_id from request
 
         if capability == "add_to_memory":
             content = data.get("prompt", "")
@@ -75,8 +86,10 @@ class MemoryAgent(NetworkAgent):
                     content, metadata
                 )
 
-                # Store with enhanced metadata
-                mem_id = await self.vector_memory.add_memory(content, enhanced_metadata)
+                # Store with enhanced metadata and user_id
+                mem_id = await self.vector_memory.add_memory(
+                    content, enhanced_metadata, user_id=user_id
+                )
 
                 # Generate a confirmation response using AI
                 confirmation_response = await self._generate_memory_confirmation(
@@ -89,6 +102,135 @@ class MemoryAgent(NetworkAgent):
                         "response": confirmation_response,
                         "success": True,
                         "memory_id": mem_id,
+                    },
+                    message.request_id,
+                    message.id,
+                )
+            except Exception as exc:
+                await self.send_error(message.from_agent, str(exc), message.request_id)
+
+        elif capability == "store_fact":
+            fact_text = data.get("fact_text", "")
+            category = data.get("category", "general")
+            entity = data.get("entity")
+            confidence = data.get("confidence", 1.0)
+            source = data.get("source", "explicit")
+            context = data.get("context")
+
+            if not fact_text or user_id is None:
+                await self.send_error(
+                    message.from_agent,
+                    "fact_text and user_id are required",
+                    message.request_id,
+                )
+                return
+
+            try:
+                # Check for conflicts
+                conflicts = self.fact_service.check_conflicts(
+                    user_id, fact_text, category
+                )
+
+                fact_id = self.fact_service.add_fact(
+                    user_id=user_id,
+                    fact_text=fact_text,
+                    category=category,
+                    entity=entity,
+                    confidence=confidence,
+                    source=source,
+                    context=context,
+                )
+
+                # Also store in vector memory for semantic search
+                await self.vector_memory.add_memory(
+                    fact_text,
+                    {
+                        "fact_id": fact_id,
+                        "category": category,
+                        "entity": entity,
+                        "type": "fact",
+                    },
+                    user_id=user_id,
+                )
+
+                conflict_msg = ""
+                if conflicts:
+                    conflict_msg = (
+                        f" Note: Found {len(conflicts)} potentially conflicting facts."
+                    )
+
+                await self.send_capability_response(
+                    message.from_agent,
+                    {
+                        "response": f"Fact stored successfully.{conflict_msg}",
+                        "fact_id": fact_id,
+                        "conflicts": len(conflicts),
+                    },
+                    message.request_id,
+                    message.id,
+                )
+            except Exception as exc:
+                await self.send_error(message.from_agent, str(exc), message.request_id)
+
+        elif capability == "get_facts":
+            category = data.get("category")
+            entity = data.get("entity")
+            limit = data.get("limit", 10)
+
+            if user_id is None:
+                await self.send_error(
+                    message.from_agent, "user_id is required", message.request_id
+                )
+                return
+
+            try:
+                facts = self.fact_service.get_facts(
+                    user_id=user_id,
+                    category=category,
+                    entity=entity,
+                    limit=limit,
+                )
+                await self.send_capability_response(
+                    message.from_agent,
+                    {
+                        "facts": [
+                            {
+                                "id": f.id,
+                                "text": f.fact_text,
+                                "category": f.category,
+                                "entity": f.entity,
+                                "confidence": f.confidence,
+                            }
+                            for f in facts
+                        ],
+                        "count": len(facts),
+                    },
+                    message.request_id,
+                    message.id,
+                )
+            except Exception as exc:
+                await self.send_error(message.from_agent, str(exc), message.request_id)
+
+        elif capability == "extract_facts":
+            conversation_text = data.get("conversation_text", "")
+
+            if not conversation_text or user_id is None:
+                await self.send_error(
+                    message.from_agent,
+                    "conversation_text and user_id are required",
+                    message.request_id,
+                )
+                return
+
+            try:
+                extracted_facts = await self._extract_facts_from_conversation(
+                    conversation_text, user_id
+                )
+                await self.send_capability_response(
+                    message.from_agent,
+                    {
+                        "extracted_facts": extracted_facts,
+                        "count": len(extracted_facts),
                     },
                     message.request_id,
                     message.id,
@@ -112,14 +254,34 @@ class MemoryAgent(NetworkAgent):
                 # Use AI to enhance the query for better retrieval
                 enhanced_query = await self._enhance_recall_query(query)
 
-                # Get results using enhanced query
+                # Get results using enhanced query, scoped to user if provided
                 results = await self.vector_memory.similarity_search(
-                    enhanced_query, top_k=top_k
+                    enhanced_query, top_k=top_k, user_id=user_id
                 )
-                print(results, "RECALL RESULTS")
+
+                # Also search structured facts if user_id is provided
+                fact_results = []
+                if user_id is not None:
+                    facts = self.fact_service.search_facts(user_id, query, limit=top_k)
+                    fact_results = [
+                        {
+                            "text": f.fact_text,
+                            "metadata": {
+                                "category": f.category,
+                                "entity": f.entity,
+                                "type": "fact",
+                            },
+                        }
+                        for f in facts
+                    ]
+
+                # Combine vector and fact results
+                all_results = results + fact_results
 
                 # Filter and rank results using AI
-                filtered_results = await self._filter_and_rank_results(results, query)
+                filtered_results = await self._filter_and_rank_results(
+                    all_results, query
+                )
 
                 summary = await self._summarize_results(filtered_results, query)
 
@@ -377,6 +539,109 @@ Instructions:
             if self.logger:
                 self.logger.log("ERROR", "Memory summary failed", str(exc))
             return memory_lines
+
+    async def _extract_facts_from_conversation(
+        self, conversation_text: str, user_id: int
+    ) -> List[Dict[str, Any]]:
+        """Use AI to extract structured facts from conversation text."""
+        if not self.ai_client:
+            return []
+
+        prompt = f"""Analyze this conversation and extract specific facts about the user:
+
+Conversation:
+{conversation_text}
+
+Extract facts that represent:
+1. Personal information (name, age, location, occupation, etc.)
+2. Preferences (likes, dislikes, favorite things)
+3. Relationships (family, friends, colleagues mentioned)
+4. Important memories or experiences
+5. Skills, hobbies, or interests
+6. Goals or plans
+
+For each fact, provide:
+- fact_text: The fact as a clear statement
+- category: personal_info, preference, relationship, memory, skill, goal
+- entity: What/who the fact is about (if applicable)
+- confidence: 0.0 to 1.0 based on certainty
+
+Respond ONLY with a JSON array of fact objects:
+[
+    {{
+        "fact_text": "The user's name is Alice",
+        "category": "personal_info",
+        "entity": "user",
+        "confidence": 1.0
+    }},
+    {{
+        "fact_text": "Alice loves Italian food",
+        "category": "preference",
+        "entity": "food",
+        "confidence": 0.9
+    }}
+]
+
+If no facts can be extracted, return an empty array []."""
+
+        try:
+            response, _ = await self.ai_client.weak_chat(
+                [{"role": "user", "content": prompt}], []
+            )
+
+            # Parse JSON response
+            facts_json = json.loads(response.content.strip())
+            if not isinstance(facts_json, list):
+                return []
+
+            # Store extracted facts
+            stored_facts = []
+            for fact_data in facts_json:
+                try:
+                    fact_id = self.fact_service.add_fact(
+                        user_id=user_id,
+                        fact_text=fact_data.get("fact_text", ""),
+                        category=fact_data.get("category", "general"),
+                        entity=fact_data.get("entity"),
+                        confidence=float(fact_data.get("confidence", 0.8)),
+                        source="extracted",
+                        context=f"Extracted from conversation",
+                    )
+
+                    # Also store in vector memory
+                    await self.vector_memory.add_memory(
+                        fact_data.get("fact_text", ""),
+                        {
+                            "fact_id": fact_id,
+                            "category": fact_data.get("category", "general"),
+                            "entity": fact_data.get("entity"),
+                            "type": "fact",
+                            "source": "extracted",
+                        },
+                        user_id=user_id,
+                    )
+
+                    stored_facts.append(
+                        {
+                            "fact_id": fact_id,
+                            "fact_text": fact_data.get("fact_text", ""),
+                            "category": fact_data.get("category", "general"),
+                        }
+                    )
+                except Exception as exc:
+                    if self.logger:
+                        self.logger.log(
+                            "WARNING", f"Failed to store extracted fact", str(exc)
+                        )
+
+            return stored_facts
+
+        except Exception as exc:
+            if self.logger:
+                self.logger.log(
+                    "ERROR", "Fact extraction from conversation failed", str(exc)
+                )
+            return []
 
     async def _handle_capability_response(self, message: Message) -> None:
         # MemoryAgent does not currently send capability requests

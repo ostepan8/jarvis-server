@@ -93,23 +93,54 @@ class VectorMemoryService:
             pass
 
     async def add_memory(
-        self, text: str, metadata: Optional[Dict[str, Any]] = None
+        self,
+        text: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
     ) -> str:
         """Store a piece of text in the vector database."""
         memory_id = str(uuid.uuid4())
         metadata = metadata or {}
+        if user_id is not None:
+            metadata["user_id"] = user_id
         await asyncio.to_thread(
             self.collection.add, ids=[memory_id], documents=[text], metadatas=[metadata]
         )
         return memory_id
 
+    def _get_user_collection(self, user_id: int) -> Any:
+        """Get or create a user-specific collection."""
+        collection_name = f"{self.collection.name}_user_{user_id}"
+        return self.client.get_or_create_collection(
+            name=collection_name,
+            embedding_function=self.embedding_function,
+        )
+
     async def similarity_search(
-        self, text: str, top_k: int = 3
+        self,
+        text: str,
+        top_k: int = 3,
+        user_id: Optional[int] = None,
+        metadata_filter: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Retrieve top_k most similar memories to the given text."""
-        result = await asyncio.to_thread(
-            self.collection.query, query_texts=[text], n_results=top_k
+        collection = (
+            self._get_user_collection(user_id)
+            if user_id is not None
+            else self.collection
         )
+
+        where = {}
+        if user_id is not None:
+            where["user_id"] = user_id
+        if metadata_filter:
+            where.update(metadata_filter)
+
+        query_kwargs = {"query_texts": [text], "n_results": top_k}
+        if where:
+            query_kwargs["where"] = where
+
+        result = await asyncio.to_thread(collection.query, **query_kwargs)
         docs = result.get("documents", [[]])[0]
         metas = result.get("metadatas", [[]])[0]
         return [{"text": doc, "metadata": meta} for doc, meta in zip(docs, metas)]
@@ -119,17 +150,29 @@ class VectorMemoryService:
         memory_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         limit: Optional[int] = None,
+        user_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Retrieve memories by id or metadata filters."""
+        collection = (
+            self._get_user_collection(user_id)
+            if user_id is not None
+            else self.collection
+        )
+
         kwargs: Dict[str, Any] = {}
         if memory_id:
             kwargs["ids"] = [memory_id]
         if metadata:
-            kwargs["where"] = metadata
+            where = metadata.copy()
+            if user_id is not None and "user_id" not in where:
+                where["user_id"] = user_id
+            kwargs["where"] = where
+        elif user_id is not None:
+            kwargs["where"] = {"user_id": user_id}
         if limit is not None:
             kwargs["limit"] = limit
 
-        result = await asyncio.to_thread(self.collection.get, **kwargs)
+        result = await asyncio.to_thread(collection.get, **kwargs)
 
         docs = result.get("documents", [])
         metas = result.get("metadatas", [])

@@ -181,30 +181,50 @@ class NetworkAgent:
     # Shared tools
     # ------------------------------------------------------------------
     async def remember(
-        self, content: str, metadata: Optional[Dict[str, Any]] = None
+        self,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
     ) -> Optional[str]:
         """Store something in shared memory via MemoryAgent."""
         if not self.network:
             return None
         req_id = await self.request_capability(
-            "remember", {"content": content, "metadata": metadata}
+            "add_to_memory",
+            {"prompt": content, "metadata": metadata or {}, "user_id": user_id},
         )
         result = await self.network.wait_for_response(req_id)
         if isinstance(result, dict):
             return result.get("memory_id")
         return None
 
-    async def recall(self, query: str, top_k: int = 3) -> str:
+    async def recall(
+        self, query: str, top_k: int = 3, user_id: Optional[int] = None
+    ) -> str:
         """Search shared memory and get a summarized response via MemoryAgent."""
         if not self.network:
             return "No memory network available."
         req_id = await self.request_capability(
-            "add_to_memory", {"query": query, "top_k": top_k}
+            "recall_from_memory", {"prompt": query, "top_k": top_k, "user_id": user_id}
         )
         result = await self.network.wait_for_response(req_id)
         if isinstance(result, dict):
             return result.get("response", "No memories found.")
         return "No memories found."
+
+    async def store_memory(
+        self, text: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Store memory (backward compatibility alias for remember)."""
+        return await self.remember(text, metadata)
+
+    async def search_memory(
+        self, query: str, top_k: int = 3, user_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Search memory and return raw results."""
+        if not self.memory:
+            return []
+        return await self.memory.similarity_search(query, top_k=top_k, user_id=user_id)
 
     def update_profile(self, **fields: Any) -> None:
         """Update the agent's profile in-place."""

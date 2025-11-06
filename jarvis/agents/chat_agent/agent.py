@@ -144,13 +144,34 @@ class ChatAgent(NetworkAgent):
             iterations += 1
 
         response_text = message.content if message else ""
+
+        # Store conversation in memory
+        user_id = getattr(self, "current_user_id", None)
         try:
             await self.store_memory(
                 f"User: {user_input}\nAssistant: {response_text}",
                 {"type": "conversation"},
+                user_id=user_id,
             )
         except Exception:
             pass
+
+        # Automatically extract and store facts from the conversation
+        if user_id is not None and user_input:
+            try:
+                conversation_text = f"User: {user_input}\nAssistant: {response_text}"
+                if self.network:
+                    req_id = await self.request_capability(
+                        "extract_facts",
+                        {
+                            "conversation_text": conversation_text,
+                            "user_id": user_id,
+                        },
+                    )
+                    # Don't wait for this - run it asynchronously
+                    # Facts will be stored by MemoryAgent
+            except Exception:
+                pass  # Don't fail the chat if fact extraction fails
 
         return {"response": response_text, "actions": actions}
 
@@ -158,19 +179,56 @@ class ChatAgent(NetworkAgent):
     # Tool implementations
     # ------------------------------------------------------------------
     async def _store_fact(self, fact: str) -> str:
-        await self.store_memory(fact, {"type": "fact"})
+        user_id = getattr(self, "current_user_id", None)
+        await self.store_memory(fact, {"type": "fact"}, user_id=user_id)
+
+        # Also store as structured fact if user_id is available
+        if user_id is not None and self.network:
+            try:
+                req_id = await self.request_capability(
+                    "store_fact",
+                    {
+                        "fact_text": fact,
+                        "category": "general",
+                        "user_id": user_id,
+                        "source": "explicit",
+                    },
+                )
+            except Exception:
+                pass
+
         return "fact stored"
 
     async def _get_facts(self, query: str, top_k: int = 3) -> str:
-        results = await self.search_memory(query, top_k=top_k)
+        user_id = getattr(self, "current_user_id", None)
+        results = await self.search_memory(query, top_k=top_k, user_id=user_id)
         if not results:
             return "no relevant facts found"
         return "\n".join(r.get("text", "") for r in results)
 
     async def _update_profile(self, field: str, value: str) -> str:
         self.update_profile(**{field: value})
+        user_id = getattr(self, "current_user_id", None)
         await self.store_memory(
             f"Updated profile {field} to {value}",
             {"type": "preference", "field": field},
+            user_id=user_id,
         )
+
+        # Also store as a structured fact
+        if user_id is not None and self.network:
+            try:
+                req_id = await self.request_capability(
+                    "store_fact",
+                    {
+                        "fact_text": f"Profile {field} is {value}",
+                        "category": "preference",
+                        "entity": field,
+                        "user_id": user_id,
+                        "source": "explicit",
+                    },
+                )
+            except Exception:
+                pass
+
         return f"updated {field}"
