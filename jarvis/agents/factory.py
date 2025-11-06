@@ -25,6 +25,7 @@ from ..night_agents import (
     NightAgent,
     TriggerPhraseSuggesterAgent,
     NightModeControllerAgent,
+    LogCleanupAgent,
 )
 
 if TYPE_CHECKING:
@@ -244,6 +245,10 @@ class AgentFactory:
         trigger_agent = TriggerPhraseSuggesterAgent(logger=self.logger)
         network.register_night_agent(trigger_agent)
         night_agents.append(trigger_agent)
+
+        cleanup_agent = LogCleanupAgent(logger=self.logger)
+        network.register_night_agent(cleanup_agent)
+        night_agents.append(cleanup_agent)
 
         return {
             "night_controller": controller,
