@@ -20,6 +20,7 @@ from ..services.vector_memory import VectorMemoryService
 from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
 from ..services.canvas_service import CanvasService
+from ..utils import get_location_from_ip
 from ..night_agents import (
     NightAgent,
     TriggerPhraseSuggesterAgent,
@@ -112,10 +113,27 @@ class AgentFactory:
         self, network: AgentNetwork, ai_client: BaseAIClient
     ) -> Dict[str, Any]:
         try:
+            # Automatically detect location from IP address
+            detected_location = get_location_from_ip()
+            if detected_location:
+                self.logger.log(
+                    "INFO",
+                    "Detected location from IP address",
+                    f"Using '{detected_location}' as default weather location",
+                )
+            else:
+                detected_location = "Chicago"  # Fallback
+                self.logger.log(
+                    "INFO",
+                    "Could not detect location from IP",
+                    f"Using default location '{detected_location}'",
+                )
+
             weather_agent = WeatherAgent(
                 api_key=self.config.weather_api_key,
                 logger=self.logger,
                 ai_client=ai_client,
+                default_location=detected_location,
             )
             network.register_agent(weather_agent)
             return {"weather_agent": weather_agent}

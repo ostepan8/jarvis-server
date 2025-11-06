@@ -534,6 +534,12 @@ Example for "turn lights red and tell me the weather":
   "get_weather": []
 }}}}
 
+Example for "pause the tv and make the lights red":
+{{"dag": {{
+  "roku_pause": [],
+  "lights_color": []
+}}}}
+
 Example for "book a meeting tomorrow and send me a reminder":
 {{"dag": {{
   "schedule_appointment": [],
@@ -845,13 +851,21 @@ Your job is to analyze the user input and return **only** a JSON object—no pro
    - "perform_capability" = Execute ONE single capability
    - "chat" = General conversation that doesn't require specific capabilities
    - "run_protocol" = Matches a predefined protocol/command
+   - null = Multiple capabilities needed (will trigger parallel execution)
 DO NOT USE "orchestrate_tasks" - that's deprecated.
 
 **Decision Logic:**
+- Does the user want MULTIPLE distinct actions (e.g., "pause tv AND make lights red",
+  "turn on lights AND get weather")? → {{"intent": null, "capability": null}}
 - Does the user want ONE simple action that matches ONE capability? → "perform_capability"
 - Is this general conversation? → "chat"
 - Does it match a known protocol pattern? → "run_protocol"
 - Not sure? Default to "perform_capability" if it matches any single capability
+
+**Key Indicators of Multiple Capabilities:**
+- Words like "and", "also", "then" connecting different actions
+- Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get")
+- Different target objects (e.g., "tv" and "lights", "calendar" and "weather")
 
 **User Input**
 \"\"\"{user_input}\"\"\"
@@ -861,14 +875,16 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 {cap_list}
 
 **Examples:**
-- "Turn on the lights" → {{"intent": "perform_capability", "capability": "control_lights"}}
+- "Turn on the lights" → {{"intent": "perform_capability", "capability": "lights_on"}}
+- "Pause the tv and make the lights red" → {{"intent": null, "capability": null}}
 - "Schedule a meeting" → {{"intent": "perform_capability", "capability": "schedule_appointment"}}
 - "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
+- "Turn on lights and get weather" → {{"intent": null, "capability": null}}
 - "How are you?" → {{"intent": "chat", "capability": null}}
 
 **Return ONLY this JSON:**
 {{
-  "intent": "perform_capability OR chat OR run_protocol",
+  "intent": "perform_capability OR chat OR run_protocol OR null",
   "capability": "exact_capability_name_from_list OR null",
 }}"""
         return prompt
