@@ -64,6 +64,10 @@ class JarvisSystem:
         self.vector_memory: VectorMemoryService | None = None
         self.user_profiles: dict[int, AgentProfile] = {}
 
+        # Conversation history: user_id -> list of (user, assistant) turns
+        self.conversation_history: Dict[int, List[Dict[str, str]]] = {}
+        self.max_history_length = 10  # Keep last 10 turns
+
         # Night mode management
         self.night_mode: bool = False
         self.night_agents: list[NightAgent] = []
@@ -275,12 +279,25 @@ class JarvisSystem:
             # 2) No protocol match or protocol failed - use NLU agent for routing
             request_id = str(uuid.uuid4())
 
+            # Get user_id and conversation history
+            user_id = metadata.get("user_id", -1) if metadata else -1
+            conversation_history = self.conversation_history.get(user_id, [])
+
+            self.logger.log(
+                "DEBUG",
+                f"Retrieved conversation history for user {user_id}",
+                f"{len(conversation_history)} turns",
+            )
+
             # Use "JarvisSystem" as the from_agent so NLU knows we're the original requester
             async with tracker.timer("nlu_routing"):
                 await self.network.request_capability(
                     from_agent="JarvisSystem",
                     capability="intent_matching",
-                    data={"input": user_input},
+                    data={
+                        "input": user_input,
+                        "conversation_history": conversation_history,
+                    },
                     request_id=request_id,
                     allowed_agents=allowed_agents if allowed_agents else None,
                 )
@@ -292,13 +309,37 @@ class JarvisSystem:
                     )
 
                     # Result should have "response" key from NLU's formatted response
+                    response_text = None
                     if isinstance(result, dict):
                         if "response" in result:
-                            return {"response": result["response"]}
-                        # Fallback for old format
-                        return result
+                            response_text = result["response"]
+                            response_dict = {"response": response_text}
+                        else:
+                            # Fallback for old format
+                            response_dict = result
+                            response_text = str(result)
+                    else:
+                        response_text = str(result)
+                        response_dict = {"response": response_text}
 
-                    return {"response": str(result)}
+                    # Store conversation history
+                    if response_text:
+                        if user_id not in self.conversation_history:
+                            self.conversation_history[user_id] = []
+                        history = self.conversation_history[user_id]
+                        history.append({"user": user_input, "assistant": response_text})
+                        # Keep only last N turns
+                        if len(history) > self.max_history_length:
+                            self.conversation_history[user_id] = history[
+                                -self.max_history_length :
+                            ]
+                        self.logger.log(
+                            "DEBUG",
+                            f"Stored conversation turn for user {user_id}",
+                            f"History now has {len(self.conversation_history[user_id])} turns",
+                        )
+
+                    return response_dict
 
                 except asyncio.TimeoutError:
                     self.logger.log(

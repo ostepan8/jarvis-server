@@ -48,19 +48,32 @@ class NLUAgent(NetworkAgent):
         request_id = message.request_id
 
         # Check if this is a response to an internal request (need to map to parent)
+        capability = None
+        original_request_id = request_id
+
         if request_id in self.active_requests:
-            request_info = self.active_requests[request_id]
+            internal_request_info = self.active_requests[request_id]
             # If this has a parent_request_id, it's an internal request - map to parent
-            if "parent_request_id" in request_info:
-                parent_id = request_info["parent_request_id"]
+            if "parent_request_id" in internal_request_info:
+                parent_id = internal_request_info["parent_request_id"]
+                capability = internal_request_info.get(
+                    "capability"
+                )  # Get capability from internal request
                 self.logger.log(
                     "DEBUG",
                     f"Mapping internal response to parent request",
-                    f"internal_id={request_id}, parent_id={parent_id}",
+                    f"internal_id={original_request_id}, parent_id={parent_id}, capability={capability}",
                 )
                 # Use the parent request_id for the rest of processing
                 request_id = parent_id
-                request_info = self.active_requests[parent_id]
+                if request_id not in self.active_requests:
+                    self.logger.log(
+                        "ERROR",
+                        f"Parent request {parent_id} not found",
+                        "",
+                    )
+                    return
+            request_info = self.active_requests[request_id]
         else:
             # Not tracked - might be from an agent routing back to us
             self.logger.log(
@@ -70,10 +83,11 @@ class NLUAgent(NetworkAgent):
             )
             return
 
-        request_info = self.active_requests[request_id]
+        # Add result to agent_results
         request_info.setdefault("agent_results", []).append(
             {
                 "from_agent": message.from_agent,
+                "capability": capability,
                 "result": message.content,
             }
         )
@@ -81,9 +95,42 @@ class NLUAgent(NetworkAgent):
         self.logger.log(
             "INFO",
             f"NLUAgent received response from {message.from_agent}",
-            f"request_id={request_id}, step={request_info.get('step', 0)}",
+            f"request_id={request_id}, capability={capability}",
         )
 
+        # Check if this is DAG-based execution
+        dag = request_info.get("dag")
+        if dag is not None:
+            # DAG-based execution
+            if capability:
+                completed_caps = request_info.get("completed_caps", set())
+                running_caps = request_info.get("running_caps", set())
+
+                # Mark capability as completed
+                completed_caps.add(capability)
+                running_caps.discard(capability)
+
+                self.logger.log(
+                    "INFO",
+                    f"Capability '{capability}' completed in DAG",
+                    f"Completed: {len(completed_caps)}/{len(dag)}, Running: {len(running_caps)}",
+                )
+
+                # Check if more capabilities can now run (dependencies satisfied)
+                user_input = request_info.get("user_input", "")
+                context = request_info.get("context", {})
+                allowed_agents = request_info.get("allowed_agents")
+
+                await self._execute_ready_capabilities(
+                    request_id,
+                    dag,
+                    user_input,
+                    context,
+                    allowed_agents,
+                )
+            return
+
+        # Legacy sequential execution handling
         user_input = request_info.get("user_input", "")
         results = request_info.get("agent_results", [])
 
@@ -232,6 +279,7 @@ class NLUAgent(NetworkAgent):
 
         user_input = message.content["data"]["input"]
         context = message.content["data"].get("context", {})
+        conversation_history = message.content["data"].get("conversation_history", [])
         request_id = message.request_id
         original_requester = message.from_agent
         # Extract allowed_agents from the capability request (passed through network)
@@ -239,10 +287,16 @@ class NLUAgent(NetworkAgent):
 
         self.logger.log("INFO", "NLU received input", user_input)
 
+        # Add conversation history to context so it's passed to agents
+        if conversation_history:
+            context["conversation_history"] = conversation_history
+
         known_capabilities = list(self.network.capability_registry.keys())
 
-        # Classify the request
-        classification = await self.classify(user_input, known_capabilities, context)
+        # Classify the request - pass conversation history for better context understanding
+        classification = await self.classify(
+            user_input, known_capabilities, context, conversation_history
+        )
 
         # Handle different intents
         if classification.get("intent") == "perform_capability":
@@ -338,13 +392,11 @@ class NLUAgent(NetworkAgent):
             )
 
         else:
-            # Unknown intent or complex multi-step - handle via multi-step routing
-            # Try to break down into capabilities
-            capabilities_needed = await self._extract_capabilities(
-                user_input, known_capabilities
-            )
+            # Unknown intent or complex multi-step - handle via DAG-based routing
+            # Extract capabilities and build DAG with dependencies
+            dag = await self._extract_capabilities(user_input, known_capabilities)
 
-            if not capabilities_needed:
+            if not dag:
                 await self.send_error(
                     original_requester,
                     "Could not understand the request. Please try rephrasing.",
@@ -352,32 +404,33 @@ class NLUAgent(NetworkAgent):
                 )
                 return
 
-            # Route to first capability, track the rest - use internal request_id
-            internal_request_id = str(uuid.uuid4())
+            # Initialize DAG tracking structure
+            # Track which capabilities are pending, running, and completed
+            completed_caps: Set[str] = set()
+            running_caps: Set[str] = set()  # Track capabilities currently executing
+            capability_request_ids: Dict[str, str] = {}  # Map capability -> request_id
+
             self.active_requests[request_id] = {
                 "user_input": user_input,
                 "original_requester": original_requester,
                 "agent_results": [],
-                "remaining_capabilities": (
-                    capabilities_needed[1:] if len(capabilities_needed) > 1 else []
-                ),
-                "step": 1,
+                "dag": dag,  # Store the full DAG
+                "completed_caps": completed_caps,
+                "running_caps": running_caps,
+                "capability_request_ids": capability_request_ids,
                 "original_message_id": message.id,
-                "internal_request_id": internal_request_id,
+                "context": context,  # Store context for subsequent executions
+                "allowed_agents": set(allowed_agents) if allowed_agents else None,
             }
 
-            first_capability = capabilities_needed[0]
-            await self.request_capability(
-                capability=first_capability,
-                data={"prompt": user_input, "context": context},
-                request_id=internal_request_id,  # Use internal ID
-                allowed_agents=set(allowed_agents) if allowed_agents else None,
+            # Start initial batch of capabilities (those with no dependencies)
+            await self._execute_ready_capabilities(
+                request_id,
+                dag,
+                user_input,
+                context,
+                allowed_agents,
             )
-            # Track internal request
-            self.active_requests[internal_request_id] = {
-                "parent_request_id": request_id,
-                "user_input": user_input,
-            }
 
     @track_async("nlu_reasoning")
     async def classify(
@@ -385,9 +438,12 @@ class NLUAgent(NetworkAgent):
         user_input: str,
         capabilities: List[str],
         context: Optional[Dict[str, Any]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         """Invoke the LLM to classify the user_input into a routing JSON."""
-        prompt = self.build_prompt(user_input, capabilities, context)
+        prompt = self.build_prompt(
+            user_input, capabilities, context, conversation_history
+        )
         self.logger.log("DEBUG", "NLU prompt built", prompt)
 
         response = await self.ai_client.weak_chat(
@@ -445,19 +501,44 @@ class NLUAgent(NetworkAgent):
 
     async def _extract_capabilities(
         self, user_input: str, available_capabilities: List[str]
-    ) -> List[str]:
-        """Extract multiple capabilities from a user request."""
-        # Use LLM to identify multiple capabilities needed
-        prompt = f"""Analyze this request and identify ALL capabilities needed (in order if sequential):
+    ) -> Dict[str, List[str]]:
+        """
+        Extract multiple capabilities from a user request and build a DAG.
+
+        Returns a dictionary mapping capability -> list of dependencies.
+        Capabilities with no dependencies can run in parallel.
+        """
+        # Use LLM to identify multiple capabilities needed and their dependencies
+        prompt = f"""Analyze this request and identify ALL capabilities needed and their dependencies.
 
 Request: "{user_input}"
 
 Available capabilities: {', '.join(available_capabilities)}
 
-Return JSON with a list of capability names, in order if they need to run sequentially:
-{{"capabilities": ["capability1", "capability2", ...]}}
+Return JSON with a DAG structure where each capability lists its dependencies:
+{{"dag": {{
+  "capability1": [],  // No dependencies - can run immediately
+  "capability2": [],  // No dependencies - can run in parallel with capability1
+  "capability3": ["capability1"]  // Depends on capability1 completing first
+}}}}
 
-If only one capability is needed, return a single-item list."""
+Rules:
+- If two capabilities don't depend on each other, they can run in parallel (empty dependencies)
+- Only list dependencies if one capability truly needs the result of another
+- For independent tasks (e.g., "turn lights red" and "get weather"), use empty dependencies []
+- If only one capability is needed, return single capability with empty dependencies
+
+Example for "turn lights red and tell me the weather":
+{{"dag": {{
+  "lights_color": [],
+  "get_weather": []
+}}}}
+
+Example for "book a meeting tomorrow and send me a reminder":
+{{"dag": {{
+  "schedule_appointment": [],
+  "send_message": ["schedule_appointment"]  // Reminder needs meeting details
+}}}}"""
 
         try:
             response = await self.ai_client.weak_chat(
@@ -468,16 +549,190 @@ If only one capability is needed, return a single-item list."""
                 [],
             )
             result = extract_json_from_text(response[0].content)
-            if result and "capabilities" in result:
-                # Filter to only include valid capabilities
-                valid = [
-                    c for c in result["capabilities"] if c in available_capabilities
-                ]
-                return valid
+            if result and "dag" in result:
+                dag = result["dag"]
+                # Filter to only include valid capabilities and validate dependencies
+                filtered_dag: Dict[str, List[str]] = {}
+                for cap, deps in dag.items():
+                    if cap in available_capabilities:
+                        # Filter dependencies to only valid capabilities
+                        valid_deps = [
+                            d for d in deps if d in available_capabilities and d != cap
+                        ]
+                        filtered_dag[cap] = valid_deps
+                # Validate DAG (no circular dependencies - basic check)
+                if self._validate_dag(filtered_dag):
+                    return filtered_dag
+                else:
+                    self.logger.log(
+                        "WARNING",
+                        "Invalid DAG detected (circular or invalid dependencies), falling back to sequential",
+                        str(filtered_dag),
+                    )
+                    # Fallback to sequential execution
+                    return {cap: [] for cap in filtered_dag.keys()}
         except Exception as e:
             self.logger.log("ERROR", "Failed to extract capabilities", str(e))
 
-        return []
+        return {}
+
+    def _validate_dag(self, dag: Dict[str, List[str]]) -> bool:
+        """Validate that the DAG has no circular dependencies."""
+        visited: Set[str] = set()
+        rec_stack: Set[str] = set()
+
+        def has_cycle(cap: str) -> bool:
+            visited.add(cap)
+            rec_stack.add(cap)
+
+            for dep in dag.get(cap, []):
+                if dep not in visited:
+                    if has_cycle(dep):
+                        return True
+                elif dep in rec_stack:
+                    return True
+
+            rec_stack.remove(cap)
+            return False
+
+        for cap in dag.keys():
+            if cap not in visited:
+                if has_cycle(cap):
+                    return False
+
+        return True
+
+    async def _execute_ready_capabilities(
+        self,
+        request_id: str,
+        dag: Dict[str, List[str]],
+        user_input: str,
+        context: Dict[str, Any],
+        allowed_agents: Optional[Set[str]],
+    ) -> None:
+        """
+        Execute all capabilities that have their dependencies satisfied.
+        Capabilities with no dependencies or all dependencies completed can run in parallel.
+        """
+        request_info = self.active_requests.get(request_id)
+        if not request_info:
+            return
+
+        completed_caps = request_info.get("completed_caps", set())
+        running_caps = request_info.get("running_caps", set())
+
+        # Find capabilities ready to execute (dependencies satisfied and not already running/completed)
+        ready_caps = []
+        for cap, deps in dag.items():
+            if cap in completed_caps or cap in running_caps:
+                continue  # Already completed or running
+            # Check if all dependencies are completed
+            if all(dep in completed_caps for dep in deps):
+                ready_caps.append(cap)
+
+        if not ready_caps:
+            # No more capabilities to execute - check if we're done
+            if len(completed_caps) == len(dag):
+                # All capabilities completed, format final response
+                await self._complete_dag_execution(request_id)
+            return
+
+        # Execute all ready capabilities in parallel
+        self.logger.log(
+            "INFO",
+            f"Executing {len(ready_caps)} capabilities in parallel",
+            f"Capabilities: {ready_caps}",
+        )
+
+        for cap in ready_caps:
+            running_caps.add(cap)
+            internal_request_id = str(uuid.uuid4())
+            request_info["capability_request_ids"][cap] = internal_request_id
+
+            # Track internal request for mapping responses back
+            self.active_requests[internal_request_id] = {
+                "parent_request_id": request_id,
+                "capability": cap,
+                "user_input": user_input,
+            }
+
+            # Build context with previous results for dependent capabilities
+            enhanced_context = dict(context)
+            if completed_caps:
+                # Include results from completed capabilities in context
+                results = request_info.get("agent_results", [])
+                enhanced_context["previous_results"] = [
+                    r for r in results if r.get("capability") in completed_caps
+                ]
+
+            # Execute capability (non-blocking - they'll run in parallel)
+            await self.request_capability(
+                capability=cap,
+                data={"prompt": user_input, "context": enhanced_context},
+                request_id=internal_request_id,
+                allowed_agents=allowed_agents,
+            )
+
+    async def _complete_dag_execution(self, request_id: str) -> None:
+        """Format and send final response after all capabilities in DAG are complete."""
+        request_info = self.active_requests.get(request_id)
+        if not request_info:
+            return
+
+        original_requester = request_info.get("original_requester")
+        if not original_requester:
+            self.logger.log(
+                "WARNING",
+                f"No original_requester found for request {request_id}",
+                "",
+            )
+            return
+
+        try:
+            user_input = request_info.get("user_input", "")
+            results = request_info.get("agent_results", [])
+
+            self.logger.log(
+                "INFO",
+                f"All capabilities completed for request {request_id}",
+                f"Results count: {len(results)}",
+            )
+
+            final_response = await self._format_final_response(user_input, results)
+
+            await self.send_capability_response(
+                to_agent=original_requester,
+                result={"response": final_response, "results": results},
+                request_id=request_id,
+                original_message_id=request_info.get("original_message_id"),
+            )
+
+            # Clean up
+            del self.active_requests[request_id]
+
+        except Exception as e:
+            self.logger.log(
+                "ERROR",
+                f"Error completing DAG execution for {request_id}",
+                str(e),
+            )
+            # Try to send error response
+            try:
+                await self.send_capability_response(
+                    to_agent=original_requester,
+                    result={"response": f"Error: {str(e)}", "results": []},
+                    request_id=request_id,
+                    original_message_id=request_info.get("original_message_id"),
+                )
+            except Exception as send_error:
+                self.logger.log(
+                    "ERROR",
+                    f"Failed to send error response: {str(send_error)}",
+                    "",
+                )
+            finally:
+                if request_id in self.active_requests:
+                    del self.active_requests[request_id]
 
     async def _format_final_response(
         self, user_input: str, agent_results: List[Dict[str, Any]]
@@ -553,13 +808,31 @@ If only one capability is needed, return a single-item list."""
         user_input: str,
         capabilities: List[str],
         context: Optional[Dict[str, Any]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         cap_list = ", ".join(capabilities) if capabilities else "none"
+
+        # Format conversation history separately for better readability
+        history_str = ""
+        if conversation_history and len(conversation_history) > 0:
+            history_str = "\n\n**Recent Conversation History:**\n"
+            for i, turn in enumerate(conversation_history[-5:], 1):  # Show last 5 turns
+                history_str += f"{i}. User: {turn.get('user', '')}\n"
+                history_str += f"   Assistant: {turn.get('assistant', '')}\n"
+            history_str += (
+                "\n**IMPORTANT:** If the user's input is a brief response "
+                "(like 'Yes', 'No', 'OK', etc.), use the conversation history "
+                "to understand what they're responding to.\n"
+            )
+
+        # Filter out conversation_history from context before displaying
         context_str = ""
         if context:
-            context_str = (
-                f"\n\n**Context from previous steps:**\n{json.dumps(context, indent=2)}"
-            )
+            filtered_context = {
+                k: v for k, v in context.items() if k != "conversation_history"
+            }
+            if filtered_context:
+                context_str = f"\n\n**Context from previous steps:**\n{json.dumps(filtered_context, indent=2)}"
 
         prompt = f"""You are JARVIS's Natural Language Understanding engine.
 
@@ -582,7 +855,7 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 
 **User Input**
 \"\"\"{user_input}\"\"\"
-{context_str}
+{history_str}{context_str}
 
 **Available Capabilities:**
 {cap_list}

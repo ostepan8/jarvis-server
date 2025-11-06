@@ -14,7 +14,9 @@ from .tools import tools as chat_tools
 class ChatAgent(NetworkAgent):
     """Lightweight conversational agent that remembers user facts."""
 
-    def __init__(self, ai_client: BaseAIClient, logger: Optional[JarvisLogger] = None) -> None:
+    def __init__(
+        self, ai_client: BaseAIClient, logger: Optional[JarvisLogger] = None
+    ) -> None:
         super().__init__("ChatAgent", logger, memory=None, profile=AgentProfile())
         self.ai_client = ai_client
         self.tools = chat_tools
@@ -50,12 +52,19 @@ class ChatAgent(NetworkAgent):
 
         data = message.content.get("data", {})
         prompt = data.get("prompt")
+        context = data.get("context", {})
+        conversation_history = context.get("conversation_history", [])
+
         if not isinstance(prompt, str):
-            await self.send_error(message.from_agent, "Invalid prompt", message.request_id)
+            await self.send_error(
+                message.from_agent, "Invalid prompt", message.request_id
+            )
             return
 
-        result = await self._process_chat(prompt)
-        await self.send_capability_response(message.from_agent, result, message.request_id, message.id)
+        result = await self._process_chat(prompt, conversation_history)
+        await self.send_capability_response(
+            message.from_agent, result, message.request_id, message.id
+        )
 
     async def _handle_capability_response(self, message: Message) -> None:
         # ChatAgent does not initiate capability requests currently
@@ -64,11 +73,28 @@ class ChatAgent(NetworkAgent):
     # ------------------------------------------------------------------
     # Chat processing
     # ------------------------------------------------------------------
-    async def _process_chat(self, user_input: str) -> Dict[str, Any]:
+    async def _process_chat(
+        self, user_input: str, conversation_history: List[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_input},
         ]
+
+        # Add conversation history (last 5 turns for context)
+        # Validate content to avoid API errors with None/empty values
+        if conversation_history:
+            for turn in conversation_history[-5:]:
+                user_content = turn.get("user") or ""
+                assistant_content = turn.get("assistant") or ""
+
+                # Only add if content is non-empty
+                if user_content.strip():
+                    messages.append({"role": "user", "content": user_content})
+                if assistant_content.strip():
+                    messages.append({"role": "assistant", "content": assistant_content})
+
+        # Add current user input
+        messages.append({"role": "user", "content": user_input})
 
         actions: List[Dict[str, Any]] = []
         iterations = 0
@@ -80,7 +106,25 @@ class ChatAgent(NetworkAgent):
             if not tool_calls:
                 break
 
-            messages.append({"role": "assistant", "content": message.content})
+            # Build assistant message with tool_calls
+            # OpenAI requires tool_calls field when there are tool messages following
+            content = message.content if message.content is not None else ""
+            assistant_msg = {
+                "role": "assistant",
+                "content": content,
+                "tool_calls": [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.function.name,
+                            "arguments": call.function.arguments,
+                        },
+                    }
+                    for call in tool_calls
+                ],
+            }
+            messages.append(assistant_msg)
 
             for call in tool_calls:
                 fn = call.function.name

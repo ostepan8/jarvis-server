@@ -9,6 +9,21 @@ import chromadb
 from chromadb.utils import embedding_functions
 from openai import OpenAI
 
+# Patch ChromaDB's telemetry to prevent the bug
+# The error "capture() takes 1 positional argument but 3 were given" is caused by
+# ChromaDB's Posthog telemetry implementation. We patch it to be a no-op.
+try:
+    import chromadb.telemetry.posthog as posthog_module
+
+    def noop_capture(self, event):
+        """No-op implementation - prevents telemetry errors."""
+        pass
+
+    # Replace Posthog.capture with our no-op version
+    posthog_module.Posthog.capture = noop_capture
+except Exception:
+    pass  # If patching fails, continue silently
+
 
 class ModernOpenAIEmbeddingFunction:
     """Custom embedding function using modern OpenAI API."""
