@@ -23,7 +23,6 @@ from ..services.canvas_service import CanvasService
 from ..utils import get_location_from_ip
 from ..night_agents import (
     NightAgent,
-    TriggerPhraseSuggesterAgent,
     NightModeControllerAgent,
     LogCleanupAgent,
 )
@@ -241,10 +240,6 @@ class AgentFactory:
         night_agents: list[NightAgent] = []
         controller = NightModeControllerAgent(system, self.logger)
         network.register_agent(controller)
-
-        trigger_agent = TriggerPhraseSuggesterAgent(logger=self.logger)
-        network.register_night_agent(trigger_agent)
-        night_agents.append(trigger_agent)
 
         cleanup_agent = LogCleanupAgent(logger=self.logger)
         network.register_night_agent(cleanup_agent)
