@@ -335,6 +335,176 @@ def generate_protocol_log(
     return log_entry.dict()
 
 
+# Interaction Logging Models
+class InteractionLogEntry(BaseModel):
+    """Log entry for user interactions with Jarvis."""
+
+    user_input: str
+    intent: Optional[str] = None
+    capability: Optional[str] = None
+    protocol_executed: Optional[str] = None
+    response: str
+    agent_results: List[Dict[str, Any]] = Field(default_factory=list)
+    tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
+    timestamp_utc: datetime
+    time_zone: str
+    latency_ms: Optional[float] = None
+    success: bool = True
+
+    # Metadata
+    user_id: Optional[int] = None
+    device: Optional[str] = None
+    location: Optional[str] = None
+    source: Optional[str] = None
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
+
+
+@dataclass
+class InteractionLogger:
+    """Async MongoDB logger for user interaction history."""
+
+    mongo_uri: str = "mongodb://localhost:27017"
+    db_name: str = "protocol"
+    collection_name: str = "interaction_history"
+    connection_timeout_ms: int = 5000
+    max_pool_size: int = 10
+
+    # Internal state
+    _client: Optional[AsyncIOMotorClient] = field(default=None, init=False)
+    _collection: Optional[AsyncIOMotorCollection] = field(default=None, init=False)
+    _logger: logging.Logger = field(
+        default_factory=lambda: logging.getLogger(__name__), init=False
+    )
+
+    async def connect(self) -> None:
+        """Establish connection to MongoDB and create indexes."""
+        try:
+            self._client = AsyncIOMotorClient(
+                self.mongo_uri,
+                serverSelectionTimeoutMS=self.connection_timeout_ms,
+                maxPoolSize=self.max_pool_size,
+            )
+
+            # Test connection
+            await self._client.admin.command("ping")
+
+            self._collection = self._client[self.db_name][self.collection_name]
+            await self._create_indexes()
+
+            self._logger.info(f"Connected to MongoDB at {self.mongo_uri}")
+
+        except Exception as e:
+            self._logger.error(f"Failed to connect to MongoDB: {e}")
+            raise ConnectionError(f"MongoDB connection failed: {e}") from e
+
+    async def _create_indexes(self) -> None:
+        """Create indexes for common query patterns."""
+        indexes = [
+            ("user_id", 1),
+            ("timestamp_utc", -1),
+            ("intent", 1),
+            ("capability", 1),
+            ("protocol_executed", 1),
+            ([("user_id", 1), ("timestamp_utc", -1)], None),
+            ([("intent", 1), ("timestamp_utc", -1)], None),
+        ]
+
+        for index in indexes:
+            if isinstance(index, tuple) and len(index) == 2:
+                keys, _ = index
+                await self._collection.create_index(keys)
+            else:
+                await self._collection.create_index(index)
+
+    async def close(self) -> None:
+        """Close MongoDB connection."""
+        if self._client:
+            self._client.close()
+            self._logger.info("Closed MongoDB connection")
+
+    async def log_interaction(
+        self,
+        user_input: str,
+        response: str,
+        intent: Optional[str] = None,
+        capability: Optional[str] = None,
+        protocol_executed: Optional[str] = None,
+        agent_results: Optional[List[Dict[str, Any]]] = None,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
+        latency_ms: Optional[float] = None,
+        success: bool = True,
+        user_id: Optional[int] = None,
+        device: Optional[str] = None,
+        location: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> str:
+        """Log a user interaction to MongoDB."""
+        # Auto-connect if not connected
+        if self._collection is None:
+            try:
+                await self.connect()
+            except Exception as e:
+                self._logger.error(f"Failed to auto-connect to MongoDB: {e}")
+                return ""  # Fail silently to not break main flow
+
+        try:
+            log_entry = InteractionLogEntry(
+                user_input=user_input,
+                intent=intent,
+                capability=capability,
+                protocol_executed=protocol_executed,
+                response=response,
+                agent_results=agent_results or [],
+                tool_calls=tool_calls or [],
+                timestamp_utc=datetime.now(timezone.utc),
+                time_zone=get_system_timezone(),
+                latency_ms=latency_ms,
+                success=success,
+                user_id=user_id,
+                device=device,
+                location=location,
+                source=source,
+            )
+
+            result = await self._collection.insert_one(log_entry.dict())
+            self._logger.debug(
+                f"Logged interaction: user_id={user_id}, intent={intent} (ID: {result.inserted_id})"
+            )
+            return str(result.inserted_id)
+
+        except Exception as e:
+            self._logger.error(f"Failed to log interaction: {e}")
+            return ""  # Fail silently
+
+    async def get_recent_interactions(
+        self,
+        limit: int = 100,
+        user_id: Optional[int] = None,
+        intent: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get recent interactions."""
+        if self._collection is None:
+            raise RuntimeError("Logger not connected.")
+
+        # Build filter
+        match_filter = {}
+        if user_id is not None:
+            match_filter["user_id"] = user_id
+        if intent:
+            match_filter["intent"] = intent
+
+        # Query interactions
+        cursor = (
+            self._collection.find(match_filter).sort("timestamp_utc", -1).limit(limit)
+        )
+        interactions = await cursor.to_list(None)
+        return interactions
+
+
 # Convenience functions
 @asynccontextmanager
 async def create_logger(
@@ -343,6 +513,20 @@ async def create_logger(
 ) -> ProtocolUsageLogger:
     """Create and yield a connected ProtocolUsageLogger."""
     logger = ProtocolUsageLogger(mongo_uri=mongo_uri, db_name=db_name)
+    await logger.connect()
+    try:
+        yield logger
+    finally:
+        await logger.close()
+
+
+@asynccontextmanager
+async def create_interaction_logger(
+    mongo_uri: str = "mongodb://localhost:27017",
+    db_name: str = "protocol",
+) -> InteractionLogger:
+    """Create and yield a connected InteractionLogger."""
+    logger = InteractionLogger(mongo_uri=mongo_uri, db_name=db_name)
     await logger.connect()
     try:
         yield logger

@@ -4,6 +4,9 @@ from .mongo_logger import (
     ProtocolLogEntry,
     generate_protocol_log,
     create_logger,
+    InteractionLogger,
+    InteractionLogEntry,
+    create_interaction_logger,
 )
 
 __all__ = [
@@ -12,4 +15,7 @@ __all__ = [
     "ProtocolLogEntry",
     "generate_protocol_log",
     "create_logger",
+    "InteractionLogger",
+    "InteractionLogEntry",
+    "create_interaction_logger",
 ]

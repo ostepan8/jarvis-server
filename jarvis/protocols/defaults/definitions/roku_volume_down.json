@@ -1,0 +1,20 @@
+{
+  "name": "roku_volume_down",
+  "description": "Decrease volume on Roku device",
+  "trigger_phrases": [
+    "-",
+    "volume down"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "volume_down",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

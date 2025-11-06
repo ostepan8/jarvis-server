@@ -1,0 +1,20 @@
+{
+  "name": "roku_volume_up",
+  "description": "Increase volume on Roku device",
+  "trigger_phrases": [
+    "+",
+    "volume up"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "volume_up",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

@@ -7,9 +7,10 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi import HTTPException
+from bson import ObjectId
 from ..dependencies import get_auth_db, get_jarvis
 from jarvis import JarvisSystem
-from jarvis.protocols.loggers.mongo_logger import ProtocolUsageLogger
+from jarvis.protocols.loggers.mongo_logger import ProtocolUsageLogger, InteractionLogger
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -23,8 +24,15 @@ def get_logs_db() -> sqlite3.Connection:
 def get_mongo_logger() -> ProtocolUsageLogger:
     """Get MongoDB logger instance"""
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-    db_name = os.getenv("MONGO_DB_NAME", "protocals")
+    db_name = os.getenv("MONGO_DB_NAME", "protocol")
     return ProtocolUsageLogger(mongo_uri=mongo_uri, db_name=db_name)
+
+
+def get_interaction_logger() -> InteractionLogger:
+    """Get InteractionLogger instance"""
+    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+    db_name = os.getenv("MONGO_DB_NAME", "protocol")
+    return InteractionLogger(mongo_uri=mongo_uri, db_name=db_name)
 
 
 @router.get("/dashboard")
@@ -164,6 +172,47 @@ async def get_dashboard_summary(
         except Exception:
             pass
 
+    # Interaction stats from MongoDB
+    interaction_stats = {
+        "total_interactions": 0,
+        "successful_interactions": 0,
+        "interaction_success_rate": 0.0,
+        "average_latency_ms": None,
+    }
+
+    try:
+        interaction_logger = get_interaction_logger()
+        await interaction_logger.connect()
+        total_interactions = await interaction_logger._collection.count_documents({})
+        successful_interactions = await interaction_logger._collection.count_documents(
+            {"success": True}
+        )
+        interaction_success_rate = (
+            (successful_interactions / total_interactions * 100)
+            if total_interactions > 0
+            else 0.0
+        )
+
+        # Calculate average latency
+        latency_pipeline = [
+            {"$match": {"latency_ms": {"$exists": True, "$ne": None}}},
+            {"$group": {"_id": None, "avg_latency": {"$avg": "$latency_ms"}}},
+        ]
+        latency_result = await interaction_logger._collection.aggregate(
+            latency_pipeline
+        ).to_list(1)
+        avg_latency = latency_result[0]["avg_latency"] if latency_result else None
+
+        interaction_stats = {
+            "total_interactions": total_interactions,
+            "successful_interactions": successful_interactions,
+            "interaction_success_rate": round(interaction_success_rate, 2),
+            "average_latency_ms": round(avg_latency, 2) if avg_latency else None,
+        }
+        await interaction_logger.close()
+    except Exception:
+        pass
+
     # Memory stats
     memory_stats = {"total_memories": 0, "memories_by_user": {}, "collection_names": []}
 
@@ -184,12 +233,13 @@ async def get_dashboard_summary(
 
     overview = {
         "total_users": user_stats["total_users"],
-        "total_interactions": user_stats["total_interactions"],
+        "total_interactions": interaction_stats["total_interactions"],
         "total_logs": total_logs,
         "total_protocol_executions": protocol_stats["total_executions"],
         "protocol_success_rate": protocol_stats["success_rate"],
         "total_memories": memory_stats["total_memories"],
         "active_users_30d": user_stats["active_users_30d"],
+        "interaction_success_rate": interaction_stats["interaction_success_rate"],
     }
 
     return {
@@ -350,4 +400,72 @@ async def get_memories_html() -> HTMLResponse:
     else:
         raise HTTPException(
             status_code=404, detail=f"Memories HTML file not found at {memories_path}"
+        )
+
+
+@router.get("/interactions")
+async def get_interactions(
+    limit: int = 100,
+    user_id: Optional[int] = None,
+    intent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Get interaction history from MongoDB."""
+    try:
+        logger = get_interaction_logger()
+        await logger.connect()
+        interactions = await logger.get_recent_interactions(
+            limit=limit, user_id=user_id, intent=intent
+        )
+        await logger.close()
+
+        # Convert MongoDB documents to JSON-serializable format
+        # Convert ObjectId to string and handle datetime serialization
+        def convert_mongo_doc(doc):
+            """Convert MongoDB document to JSON-serializable dict."""
+            if isinstance(doc, dict):
+                converted = {}
+                for key, value in doc.items():
+                    if isinstance(value, ObjectId):
+                        converted[key] = str(value)
+                    elif isinstance(value, datetime):
+                        converted[key] = value.isoformat()
+                    elif isinstance(value, dict):
+                        converted[key] = convert_mongo_doc(value)
+                    elif isinstance(value, list):
+                        converted[key] = [convert_mongo_doc(item) for item in value]
+                    else:
+                        converted[key] = value
+                return converted
+            return doc
+
+        serialized_interactions = [
+            convert_mongo_doc(interaction) for interaction in interactions
+        ]
+
+        return {
+            "interactions": serialized_interactions,
+            "total": len(serialized_interactions),
+            "limit": limit,
+        }
+    except Exception as e:
+        return {
+            "interactions": [],
+            "total": 0,
+            "limit": limit,
+            "error": str(e),
+        }
+
+
+@router.get("/interactions/html", response_class=HTMLResponse)
+async def get_interactions_html() -> HTMLResponse:
+    """Serve the interactions viewer HTML page."""
+    interactions_path = os.path.join(
+        os.path.dirname(__file__), "..", "static", "admin_interactions.html"
+    )
+    if os.path.exists(interactions_path):
+        return FileResponse(interactions_path)
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Interactions HTML file not found at {interactions_path}",
         )

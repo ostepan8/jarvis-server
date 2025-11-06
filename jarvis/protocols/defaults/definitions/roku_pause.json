@@ -1,0 +1,19 @@
+{
+  "name": "roku_pause",
+  "description": "Pause media on Roku device",
+  "trigger_phrases": [
+    "pause"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "pause",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

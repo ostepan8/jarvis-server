@@ -1,0 +1,20 @@
+{
+  "name": "roku_rewind",
+  "description": "Rewind media on Roku device",
+  "trigger_phrases": [
+    "rewind",
+    "<<"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "rewind",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

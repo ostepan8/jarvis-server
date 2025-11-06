@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>J.A.R.V.I.S. - Interaction Log</title>
+    <title>J.A.R.V.I.S. - Interaction History</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -15,11 +15,6 @@
         @keyframes scan {
             0% { transform: translateX(-100%); }
             100% { transform: translateX(400%); }
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
         }
         
         @keyframes fadeIn {
@@ -86,7 +81,6 @@
             letter-spacing: 2px;
             text-decoration: none;
             transition: all 0.3s;
-            position: relative;
         }
         
         .nav-link:hover {
@@ -201,50 +195,49 @@
             box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
         }
         
-        .logs-container {
+        .interactions-container {
             background: rgba(0, 240, 255, 0.05);
             border: 1px solid rgba(0, 240, 255, 0.2);
             padding: 30px;
             backdrop-filter: blur(10px);
         }
         
-        .log-entry {
+        .interaction-entry {
             background: rgba(0, 240, 255, 0.03);
             border: 1px solid rgba(0, 240, 255, 0.2);
             padding: 20px;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
             transition: all 0.3s;
             animation: fadeIn 0.3s ease-out;
         }
         
-        .log-entry:hover {
+        .interaction-entry:hover {
             border-color: rgba(0, 240, 255, 0.5);
             box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
             background: rgba(0, 240, 255, 0.08);
         }
         
-        .log-header {
+        .interaction-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
+            align-items: flex-start;
+            margin-bottom: 15px;
             flex-wrap: wrap;
             gap: 10px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
         }
         
-        .log-id {
-            color: rgba(0, 240, 255, 0.6);
-            font-size: 0.85em;
+        .interaction-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
         }
         
-        .log-timestamp {
-            color: #ff9100;
-            font-weight: 600;
-        }
-        
-        .log-level {
+        .meta-badge {
             padding: 4px 12px;
             font-family: 'Orbitron', monospace;
             font-size: 0.75em;
@@ -252,72 +245,117 @@
             text-transform: uppercase;
             border: 1px solid;
             letter-spacing: 1px;
+            display: inline-block;
         }
         
-        .log-level.INFO {
+        .meta-badge.intent {
             color: #00ff88;
             border-color: #00ff88;
             background: rgba(0, 255, 136, 0.1);
         }
         
-        .log-level.WARNING {
-            color: #ff9100;
-            border-color: #ff9100;
-            background: rgba(255, 145, 0, 0.1);
-        }
-        
-        .log-level.ERROR {
-            color: #ff4444;
-            border-color: #ff4444;
-            background: rgba(255, 68, 68, 0.1);
-        }
-        
-        .log-level.DEBUG {
+        .meta-badge.capability {
             color: #00bfff;
             border-color: #00bfff;
             background: rgba(0, 191, 255, 0.1);
         }
         
-        .log-action {
+        .meta-badge.protocol {
+            color: #ff9100;
+            border-color: #ff9100;
+            background: rgba(255, 145, 0, 0.1);
+        }
+        
+        .meta-badge.success {
+            color: #00ff88;
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .meta-badge.failed {
+            color: #ff4444;
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .meta-badge.latency {
             color: #00f0ff;
-            font-weight: 700;
-            margin: 10px 0;
+            border-color: #00f0ff;
+            background: rgba(0, 240, 255, 0.1);
+        }
+        
+        .interaction-timestamp {
+            color: #ff9100;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        
+        .interaction-content {
+            margin-top: 15px;
+        }
+        
+        .input-section, .response-section {
+            margin-bottom: 15px;
+        }
+        
+        .section-label {
+            color: rgba(0, 240, 255, 0.6);
+            font-size: 0.85em;
             text-transform: uppercase;
-        }
-        
-        .log-details {
-            color: rgba(0, 240, 255, 0.7);
-            margin-top: 10px;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-top: 30px;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
             font-family: 'Orbitron', monospace;
         }
         
-        .pagination-btn {
-            background: rgba(0, 240, 255, 0.1);
-            border: 1px solid rgba(0, 240, 255, 0.3);
+        .user-input {
+            background: rgba(0, 240, 255, 0.05);
+            border-left: 3px solid #00f0ff;
+            padding: 12px 15px;
             color: #00f0ff;
-            padding: 10px 20px;
-            cursor: pointer;
-            transition: all 0.3s;
+            font-weight: 600;
         }
         
-        .pagination-btn:hover:not(:disabled) {
-            border-color: #00f0ff;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        .jarvis-response {
+            background: rgba(0, 255, 136, 0.05);
+            border-left: 3px solid #00ff88;
+            padding: 12px 15px;
+            color: #00ff88;
         }
         
-        .pagination-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
+        .details-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(0, 240, 255, 0.1);
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .detail-item {
+            color: rgba(0, 240, 255, 0.7);
+            font-size: 0.85em;
+        }
+        
+        .detail-item strong {
+            color: rgba(0, 240, 255, 0.9);
+        }
+        
+        .agent-results {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 191, 255, 0.05);
+            border-left: 2px solid #00bfff;
+        }
+        
+        .agent-results pre {
+            color: rgba(0, 191, 255, 0.8);
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-size: 0.85em;
         }
         
         .loading {
@@ -359,48 +397,41 @@
     <div class="container">
         <div class="nav">
             <a href="/admin/dashboard/html" class="nav-link">DASHBOARD</a>
-            <a href="/admin/logs/html" class="nav-link active">SYSTEM LOGS</a>
-            <a href="/admin/interactions/html" class="nav-link">INTERACTIONS</a>
+            <a href="/admin/logs/html" class="nav-link">SYSTEM LOGS</a>
+            <a href="/admin/interactions/html" class="nav-link active">INTERACTIONS</a>
             <a href="/admin/memories/html" class="nav-link">MEMORY BANK</a>
         </div>
         
         <header>
             <div class="header-content">
-                <div class="logo">SYSTEM LOGS</div>
+                <div class="logo">INTERACTION HISTORY</div>
                 <div class="filters">
                     <div class="filter-group">
-                        <label for="levelFilter">LEVEL:</label>
-                        <select id="levelFilter">
+                        <label for="intentFilter">INTENT:</label>
+                        <select id="intentFilter">
                             <option value="">ALL</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARNING">WARNING</option>
-                            <option value="ERROR">ERROR</option>
-                            <option value="DEBUG">DEBUG</option>
+                            <option value="protocol">Protocol</option>
+                            <option value="chat">Chat</option>
+                            <option value="perform_capability">Capability</option>
                         </select>
                     </div>
                     <div class="filter-group">
                         <label for="limitInput">LIMIT:</label>
                         <input type="number" id="limitInput" value="100" min="10" max="1000" step="10">
                     </div>
-                    <button class="btn" onclick="loadLogs()">LOAD</button>
+                    <button class="btn" onclick="loadInteractions()">LOAD</button>
                 </div>
             </div>
         </header>
         
         <div id="errorContainer"></div>
         
-        <div class="logs-container" id="logsContainer">
-            <div class="loading">LOADING LOGS</div>
+        <div class="interactions-container" id="interactionsContainer">
+            <div class="loading">LOADING INTERACTIONS</div>
         </div>
-        
-        <div class="pagination" id="pagination"></div>
     </div>
     
     <script>
-        let currentOffset = 0;
-        let currentLimit = 100;
-        let currentLevel = '';
-        
         function getApiBase() {
             const stored = localStorage.getItem('jarvis_api_base');
             return stored || window.location.origin;
@@ -421,96 +452,139 @@
             container.innerHTML = `<div class="error">ERROR: ${message}</div>`;
         }
         
-        function renderLog(log) {
-            const levelClass = log.level || 'INFO';
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString();
+            } catch (e) {
+                return timestamp;
+            }
+        }
+        
+        function formatLatency(latencyMs) {
+            if (!latencyMs) return 'N/A';
+            if (latencyMs < 1000) {
+                return `${Math.round(latencyMs)}ms`;
+            }
+            return `${(latencyMs / 1000).toFixed(2)}s`;
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+        
+        function renderInteraction(interaction) {
+            const timestamp = formatTimestamp(interaction.timestamp_utc);
+            const latency = formatLatency(interaction.latency_ms);
+            const successClass = interaction.success ? 'success' : 'failed';
+            const successText = interaction.success ? 'SUCCESS' : 'FAILED';
+            
+            let badges = `<span class="meta-badge ${successClass}">${successText}</span>`;
+            
+            if (interaction.intent) {
+                badges += `<span class="meta-badge intent">INTENT: ${interaction.intent.toUpperCase()}</span>`;
+            }
+            if (interaction.capability) {
+                badges += `<span class="meta-badge capability">CAPABILITY: ${interaction.capability}</span>`;
+            }
+            if (interaction.protocol_executed) {
+                badges += `<span class="meta-badge protocol">PROTOCOL: ${interaction.protocol_executed}</span>`;
+            }
+            if (interaction.latency_ms !== null && interaction.latency_ms !== undefined) {
+                badges += `<span class="meta-badge latency">${latency}</span>`;
+            }
+            
+            let detailsHtml = '';
+            if (interaction.user_id || interaction.device || interaction.location || interaction.source) {
+                detailsHtml = '<div class="details-section"><div class="section-label">METADATA</div><div class="details-grid">';
+                if (interaction.user_id) detailsHtml += `<div class="detail-item"><strong>User ID:</strong> ${interaction.user_id}</div>`;
+                if (interaction.device) detailsHtml += `<div class="detail-item"><strong>Device:</strong> ${escapeHtml(interaction.device)}</div>`;
+                if (interaction.location) detailsHtml += `<div class="detail-item"><strong>Location:</strong> ${escapeHtml(interaction.location)}</div>`;
+                if (interaction.source) detailsHtml += `<div class="detail-item"><strong>Source:</strong> ${escapeHtml(interaction.source)}</div>`;
+                detailsHtml += '</div></div>';
+            }
+            
+            let agentResultsHtml = '';
+            if (interaction.agent_results && interaction.agent_results.length > 0) {
+                agentResultsHtml = '<div class="details-section"><div class="section-label">AGENT RESULTS</div>';
+                agentResultsHtml += '<div class="agent-results"><pre>' + escapeHtml(JSON.stringify(interaction.agent_results, null, 2)) + '</pre></div></div>';
+            }
+            
+            let toolCallsHtml = '';
+            if (interaction.tool_calls && interaction.tool_calls.length > 0) {
+                toolCallsHtml = '<div class="details-section"><div class="section-label">TOOL CALLS</div>';
+                toolCallsHtml += '<div class="agent-results"><pre>' + escapeHtml(JSON.stringify(interaction.tool_calls, null, 2)) + '</pre></div></div>';
+            }
+            
             return `
-                <div class="log-entry">
-                    <div class="log-header">
-                        <span class="log-id">ID: ${log.id}</span>
-                        <span class="log-timestamp">${log.timestamp}</span>
-                        <span class="log-level ${levelClass}">${levelClass}</span>
+                <div class="interaction-entry">
+                    <div class="interaction-header">
+                        <div class="interaction-meta">
+                            ${badges}
+                        </div>
+                        <div class="interaction-timestamp">${timestamp}</div>
                     </div>
-                    <div class="log-action">${log.action || 'N/A'}</div>
-                    ${log.details ? `<div class="log-details">${escapeHtml(log.details)}</div>` : ''}
+                    <div class="interaction-content">
+                        <div class="input-section">
+                            <div class="section-label">USER INPUT</div>
+                            <div class="user-input">${escapeHtml(interaction.user_input)}</div>
+                        </div>
+                        <div class="response-section">
+                            <div class="section-label">JARVIS RESPONSE</div>
+                            <div class="jarvis-response">${escapeHtml(interaction.response)}</div>
+                        </div>
+                        ${detailsHtml}
+                        ${agentResultsHtml}
+                        ${toolCallsHtml}
+                    </div>
                 </div>
             `;
         }
         
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        function renderPagination(total, limit, offset) {
-            const currentPage = Math.floor(offset / limit) + 1;
-            const totalPages = Math.ceil(total / limit);
-            const container = document.getElementById('pagination');
-            
-            if (totalPages <= 1) {
-                container.innerHTML = '';
-                return;
-            }
-            
-            container.innerHTML = `
-                <button class="pagination-btn" onclick="previousPage()" ${offset === 0 ? 'disabled' : ''}>
-                    PREV
-                </button>
-                <span style="color: #00f0ff; font-size: 0.9em;">
-                    PAGE ${currentPage} OF ${totalPages} (${total} TOTAL)
-                </span>
-                <button class="pagination-btn" onclick="nextPage()" ${offset + limit >= total ? 'disabled' : ''}>
-                    NEXT
-                </button>
-            `;
-        }
-        
-        async function loadLogs() {
-            const container = document.getElementById('logsContainer');
+        async function loadInteractions() {
+            const container = document.getElementById('interactionsContainer');
             const errorContainer = document.getElementById('errorContainer');
             errorContainer.innerHTML = '';
             
-            currentLevel = document.getElementById('levelFilter').value;
-            currentLimit = parseInt(document.getElementById('limitInput').value) || 100;
+            const intent = document.getElementById('intentFilter').value;
+            const limit = parseInt(document.getElementById('limitInput').value) || 100;
             
-            container.innerHTML = '<div class="loading">LOADING LOGS</div>';
+            container.innerHTML = '<div class="loading">LOADING INTERACTIONS</div>';
             
             try {
-                let url = `/admin/logs?limit=${currentLimit}&offset=${currentOffset}`;
-                if (currentLevel) {
-                    url += `&level=${currentLevel}`;
+                let url = `/admin/interactions?limit=${limit}`;
+                if (intent) {
+                    url += `&intent=${intent}`;
                 }
                 
                 const data = await fetchAPI(url);
                 
-                if (data.logs && data.logs.length > 0) {
-                    container.innerHTML = data.logs.map(renderLog).join('');
-                    renderPagination(data.total, data.limit, data.offset);
+                if (data.error) {
+                    showError(data.error);
+                    container.innerHTML = '<div class="error">FAILED TO LOAD INTERACTIONS: ' + escapeHtml(data.error) + '</div>';
+                    return;
+                }
+                
+                if (data.interactions && data.interactions.length > 0) {
+                    container.innerHTML = data.interactions.map(renderInteraction).join('');
                 } else {
-                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(0, 240, 255, 0.5); font-family: \'Orbitron\', monospace;">NO LOGS FOUND</div>';
-                    renderPagination(0, 0, 0);
+                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(0, 240, 255, 0.5); font-family: \'Orbitron\', monospace;">NO INTERACTIONS FOUND</div>';
                 }
             } catch (error) {
                 showError(error.message);
-                container.innerHTML = '<div class="error">FAILED TO LOAD LOGS</div>';
+                container.innerHTML = '<div class="error">FAILED TO LOAD INTERACTIONS</div>';
             }
         }
         
-        function nextPage() {
-            currentOffset += currentLimit;
-            loadLogs();
-        }
-        
-        function previousPage() {
-            currentOffset = Math.max(0, currentOffset - currentLimit);
-            loadLogs();
-        }
-        
-        // Load logs on page load
-        window.addEventListener('DOMContentLoaded', loadLogs);
+        // Load interactions on page load
+        window.addEventListener('DOMContentLoaded', loadInteractions);
         
         // Auto-reload every 30 seconds
-        setInterval(loadLogs, 30000);
+        setInterval(loadInteractions, 30000);
     </script>
 </body>
 </html>

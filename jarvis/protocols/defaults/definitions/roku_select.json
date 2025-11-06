@@ -1,0 +1,19 @@
+{
+  "name": "roku_select",
+  "description": "Press select/OK button on Roku device (key: s)",
+  "trigger_phrases": [
+    "s"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "select",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

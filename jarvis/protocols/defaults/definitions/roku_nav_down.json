@@ -1,0 +1,21 @@
+{
+  "name": "roku_nav_down",
+  "description": "Navigate down on Roku device (vim key: j)",
+  "trigger_phrases": [
+    "j"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "navigate",
+      "parameters": {
+        "direction": "down"
+      }
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

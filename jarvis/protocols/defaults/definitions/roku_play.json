@@ -1,0 +1,19 @@
+{
+  "name": "roku_play",
+  "description": "Play/resume media on Roku device",
+  "trigger_phrases": [
+    "play"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "play",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

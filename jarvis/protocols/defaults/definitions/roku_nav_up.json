@@ -1,0 +1,21 @@
+{
+  "name": "roku_nav_up",
+  "description": "Navigate up on Roku device (vim key: k)",
+  "trigger_phrases": [
+    "k"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "navigate",
+      "parameters": {
+        "direction": "up"
+      }
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

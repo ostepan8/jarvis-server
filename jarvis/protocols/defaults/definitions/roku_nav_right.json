@@ -1,0 +1,21 @@
+{
+  "name": "roku_nav_right",
+  "description": "Navigate right on Roku device (vim key: l)",
+  "trigger_phrases": [
+    "l"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "navigate",
+      "parameters": {
+        "direction": "right"
+      }
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

@@ -1,0 +1,19 @@
+{
+  "name": "roku_home",
+  "description": "Go to Roku home screen",
+  "trigger_phrases": [
+    "home"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "home",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

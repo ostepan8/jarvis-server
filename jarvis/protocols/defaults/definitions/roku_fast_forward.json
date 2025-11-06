@@ -1,0 +1,20 @@
+{
+  "name": "roku_fast_forward",
+  "description": "Fast forward media on Roku device",
+  "trigger_phrases": [
+    "fast forward",
+    ">>"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "fast_forward",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+

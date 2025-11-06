@@ -1,0 +1,19 @@
+{
+  "name": "roku_back",
+  "description": "Press back button on Roku device (key: b)",
+  "trigger_phrases": [
+    "b"
+  ],
+  "steps": [
+    {
+      "agent": "RokuAgent",
+      "function": "back",
+      "parameters": {}
+    }
+  ],
+  "responses": {
+    "mode": "static",
+    "phrases": []
+  }
+}
+
