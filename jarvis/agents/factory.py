@@ -15,7 +15,9 @@ from ..agents.weather_agent import WeatherAgent
 from ..agents.memory_agent import MemoryAgent
 from ..agents.chat_agent import ChatAgent
 from ..agents.canvas import CanvasAgent
+from ..agents.roku_agent import RokuAgent
 from ..services.vector_memory import VectorMemoryService
+from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
 from ..services.canvas_service import CanvasService
 from ..night_agents import (
@@ -58,6 +60,9 @@ class AgentFactory:
         if self.config.flags.enable_lights:
             refs.update(self._build_lights(network, ai_client))
 
+        if self.config.flags.enable_roku:
+            refs.update(self._build_roku(network, ai_client))
+
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -70,9 +75,14 @@ class AgentFactory:
         vector_memory = VectorMemoryService(
             persist_directory=self.config.memory_dir, api_key=self.config.api_key
         )
-        memory_agent = MemoryAgent(vector_memory, self.logger, ai_client)
+        fact_service = FactMemoryService()
+        memory_agent = MemoryAgent(vector_memory, fact_service, self.logger, ai_client)
         network.register_agent(memory_agent)
-        return {"vector_memory": vector_memory, "memory_agent": memory_agent}
+        return {
+            "vector_memory": vector_memory,
+            "fact_service": fact_service,
+            "memory_agent": memory_agent,
+        }
 
     def _build_nlu(
         self, network: AgentNetwork, ai_client: BaseAIClient
@@ -182,6 +192,29 @@ class AgentFactory:
             "canvas_service": canvas_service,
             "canvas_agent": canvas_agent,
         }
+
+    def _build_roku(
+        self, network: AgentNetwork, ai_client: BaseAIClient
+    ) -> Dict[str, Any]:
+        if not self.config.roku_ip_address:
+            self.logger.log(
+                "INFO", "Skipping Roku agent", "No Roku IP address configured"
+            )
+            return {}
+
+        try:
+            roku_agent = RokuAgent(
+                ai_client=ai_client,
+                device_ip=self.config.roku_ip_address,
+                username=self.config.roku_username,
+                password=self.config.roku_password,
+                logger=self.logger,
+            )
+            network.register_agent(roku_agent)
+            return {"roku_agent": roku_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "RokuAgent init failed", str(exc))
+            return {}
 
     def _build_night_agents(
         self, network: AgentNetwork, system: "JarvisSystem"

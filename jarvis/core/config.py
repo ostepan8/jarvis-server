@@ -13,6 +13,7 @@ class FeatureFlags:
     enable_lights: bool = True
     enable_canvas: bool = True
     enable_night_mode: bool = True
+    enable_roku: bool = True
 
 
 @dataclass
@@ -47,6 +48,15 @@ class JarvisConfig:
             else None
         )
     )
+    roku_ip_address: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROKU_IP_ADDRESS")
+    )
+    roku_username: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROKU_USERNAME")
+    )
+    roku_password: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROKU_PASSWORD")
+    )
     flags: FeatureFlags = field(default_factory=FeatureFlags)
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
@@ -63,3 +73,6 @@ class UserConfig:
     weather_api_key: Optional[str] = None
     hue_bridge_ip: Optional[str] = None
     hue_username: Optional[str] = None
+    roku_ip_address: Optional[str] = None
+    roku_username: Optional[str] = None
+    roku_password: Optional[str] = None

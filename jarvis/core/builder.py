@@ -23,6 +23,7 @@ class BuilderOptions:
     with_weather: bool = True
     with_protocols: bool = True
     with_lights: bool = True
+    with_roku: bool = True
     with_software: bool = False  # was commented out in your code
     with_night_agents: bool = True
 
@@ -72,6 +73,10 @@ class JarvisBuilder:
         self._opts.with_lights = enabled
         return self
 
+    def roku(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_roku = enabled
+        return self
+
     def software_agent(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_software = enabled
         return self
@@ -110,6 +115,11 @@ class JarvisBuilder:
         )
         hue_username = os.getenv("PHILLIPS_HUE_USERNAME")
 
+        # Roku configuration
+        roku_ip_address = os.getenv("ROKU_IP_ADDRESS")
+        roku_username = os.getenv("ROKU_USERNAME")
+        roku_password = os.getenv("ROKU_PASSWORD")
+
         cfg = JarvisConfig(
             ai_provider=ai_provider,
             api_key=api_key,
@@ -120,6 +130,9 @@ class JarvisBuilder:
             hue_username=hue_username,
             lighting_backend=lighting_backend,
             yeelight_bulb_ips=yeelight_bulb_ips,
+            roku_ip_address=roku_ip_address,
+            roku_username=roku_username,
+            roku_password=roku_password,
         )
         b = JarvisBuilder(cfg)
         b._dotenv_loaded = True
@@ -157,6 +170,8 @@ class JarvisBuilder:
             refs.update(factory._build_protocol(jarvis.network))
         if self._opts.with_lights and jarvis.config.flags.enable_lights:
             refs.update(factory._build_lights(jarvis.network, ai_client))
+        if self._opts.with_roku and jarvis.config.flags.enable_roku:
+            refs.update(factory._build_roku(jarvis.network, ai_client))
         if self._opts.with_software:
             # Placeholder for future implementation
             pass
@@ -169,6 +184,7 @@ class JarvisBuilder:
         jarvis.chat_agent = refs.get("chat_agent")
         jarvis.protocol_agent = refs.get("protocol_agent")
         jarvis.lights_agent = refs.get("lights_agent")
+        jarvis.roku_agent = refs.get("roku_agent")
         jarvis.canvas_service = refs.get("canvas_service")
         jarvis.night_controller = refs.get("night_controller")
         jarvis.night_agents = refs.get("night_agents", [])
