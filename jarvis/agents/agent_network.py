@@ -423,34 +423,34 @@ class AgentNetwork:
         fut_data = self._response_futures.get(message.request_id)
         if fut_data:
             fut, _ = fut_data
-                        if not fut.done():
-                            self.logger.log(
-                                "DEBUG",
-                                f"Fulfilling future for request {message.request_id}",
-                                f"from={message.from_agent}, to={message.to_agent}",
-                            )
-                            fut.set_result(message.content)
+            if not fut.done():
+                self.logger.log(
+                    "DEBUG",
+                    f"Fulfilling future for request {message.request_id}",
+                    f"from={message.from_agent}, to={message.to_agent}",
+                )
+                fut.set_result(message.content)
                 # Clean up future immediately after fulfillment
                 del self._response_futures[message.request_id]
-                        else:
-                            self.logger.log(
-                                "DEBUG",
-                                f"Future already done for request {message.request_id}",
-                                "",
-                            )
-                    else:
-                        self.logger.log(
-                            "WARNING",
-                            f"No future found for capability_response",
-                            f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}",
-                        )
+            else:
+                self.logger.log(
+                    "DEBUG",
+                    f"Future already done for request {message.request_id}",
+                    "",
+                )
+        else:
+            self.logger.log(
+                "WARNING",
+                f"No future found for capability_response",
+                f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}",
+            )
         
         # Only deliver to agent if it's not a direct response (to_agent indicates forwarding)
         # Most responses are handled via future fulfillment above
-                    if message.to_agent and message.to_agent in self.agents:
-                        asyncio.create_task(
-                            self.agents[message.to_agent].receive_message(message)
-                        )
+        if message.to_agent and message.to_agent in self.agents:
+            asyncio.create_task(
+                self.agents[message.to_agent].receive_message(message)
+            )
     
     async def _handle_error_message(self, message: Message) -> None:
         """Handle error message - fulfill future and deliver to agent."""
