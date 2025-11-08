@@ -423,34 +423,34 @@ class AgentNetwork:
         fut_data = self._response_futures.get(message.request_id)
         if fut_data:
             fut, _ = fut_data
-            if not fut.done():
-                self.logger.log(
-                    "DEBUG",
-                    f"Fulfilling future for request {message.request_id}",
-                    f"from={message.from_agent}, to={message.to_agent}",
-                )
-                fut.set_result(message.content)
+                        if not fut.done():
+                            self.logger.log(
+                                "DEBUG",
+                                f"Fulfilling future for request {message.request_id}",
+                                f"from={message.from_agent}, to={message.to_agent}",
+                            )
+                            fut.set_result(message.content)
                 # Clean up future immediately after fulfillment
                 del self._response_futures[message.request_id]
-            else:
-                self.logger.log(
-                    "DEBUG",
-                    f"Future already done for request {message.request_id}",
-                    "",
-                )
-        else:
-            self.logger.log(
-                "WARNING",
-                f"No future found for capability_response",
-                f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}",
-            )
+                        else:
+                            self.logger.log(
+                                "DEBUG",
+                                f"Future already done for request {message.request_id}",
+                                "",
+                            )
+                    else:
+                        self.logger.log(
+                            "WARNING",
+                            f"No future found for capability_response",
+                            f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}",
+                        )
         
         # Only deliver to agent if it's not a direct response (to_agent indicates forwarding)
         # Most responses are handled via future fulfillment above
-        if message.to_agent and message.to_agent in self.agents:
-            asyncio.create_task(
-                self.agents[message.to_agent].receive_message(message)
-            )
+                    if message.to_agent and message.to_agent in self.agents:
+                        asyncio.create_task(
+                            self.agents[message.to_agent].receive_message(message)
+                        )
     
     async def _handle_error_message(self, message: Message) -> None:
         """Handle error message - fulfill future and deliver to agent."""
@@ -458,58 +458,54 @@ class AgentNetwork:
         if fut_data:
             fut, _ = fut_data
             if not fut.done():
-                fut.set_result({"error": message.content.get("error")})
+                        fut.set_result({"error": message.content.get("error")})
                 # Clean up future
                 del self._response_futures[message.request_id]
         
-        if message.to_agent and message.to_agent in self.agents:
-            asyncio.create_task(
-                self.agents[message.to_agent].receive_message(message)
-            )
+                    if message.to_agent and message.to_agent in self.agents:
+                        asyncio.create_task(
+                            self.agents[message.to_agent].receive_message(message)
+                        )
     
     async def _handle_capability_request_broadcast(self, message: Message) -> None:
         """Handle capability request with batched broadcast to providers."""
-        capability = message.content.get("capability")
-        providers = self.capability_registry.get(capability, [])
-        allowed = message.content.get("allowed_agents")
-        if allowed:
-            providers = [p for p in providers if p in allowed]
+                    capability = message.content.get("capability")
+                    providers = self.capability_registry.get(capability, [])
+                    allowed = message.content.get("allowed_agents")
+                    if allowed:
+                        providers = [p for p in providers if p in allowed]
         
-        if (
-            self.method_recorder
-            and self.method_recorder.recording
-            and capability != "intent_matching"
-        ):
-            provider = providers[0] if providers else None
-            if provider:
-                params = message.content.get("data", {})
-                mappings = message.content.get("mappings")
-                self.method_recorder.record_step(
-                    provider, capability, params, mappings
-                )
+                    if (
+                        self.method_recorder
+                        and self.method_recorder.recording
+                        and capability != "intent_matching"
+                    ):
+                        provider = providers[0] if providers else None
+                        if provider:
+                            params = message.content.get("data", {})
+                            mappings = message.content.get("mappings")
+                            self.method_recorder.record_step(
+                                provider, capability, params, mappings
+                            )
 
         # Batch broadcast: create all tasks at once instead of one-by-one
         if providers:
-            tasks = []
-            for provider in providers:
+                    for provider in providers:
                 if provider in self.agents:
                     # Reuse message content instead of full clone
-                    cloned = Message(
-                        from_agent=message.from_agent,
-                        to_agent=provider,
-                        message_type=message.message_type,
+                        cloned = Message(
+                            from_agent=message.from_agent,
+                            to_agent=provider,
+                            message_type=message.message_type,
                         content=message.content,  # Reference, not deep copy
-                        request_id=message.request_id,
-                        reply_to=message.reply_to,
-                    )
-                    tasks.append(
-                        self.agents[provider].receive_message(cloned)
-                    )
-            
-            # Execute all broadcasts in parallel
-            if tasks:
-                asyncio.create_task(asyncio.gather(*tasks, return_exceptions=True))
-                self._metrics["broadcast_messages"] += len(tasks)
+                            request_id=message.request_id,
+                            reply_to=message.reply_to,
+                        )
+                    # Create individual tasks for parallel execution
+                        asyncio.create_task(
+                            self.agents[provider].receive_message(cloned)
+                        )
+                    self._metrics["broadcast_messages"] += 1
 
     async def request_capability(
         self,
