@@ -448,9 +448,9 @@ class AgentNetwork:
         # Only deliver to agent if it's not a direct response (to_agent indicates forwarding)
         # Most responses are handled via future fulfillment above
         if message.to_agent and message.to_agent in self.agents:
-                        asyncio.create_task(
-                            self.agents[message.to_agent].receive_message(message)
-                        )
+            asyncio.create_task(
+                self.agents[message.to_agent].receive_message(message)
+            )
     
     async def _handle_error_message(self, message: Message) -> None:
         """Handle error message - fulfill future and deliver to agent."""
