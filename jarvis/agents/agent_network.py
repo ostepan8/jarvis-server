@@ -458,14 +458,14 @@ class AgentNetwork:
         if fut_data:
             fut, _ = fut_data
             if not fut.done():
-                        fut.set_result({"error": message.content.get("error")})
+                fut.set_result({"error": message.content.get("error")})
                 # Clean up future
                 del self._response_futures[message.request_id]
         
-                    if message.to_agent and message.to_agent in self.agents:
-                        asyncio.create_task(
-                            self.agents[message.to_agent].receive_message(message)
-                        )
+        if message.to_agent and message.to_agent in self.agents:
+            asyncio.create_task(
+                self.agents[message.to_agent].receive_message(message)
+            )
     
     async def _handle_capability_request_broadcast(self, message: Message) -> None:
         """Handle capability request with batched broadcast to providers."""
