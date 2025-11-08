@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi import HTTPException
 from bson import ObjectId
-from ..dependencies import get_auth_db, get_jarvis
+from ..dependencies import get_auth_db, get_jarvis, get_fact_service
 from jarvis import JarvisSystem
 from jarvis.protocols.loggers.mongo_logger import ProtocolUsageLogger, InteractionLogger
+from jarvis.services.fact_memory import FactMemoryService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -469,3 +470,109 @@ async def get_interactions_html() -> HTMLResponse:
             status_code=404,
             detail=f"Interactions HTML file not found at {interactions_path}",
         )
+
+
+@router.post("/facts/test")
+async def test_facts(
+    fact_service: FactMemoryService = Depends(get_fact_service),
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Test fact memory operations."""
+    # Use provided user_id, or default from env, or 1
+    if user_id is None:
+        user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
+
+    test_results = {
+        "success": True,
+        "tests": [],
+        "errors": [],
+        "user_id": user_id,
+    }
+
+    try:
+        # Test 1: Add a fact
+        test_fact_text = "Test fact: User loves Italian food"
+        test_fact_id = fact_service.add_fact(
+            user_id=user_id,
+            fact_text=test_fact_text,
+            category="preference",
+            entity="food",
+            confidence=0.9,
+            source="test",
+        )
+        test_results["tests"].append(
+            {
+                "name": "add_fact",
+                "passed": test_fact_id is not None,
+                "fact_id": test_fact_id,
+            }
+        )
+
+        # Test 2: Retrieve the fact
+        facts = fact_service.get_facts(user_id=user_id, category="preference")
+        found_fact = next((f for f in facts if f.id == test_fact_id), None)
+        test_results["tests"].append(
+            {
+                "name": "get_facts",
+                "passed": found_fact is not None
+                and found_fact.fact_text == test_fact_text,
+                "facts_count": len(facts),
+            }
+        )
+
+        # Test 3: Search facts
+        search_results = fact_service.search_facts(
+            user_id=user_id, query_text="Italian", category="preference"
+        )
+        found_in_search = any(f.id == test_fact_id for f in search_results)
+        test_results["tests"].append(
+            {
+                "name": "search_facts",
+                "passed": found_in_search,
+                "search_results_count": len(search_results),
+            }
+        )
+
+        # Test 4: Check for conflicts
+        conflicts = fact_service.check_conflicts(
+            user_id=user_id,
+            fact_text="User prefers Italian cuisine",
+            category="preference",
+        )
+        has_conflict = any(f.id == test_fact_id for f in conflicts)
+        test_results["tests"].append(
+            {
+                "name": "check_conflicts",
+                "passed": has_conflict,
+                "conflicts_count": len(conflicts),
+            }
+        )
+
+        # Test 5: Get user summary
+        summary = fact_service.get_user_summary(user_id=user_id)
+        test_results["tests"].append(
+            {
+                "name": "get_user_summary",
+                "passed": summary["total_facts"] > 0,
+                "summary": summary,
+            }
+        )
+
+        # Cleanup: Deactivate the test fact
+        if test_fact_id:
+            fact_service.deactivate_fact(test_fact_id)
+            test_results["tests"].append(
+                {
+                    "name": "deactivate_fact",
+                    "passed": True,
+                }
+            )
+
+        # Check if all tests passed
+        test_results["success"] = all(test["passed"] for test in test_results["tests"])
+
+    except Exception as e:
+        test_results["success"] = False
+        test_results["errors"].append(str(e))
+
+    return test_results

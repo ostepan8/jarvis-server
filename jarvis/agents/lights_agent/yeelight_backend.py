@@ -199,14 +199,28 @@ class YeelightBackend(BaseLightingBackend):
                 available_colors = ", ".join(self.COLOR_MAP.keys())
                 return f"Unknown color '{color_name}'. Available colors: {available_colors}"
 
-            color_data = self.COLOR_MAP[color_name]
             bulbs = self._get_bulbs_by_name(None)
             if not bulbs:
                 return "No lights found"
 
-            def set_color_bulb(bulb: Bulb):
-                bulb.turn_on()
-                bulb.set_rgb(color_data["r"], color_data["g"], color_data["b"])
+            # For white color, use color temperature mode for bright white light
+            # For other colors, use RGB mode
+            if color_name == "white":
+
+                def set_color_bulb(bulb: Bulb):
+                    bulb.turn_on()
+                    # Set to cool white (5000K) for bright white light
+                    # Color temp range: 1700K (warm) to 6500K (cool)
+                    bulb.set_color_temp(5000)
+                    # Set brightness to maximum for super bright white
+                    bulb.set_brightness(100)
+
+            else:
+                color_data = self.COLOR_MAP[color_name]
+
+                def set_color_bulb(bulb: Bulb):
+                    bulb.turn_on()
+                    bulb.set_rgb(color_data["r"], color_data["g"], color_data["b"])
 
             successes, failures = self._execute_bulb_operations_parallel(
                 "set_color", bulbs, set_color_bulb
@@ -352,14 +366,28 @@ class YeelightBackend(BaseLightingBackend):
                 available_colors = ", ".join(self.COLOR_MAP.keys())
                 return f"Unknown color '{color_name}'. Available colors: {available_colors}"
 
-            color_data = self.COLOR_MAP[color_name]
             bulbs = self._get_bulbs_by_name(light_name)
             if not bulbs:
                 return f"Light '{light_name}' not found"
 
-            def set_color_bulb(bulb: Bulb):
-                bulb.turn_on()
-                bulb.set_rgb(color_data["r"], color_data["g"], color_data["b"])
+            # For white color, use color temperature mode for bright white light
+            # For other colors, use RGB mode
+            if color_name == "white":
+
+                def set_color_bulb(bulb: Bulb):
+                    bulb.turn_on()
+                    # Set to cool white (5000K) for bright white light
+                    # Color temp range: 1700K (warm) to 6500K (cool)
+                    bulb.set_color_temp(5000)
+                    # Set brightness to maximum for super bright white
+                    bulb.set_brightness(100)
+
+            else:
+                color_data = self.COLOR_MAP[color_name]
+
+                def set_color_bulb(bulb: Bulb):
+                    bulb.turn_on()
+                    bulb.set_rgb(color_data["r"], color_data["g"], color_data["b"])
 
             successes, failures = self._execute_bulb_operations_parallel(
                 "set_color", bulbs, set_color_bulb

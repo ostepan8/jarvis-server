@@ -14,6 +14,7 @@ class FeatureFlags:
     enable_canvas: bool = True
     enable_night_mode: bool = True
     enable_roku: bool = True
+    enable_spotify: bool = True
 
 
 @dataclass

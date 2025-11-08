@@ -77,6 +77,7 @@ class JarvisBuilder:
         self._opts.with_roku = enabled
         return self
 
+
     def software_agent(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_software = enabled
         return self

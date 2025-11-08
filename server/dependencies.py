@@ -6,6 +6,7 @@ from jarvis import JarvisSystem
 from .auth import decode_token
 from .database import get_user_agent_permissions, get_user_config
 from jarvis import JarvisConfig
+from jarvis.services.fact_memory import FactMemoryService
 
 
 async def get_jarvis(request: Request) -> JarvisSystem:
@@ -21,6 +22,11 @@ async def get_jarvis(request: Request) -> JarvisSystem:
 def get_auth_db(request: Request) -> sqlite3.Connection:
     """Dependency to get the authentication database connection."""
     return request.app.state.auth_db
+
+
+def get_fact_service() -> FactMemoryService:
+    """Dependency to get the FactMemoryService instance."""
+    return FactMemoryService()
 
 
 async def get_current_user(

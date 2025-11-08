@@ -41,20 +41,32 @@ async def build_jarvis():
 
 
 async def _display_result(result: dict, output: OutputHandler) -> None:
+    print(f"[DISPLAY_START] _display_result called")
+    print(f"[DISPLAY] result type: {type(result)}, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
     response_data = result.get("response", "")
+    print(f"[DISPLAY] response_data type: {type(response_data)}, value: {str(response_data)[:200]}")
     console_mode = isinstance(output, ConsoleOutput)
+    print(f"[DISPLAY] console_mode: {console_mode}")
+    
+    # Handle the case where response_data is a dict (legacy format with actions)
     if isinstance(response_data, dict):
+        print(f"[DISPLAY] response_data is dict, keys: {list(response_data.keys())}")
         if console_mode:
             await output.send_output(
                 Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL
             )
         if "response" in response_data:
+            print(f"[DISPLAY] Found 'response' key in response_data, value: {response_data['response']}")
             if console_mode:
+                print(f"[DISPLAY] Console mode - sending output with formatting")
                 await output.send_output(
                     Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL
                 )
+                print(f"[DISPLAY] Output sent to console")
             else:
+                print(f"[DISPLAY] Non-console mode - sending output")
                 await output.send_output(response_data["response"])
+                print(f"[DISPLAY] Output sent")
 
         if "actions" in response_data and console_mode:
             await output.send_output(
@@ -96,11 +108,25 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
                     await output.send_output(
                         f"    - {Fore.MAGENTA}{str_result}{Style.RESET_ALL}"
                     )
-    else:
-        if result.get("success"):
-            await output.send_output(Fore.CYAN + str(response_data) + Style.RESET_ALL)
+    # Handle the case where response_data is a simple string (current format)
+    elif response_data:
+        print(f"[DISPLAY] response_data is string, value: {str(response_data)[:200]}")
+        if console_mode:
+            print(f"[DISPLAY] Sending string response to console")
+            await output.send_output(Fore.GREEN + str(response_data) + Style.RESET_ALL)
+            print(f"[DISPLAY] String response sent to console")
         else:
-            await output.send_output(Fore.RED + str(response_data) + Style.RESET_ALL)
+            print(f"[DISPLAY] Sending string response (non-console)")
+            await output.send_output(str(response_data))
+            print(f"[DISPLAY] String response sent")
+    # Fallback for empty response
+    else:
+        print(f"[DISPLAY] response_data is empty, using fallback")
+        if console_mode:
+            await output.send_output(Fore.YELLOW + "Request completed." + Style.RESET_ALL)
+        else:
+            await output.send_output("Request completed.")
+        print(f"[DISPLAY] Fallback message sent")
 
 
 async def demo(
@@ -113,16 +139,26 @@ async def demo(
     jarvis = await build_jarvis()
     tz_name = get_localzone_name()
 
+    # Get default user_id from environment or default to 1
+    default_user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
+
     try:
         while True:
             user_command = await input_handler.get_input("Jarvis> ")
             if user_command.strip().lower() in {"exit", "quit"}:
                 break
 
+            print(f"[MAIN] About to call jarvis.process_request with: {user_command}")
             result = await jarvis.process_request(
-                user_command, tz_name, {}, allowed_agents=None
+                user_command,
+                tz_name,
+                {"user_id": default_user_id, "source": "cli"},
+                allowed_agents=None,
             )
+            print(f"[MAIN] Got result from process_request, type: {type(result)}, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            print(f"[MAIN] About to call _display_result")
             await _display_result(result, output_handler)
+            print(f"[MAIN] _display_result completed")
     finally:
         await jarvis.shutdown()
 
@@ -137,6 +173,9 @@ async def run_voice() -> None:
     # NEW: build with the builder
     jarvis = await build_jarvis()
     tz_name = get_localzone_name()
+
+    # Get default user_id from environment or default to 1
+    default_user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
 
     # Initialize components
     wake_listener = PicovoiceWakeWordListener(
@@ -168,7 +207,12 @@ async def run_voice() -> None:
             system.stop()
             return "Goodbye, sir."
 
-        result = await jarvis.process_request(text, tz_name, {}, allowed_agents=None)
+        result = await jarvis.process_request(
+            text,
+            tz_name,
+            {"user_id": default_user_id, "source": "voice"},
+            allowed_agents=None,
+        )
         await _display_result(result, ConsoleOutput())
 
         resp = result.get("response", "")

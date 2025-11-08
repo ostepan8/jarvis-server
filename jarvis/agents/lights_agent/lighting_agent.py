@@ -183,7 +183,9 @@ class LightingAgent(NetworkAgent):
 3. Target (all lights or specific light name)
 
 Return JSON: {{"color": "color_name", "brightness": "normal|bright|dim", "target": "all|light_name"}}
-If color not found, use closest match. Default brightness is "normal"."""
+If color not found, use closest match. Default brightness is "normal".
+IMPORTANT: When the color is "white", default brightness should be "bright" to achieve
+super bright white light like in the Yeelight app."""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -223,11 +225,18 @@ If color not found, use closest match. Default brightness is "normal"."""
                     "message": f"Unknown color. Available: {', '.join(self.color_map.keys())}",
                 }
 
+            # For white color, default to bright unless explicitly dimmed
+            # The backend will handle white specially (color temp + max brightness)
+            # but we ensure brightness_mod reflects this for consistency
+            if color_name == "white" and brightness_mod == "normal":
+                brightness_mod = "bright"
+
             # Execute the command
             if target == "all" or target is None:
                 result_msg = self._set_all_color(color_name)
-                # Adjust brightness if requested
-                if brightness_mod == "bright":
+                # Adjust brightness if requested (for non-white colors or explicit dim)
+                # Note: White is already set to max brightness by backend, so only adjust if dimming
+                if brightness_mod == "bright" and color_name != "white":
                     # Increase brightness to ~90%
                     brightness_val = int(254 * 0.9)
                     brightness_result = self._set_all_brightness(brightness_val)
@@ -238,7 +247,9 @@ If color not found, use closest match. Default brightness is "normal"."""
                     result_msg += f" {brightness_result}"
             else:
                 result_msg = self._set_color_name(target, color_name)
-                if brightness_mod == "bright":
+                # Adjust brightness if requested (for non-white colors or explicit dim)
+                # Note: White is already set to max brightness by backend, so only adjust if dimming
+                if brightness_mod == "bright" and color_name != "white":
                     brightness_val = int(254 * 0.9)
                     self._set_brightness(target, brightness_val)
                 elif brightness_mod == "dim":

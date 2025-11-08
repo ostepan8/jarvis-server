@@ -377,149 +377,170 @@ class JarvisSystem:
             )
 
             # Use "JarvisSystem" as the from_agent so NLU knows we're the original requester
-            async with tracker.timer("nlu_routing"):
-                await self.network.request_capability(
-                    from_agent="JarvisSystem",
-                    capability="intent_matching",
-                    data={
-                        "input": user_input,
-                        "conversation_history": conversation_history,
-                    },
-                    request_id=request_id,
-                    allowed_agents=allowed_agents if allowed_agents else None,
-                )
+            await self.network.request_capability(
+                from_agent="JarvisSystem",
+                capability="intent_matching",
+                data={
+                    "input": user_input,
+                    "conversation_history": conversation_history,
+                },
+                request_id=request_id,
+                allowed_agents=allowed_agents if allowed_agents else None,
+            )
 
-                try:
-                    # NLU now handles routing directly and will respond when complete
+            try:
+                # NLU now handles routing directly and will respond when complete
+                self.logger.log(
+                    "INFO",
+                    f"[SYSTEM] About to call wait_for_response",
+                    f"request_id={request_id}, timeout={self.config.response_timeout}",
+                )
+                async with tracker.timer("nlu_routing"):
                     result = await self.network.wait_for_response(
                         request_id, timeout=self.config.response_timeout
                     )
+                
+                self.logger.log(
+                    "INFO",
+                    f"[SYSTEM] Received result from wait_for_response",
+                    f"request_id={request_id}, result_type={type(result).__name__}, result_keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}",
+                )
 
-                    # Result should have "response" key from NLU's formatted response
-                    response_text = None
-                    if isinstance(result, dict):
-                        if "response" in result:
-                            response_text = result["response"]
-                            response_dict = {"response": response_text}
-                            # Extract additional information for logging
-                            if "results" in result:
-                                captured_agent_results = result["results"]
-                                # Try to extract intent and capability from agent results
-                                if captured_agent_results:
-                                    first_result = None
-                                    if isinstance(captured_agent_results, list):
-                                        first_result = captured_agent_results[0]
-                                    if first_result and isinstance(first_result, dict):
-                                        captured_capability = first_result.get(
-                                            "capability"
-                                        )
-                                        if not captured_intent:
-                                            intent_default = (
-                                                "perform_capability"
-                                                if captured_capability
-                                                else "chat"
-                                            )
-                                            captured_intent = first_result.get(
-                                                "intent", intent_default
-                                            )
-                            if "intent" in result:
-                                captured_intent = result["intent"]
-                            if "capability" in result:
-                                captured_capability = result["capability"]
-                        else:
-                            # Fallback for old format
-                            response_dict = result
-                            response_text = str(result)
-                    else:
-                        response_text = str(result)
-                        response_dict = {"response": response_text}
-
-                    # Default intent if not captured
-                    if not captured_intent:
-                        captured_intent = "chat"
-
-                    # Store conversation history
-                    if response_text:
-                        if user_id not in self.conversation_history:
-                            self.conversation_history[user_id] = []
-                        history = self.conversation_history[user_id]
-                        history.append({"user": user_input, "assistant": response_text})
-                        # Keep only last N turns
-                        if len(history) > self.max_history_length:
-                            self.conversation_history[user_id] = history[
-                                -self.max_history_length :
-                            ]
+                # Result should have "response" key from NLU's formatted response
+                response_text = None
+                self.logger.log(
+                    "INFO",
+                    f"[SYSTEM] Processing result dict",
+                    f"request_id={request_id}, result_is_dict={isinstance(result, dict)}, has_response_key={'response' in result if isinstance(result, dict) else False}",
+                )
+                if isinstance(result, dict):
+                    if "response" in result:
+                        response_text = result["response"]
                         self.logger.log(
-                            "DEBUG",
-                            f"Stored conversation turn for user {user_id}",
-                            f"History now has {len(self.conversation_history[user_id])} turns",
+                            "INFO",
+                            f"[SYSTEM] Extracted response text",
+                            f"request_id={request_id}, response_length={len(response_text) if response_text else 0}, response_preview={response_text[:100] if response_text else 'None'}",
                         )
+                        response_dict = {"response": response_text}
+                        # Extract additional information for logging
+                        if "results" in result:
+                            captured_agent_results = result["results"]
+                            # Try to extract intent and capability from agent results
+                            if captured_agent_results:
+                                first_result = None
+                                if isinstance(captured_agent_results, list):
+                                    first_result = captured_agent_results[0]
+                                if first_result and isinstance(first_result, dict):
+                                    captured_capability = first_result.get(
+                                        "capability"
+                                    )
+                                    if not captured_intent:
+                                        intent_default = (
+                                            "perform_capability"
+                                            if captured_capability
+                                            else "chat"
+                                        )
+                                        captured_intent = first_result.get(
+                                            "intent", intent_default
+                                        )
+                        if "intent" in result:
+                            captured_intent = result["intent"]
+                        if "capability" in result:
+                            captured_capability = result["capability"]
+                    else:
+                        # Fallback for old format
+                        response_dict = result
+                        response_text = str(result)
+                else:
+                    response_text = str(result)
+                    response_dict = {"response": response_text}
 
-                    # Log interaction
-                    latency_ms = (time.time() - start_time) * 1000
-                    asyncio.create_task(
-                        self.interaction_logger.log_interaction(
-                            user_input=user_input,
-                            response=response_text or "",
-                            intent=captured_intent,
-                            capability=captured_capability,
-                            agent_results=captured_agent_results,
-                            tool_calls=captured_tool_calls,
-                            latency_ms=latency_ms,
-                            success=True,
-                            user_id=user_id,
-                            device=device,
-                            location=location,
-                            source=source,
-                        )
-                    )
+                # Default intent if not captured
+                if not captured_intent:
+                    captured_intent = "chat"
 
-                    return response_dict
-
-                except asyncio.TimeoutError:
+                # Store conversation history
+                if response_text:
+                    if user_id not in self.conversation_history:
+                        self.conversation_history[user_id] = []
+                    history = self.conversation_history[user_id]
+                    history.append({"user": user_input, "assistant": response_text})
+                    # Keep only last N turns
+                    if len(history) > self.max_history_length:
+                        self.conversation_history[user_id] = history[
+                            -self.max_history_length :
+                        ]
                     self.logger.log(
-                        "ERROR",
-                        "NLU routing timed out",
-                        f"request_id={request_id}",
+                        "DEBUG",
+                        f"Stored conversation turn for user {user_id}",
+                        f"History now has {len(self.conversation_history[user_id])} turns",
                     )
-                    error_response = (
-                        "The request took too long to complete. Please try again."
+
+                # Log interaction
+                latency_ms = (time.time() - start_time) * 1000
+                asyncio.create_task(
+                    self.interaction_logger.log_interaction(
+                        user_input=user_input,
+                        response=response_text or "",
+                        intent=captured_intent,
+                        capability=captured_capability,
+                        agent_results=captured_agent_results,
+                        tool_calls=captured_tool_calls,
+                        latency_ms=latency_ms,
+                        success=True,
+                        user_id=user_id,
+                        device=device,
+                        location=location,
+                        source=source,
                     )
-                    # Log failed interaction
-                    latency_ms = (time.time() - start_time) * 1000
-                    asyncio.create_task(
-                        self.interaction_logger.log_interaction(
-                            user_input=user_input,
-                            response=error_response,
-                            intent=captured_intent or "timeout",
-                            latency_ms=latency_ms,
-                            success=False,
-                            user_id=user_id,
-                            device=device,
-                            location=location,
-                            source=source,
-                        )
+                )
+
+                return response_dict
+
+            except asyncio.TimeoutError:
+                self.logger.log(
+                    "ERROR",
+                    "NLU routing timed out",
+                    f"request_id={request_id}",
+                )
+                error_response = (
+                    "The request took too long to complete. Please try again."
+                )
+                # Log failed interaction
+                latency_ms = (time.time() - start_time) * 1000
+                asyncio.create_task(
+                    self.interaction_logger.log_interaction(
+                        user_input=user_input,
+                        response=error_response,
+                        intent=captured_intent or "timeout",
+                        latency_ms=latency_ms,
+                        success=False,
+                        user_id=user_id,
+                        device=device,
+                        location=location,
+                        source=source,
                     )
-                    return {"response": error_response}
-                except Exception as e:
-                    self.logger.log("ERROR", "Error in NLU routing", str(e))
-                    error_response = f"Sorry, I encountered an error: {str(e)}"
-                    # Log failed interaction
-                    latency_ms = (time.time() - start_time) * 1000
-                    asyncio.create_task(
-                        self.interaction_logger.log_interaction(
-                            user_input=user_input,
-                            response=error_response,
-                            intent=captured_intent or "error",
-                            latency_ms=latency_ms,
-                            success=False,
-                            user_id=user_id,
-                            device=device,
-                            location=location,
-                            source=source,
-                        )
+                )
+                return {"response": error_response}
+            except Exception as e:
+                self.logger.log("ERROR", "Error in NLU routing", str(e))
+                error_response = f"Sorry, I encountered an error: {str(e)}"
+                # Log failed interaction
+                latency_ms = (time.time() - start_time) * 1000
+                asyncio.create_task(
+                    self.interaction_logger.log_interaction(
+                        user_input=user_input,
+                        response=error_response,
+                        intent=captured_intent or "error",
+                        latency_ms=latency_ms,
+                        success=False,
+                        user_id=user_id,
+                        device=device,
+                        location=location,
+                        source=source,
                     )
-                    return {"response": error_response}
+                )
+                return {"response": error_response}
         finally:
             self.network.stop_method_recording()
             if new_tracker:
