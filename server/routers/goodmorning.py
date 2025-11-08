@@ -71,7 +71,9 @@ async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None
         # 2) Turn on the lights via protocol if lights agent is available
         try:
             agents = getattr(jarvis.network, "agents", {}) or {}
-            if "PhillipsHueAgent" in agents:
+            # Check for LightingAgent or its backward-compatible alias
+            lights_agent_available = "LightingAgent" in agents or "PhillipsHueAgent" in agents
+            if lights_agent_available:
                 runtime = getattr(jarvis, "protocol_runtime", None)
                 if runtime is not None and runtime.registry is not None:
                     lights_proto = runtime.registry.get("lights_on")
@@ -82,7 +84,7 @@ async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None
                 else:
                     print("[goodmorning] Protocol runtime not initialized")
             else:
-                print("[goodmorning] Skipping lights_on: PhillipsHueAgent not active")
+                print("[goodmorning] Skipping lights_on: LightingAgent not active")
         except Exception as exc:
             print(f"[goodmorning] Failed to run lights_on protocol: {exc}")
 

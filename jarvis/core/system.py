@@ -9,7 +9,6 @@ from pathlib import Path
 from ..agents.agent_network import AgentNetwork
 from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
-from ..agents.lights_agent import PhillipsHueAgent
 from ..agents.lights_agent.lighting_agent import LightingAgent
 from ..agents.chat_agent import ChatAgent
 from .profile import AgentProfile
@@ -60,9 +59,10 @@ class JarvisSystem:
         self.nlu_agent: NLUAgent | None = None
         self.calendar_service: CalendarService | None = None
         self.canvas_service: CanvasService | None = None  # ← NEW
-        self.lights_agent: LightingAgent | PhillipsHueAgent | None = None
+        self.lights_agent: LightingAgent | None = None
         self.chat_agent: ChatAgent | None = None
         self.protocol_agent: ProtocolAgent | None = None
+        self.roku_agent = None  # Will be set during initialization
         self.vector_memory: VectorMemoryService | None = None
         self.user_profiles: dict[int, AgentProfile] = {}
 
@@ -102,6 +102,7 @@ class JarvisSystem:
         self.chat_agent = refs.get("chat_agent")
         self.protocol_agent = refs.get("protocol_agent")
         self.lights_agent = refs.get("lights_agent")
+        self.roku_agent = refs.get("roku_agent")
         self.canvas_service = refs.get("canvas_service")
         self.night_controller = refs.get("night_controller")
         self.night_agents = refs.get("night_agents", [])
@@ -211,7 +212,11 @@ class JarvisSystem:
 
         # Track interaction for logging
         start_time = time.time()
-        user_id = metadata.get("user_id") if metadata else None
+        # Default to 1 if not provided (from env or literal 1)
+        default_user_id = int(getenv("DEFAULT_USER_ID", "1"))
+        user_id = metadata.get("user_id") if metadata else default_user_id
+        if user_id is None:
+            user_id = default_user_id
         device = metadata.get("device") if metadata else None
         location = metadata.get("location") if metadata else None
         source = metadata.get("source") if metadata else None
@@ -362,7 +367,7 @@ class JarvisSystem:
             request_id = str(uuid.uuid4())
 
             # Get user_id and conversation history
-            user_id = metadata.get("user_id", -1) if metadata else -1
+            # Use the user_id we already extracted (with default fallback)
             conversation_history = self.conversation_history.get(user_id, [])
 
             self.logger.log(

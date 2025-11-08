@@ -1,4 +1,4 @@
-"""Tool definitions for PhillipsHueAgent."""
+"""Tool definitions for LightingAgent (used by PhillipsHueBackend)."""
 from typing import Any, Dict, List
 
 tools: List[Dict[str, Any]] = [

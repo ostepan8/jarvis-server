@@ -8,7 +8,6 @@ from ..ai_clients import BaseAIClient
 from ..agents.agent_network import AgentNetwork
 from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
-from ..agents.lights_agent import PhillipsHueAgent
 from ..agents.lights_agent.lighting_agent import create_lighting_agent
 from ..agents.calendar_agent.agent import CollaborativeCalendarAgent
 from ..agents.weather_agent import WeatherAgent
@@ -63,6 +62,7 @@ class AgentFactory:
 
         if self.config.flags.enable_roku:
             refs.update(self._build_roku(network, ai_client))
+
 
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
