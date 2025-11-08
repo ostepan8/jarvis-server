@@ -194,7 +194,7 @@ class ResponseAggregator:
         """Periodic cleanup of completed trackers."""
         while self._running:
             try:
-                await asyncio.sleep(self._cleanup_interval)
+                await asyncio.sleep(self.cleanup_interval)
                 await self._cleanup_completed()
             except Exception as exc:
                 self.logger.log("ERROR", "ResponseAggregator cleanup error", str(exc))
