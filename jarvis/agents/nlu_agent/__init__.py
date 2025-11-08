@@ -47,41 +47,40 @@ class NLUAgent(NetworkAgent):
         """Handle responses from agents we've routed to."""
         request_id = message.request_id
 
-        # Check if this is a response to an internal request (need to map to parent)
-        capability = None
-        original_request_id = request_id
-
-        if request_id in self.active_requests:
-            internal_request_info = self.active_requests[request_id]
-            # If this has a parent_request_id, it's an internal request - map to parent
-            if "parent_request_id" in internal_request_info:
-                parent_id = internal_request_info["parent_request_id"]
-                capability = internal_request_info.get(
-                    "capability"
-                )  # Get capability from internal request
-                self.logger.log(
-                    "DEBUG",
-                    f"Mapping internal response to parent request",
-                    f"internal_id={original_request_id}, parent_id={parent_id}, capability={capability}",
-                )
-                # Use the parent request_id for the rest of processing
-                request_id = parent_id
-                if request_id not in self.active_requests:
+        # Simplified: Handle sub-requests (format: "parent_id:capability") and direct requests
+        # Check if this is a sub-request (DAG execution)
+        if ":" in request_id:
+            # Sub-request format: "parent_id:capability"
+            parent_id, capability = request_id.split(":", 1)
+            if parent_id in self.active_requests:
+                request_info = self.active_requests[parent_id]
+                correlation_id = parent_id
+            else:
+                # Try direct match
+                if request_id in self.active_requests:
+                    request_info = self.active_requests[request_id]
+                    correlation_id = request_id
+                    capability = request_info.get("current_capability")
+                else:
                     self.logger.log(
-                        "ERROR",
-                        f"Parent request {parent_id} not found",
-                        "",
+                        "WARNING",
+                        "NLUAgent received untracked sub-request response",
+                        f"request_id={request_id}, from={message.from_agent}",
                     )
                     return
-            request_info = self.active_requests[request_id]
         else:
-            # Not tracked - might be from an agent routing back to us
-            self.logger.log(
-                "WARNING",
-                "NLUAgent received untracked response",
-                f"request_id={request_id}, from={message.from_agent}",
-            )
-            return
+            # Direct request
+            if request_id in self.active_requests:
+                request_info = self.active_requests[request_id]
+                correlation_id = request_id
+                capability = request_info.get("current_capability")
+            else:
+                self.logger.log(
+                    "WARNING",
+                    "NLUAgent received untracked response",
+                    f"request_id={request_id}, from={message.from_agent}",
+                )
+                return
 
         # Add result to agent_results
         request_info.setdefault("agent_results", []).append(
@@ -95,8 +94,11 @@ class NLUAgent(NetworkAgent):
         self.logger.log(
             "INFO",
             f"NLUAgent received response from {message.from_agent}",
-            f"request_id={request_id}, capability={capability}",
+            f"request_id={request_id}, correlation_id={correlation_id}, capability={capability}",
         )
+
+        # Use correlation_id (parent request) for all processing
+        request_id = correlation_id
 
         # Check if this is DAG-based execution
         dag = request_info.get("dag")
@@ -138,10 +140,11 @@ class NLUAgent(NetworkAgent):
         remaining_capabilities = request_info.get("remaining_capabilities", [])
 
         if remaining_capabilities:
-            # Continue with next capability
+            # Continue with next capability - use same request_id with correlation
             next_capability = remaining_capabilities.pop(0)
             request_info["step"] = request_info.get("step", 0) + 1
             request_info["remaining_capabilities"] = remaining_capabilities
+            request_info["current_capability"] = next_capability
 
             self.logger.log(
                 "INFO",
@@ -149,18 +152,12 @@ class NLUAgent(NetworkAgent):
                 f"request_id={request_id}, remaining={len(remaining_capabilities)}",
             )
 
-            # Route to next capability - use NEW internal request_id
-            next_internal_id = str(uuid.uuid4())
+            # Route to next capability - use same request_id (simplified)
             await self.request_capability(
                 capability=next_capability,
                 data={"prompt": user_input, "context": {"previous_results": results}},
-                request_id=next_internal_id,
+                request_id=request_id,  # Reuse same request_id
             )
-            # Track the internal request
-            self.active_requests[next_internal_id] = {
-                "parent_request_id": request_id,
-                "user_input": user_input,
-            }
             return
 
         # Check if agent indicated more work is needed
@@ -178,21 +175,16 @@ class NLUAgent(NetworkAgent):
                     f"request_id={request_id}",
                 )
                 request_info["step"] = request_info.get("step", 0) + 1
-                # Use NEW internal request_id for follow-up
-                followup_internal_id = str(uuid.uuid4())
+                request_info["current_capability"] = followup_capability
+                # Use same request_id for follow-up (simplified)
                 await self.request_capability(
                     capability=followup_capability,
                     data={
                         "prompt": agent_result.get("followup_prompt", user_input),
                         "context": {"previous_results": results},
                     },
-                    request_id=followup_internal_id,
+                    request_id=request_id,  # Reuse same request_id
                 )
-                # Track the internal request
-                self.active_requests[followup_internal_id] = {
-                    "parent_request_id": request_id,
-                    "user_input": user_input,
-                }
                 return
 
         # All done - format and send final response
@@ -302,42 +294,33 @@ class NLUAgent(NetworkAgent):
         if classification.get("intent") == "perform_capability":
             capability = classification.get("capability")
             if capability and capability in self.network.capability_registry:
-                # Create a NEW request_id for the internal routing to avoid overwriting
-                # the original future that JarvisSystem is waiting for
-                internal_request_id = str(uuid.uuid4())
-
-                # Track this request using the ORIGINAL request_id (for final response)
+                # Simplified: Use same request_id throughout, track current capability
                 self.active_requests[request_id] = {
                     "user_input": user_input,
                     "original_requester": original_requester,
                     "agent_results": [],
                     "step": 1,
                     "original_message_id": message.id,
-                    "internal_request_id": internal_request_id,  # Track internal ID
+                    "current_capability": capability,  # Track current capability
                 }
 
-                # Route directly to the agent using the INTERNAL request_id
+                # Route directly to the agent using the SAME request_id
                 providers = self.network.capability_registry[capability]
                 if providers:
                     target_agent = providers[0]
                     self.logger.log(
                         "INFO",
                         f"NLU routing to {target_agent} for capability '{capability}'",
-                        f"original_request_id={request_id}, internal_request_id={internal_request_id}",
+                        f"request_id={request_id}",
                     )
 
-                    # Request the capability from the target agent using INTERNAL ID
+                    # Request the capability from the target agent using SAME request_id
                     await self.request_capability(
                         capability=capability,
                         data={"prompt": user_input, "context": context},
-                        request_id=internal_request_id,  # Use internal ID!
+                        request_id=request_id,  # Use same request_id
                         allowed_agents=set(allowed_agents) if allowed_agents else None,
                     )
-                    # Also track the internal request so we can map responses back
-                    self.active_requests[internal_request_id] = {
-                        "parent_request_id": request_id,  # Link to original
-                        "user_input": user_input,
-                    }
                     # Response will be handled in _handle_capability_response
                 else:
                     self.logger.log(
@@ -359,28 +342,22 @@ class NLUAgent(NetworkAgent):
                 )
 
         elif classification.get("intent") == "chat":
-            # Route to ChatAgent - use internal request_id
+            # Route to ChatAgent - use same request_id
             capability = "chat"
-            internal_request_id = str(uuid.uuid4())
             self.active_requests[request_id] = {
                 "user_input": user_input,
                 "original_requester": original_requester,
                 "agent_results": [],
                 "step": 1,
                 "original_message_id": message.id,
-                "internal_request_id": internal_request_id,
+                "current_capability": capability,
             }
             await self.request_capability(
                 capability=capability,
                 data={"prompt": user_input, "context": context},
-                request_id=internal_request_id,  # Use internal ID
+                request_id=request_id,  # Use same request_id
                 allowed_agents=set(allowed_agents) if allowed_agents else None,
             )
-            # Track internal request
-            self.active_requests[internal_request_id] = {
-                "parent_request_id": request_id,
-                "user_input": user_input,
-            }
 
         elif classification.get("intent") == "run_protocol":
             # For protocols, return classification for system to handle
@@ -652,14 +629,16 @@ Example for "book a meeting tomorrow and send me a reminder":
 
         for cap in ready_caps:
             running_caps.add(cap)
-            internal_request_id = str(uuid.uuid4())
-            request_info["capability_request_ids"][cap] = internal_request_id
+            # Use same request_id with capability tracking (simplified)
+            sub_request_id = f"{request_id}:{cap}"  # Simple correlation ID format
+            request_info["capability_request_ids"][cap] = sub_request_id
 
-            # Track internal request for mapping responses back
-            self.active_requests[internal_request_id] = {
-                "parent_request_id": request_id,
+            # Track sub-request with correlation to parent
+            self.active_requests[sub_request_id] = {
+                "parent_request_id": request_id,  # For correlation
                 "capability": cap,
                 "user_input": user_input,
+                "current_capability": cap,
             }
 
             # Build context with previous results for dependent capabilities
@@ -672,10 +651,11 @@ Example for "book a meeting tomorrow and send me a reminder":
                 ]
 
             # Execute capability (non-blocking - they'll run in parallel)
+            # Use sub_request_id but responses will correlate back to parent
             await self.request_capability(
                 capability=cap,
                 data={"prompt": user_input, "context": enhanced_context},
-                request_id=internal_request_id,
+                request_id=sub_request_id,
                 allowed_agents=allowed_agents,
             )
 
