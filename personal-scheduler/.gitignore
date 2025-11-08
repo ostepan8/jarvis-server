@@ -1,0 +1,53 @@
+# Build artifacts
+*.o
+*.d
+scheduler_server
+benchmark
+*_tests
+api_server
+mvc
+solid_scheduler
+unified_scheduler
+
+# Database files
+*.db
+*.db-*
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Google Calendar credentials
+calendar_integration/credentials.json
+calendar_integration/token.json
+calendar_integration/token.pickle
+# macOS
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+frontend/.env.production
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test and benchmark outputs
+benchmark_results/
+tests/temp_*
+
+# Temporary files
+*.tmp
+*.temp
+core.*
