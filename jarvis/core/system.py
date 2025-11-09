@@ -91,7 +91,7 @@ class JarvisSystem:
     async def initialize(self, load_protocol_directory: bool = False) -> None:
         """Initialize all agents and start the network."""
         ai_client = self._create_ai_client()
-        await self._connect_usage_logger()
+        await self._connect_mongo_loggers()
 
         factory = AgentFactory(self.config, self.logger)
         refs = factory.build_all(self.network, ai_client, self)
@@ -128,8 +128,10 @@ class JarvisSystem:
             self.config.ai_provider, api_key=self.config.api_key
         )
 
-    async def _connect_usage_logger(self) -> None:
+    async def _connect_mongo_loggers(self) -> None:
+        """Connect both MongoDB loggers during initialization."""
         await self.usage_logger.connect()
+        await self.interaction_logger.connect()
 
     def list_agents(self) -> Dict[str, Any]:
         """List all registered agents in the network."""
@@ -563,5 +565,7 @@ class JarvisSystem:
             await self.calendar_service.close()
         if self.usage_logger:
             await self.usage_logger.close()
+        if self.interaction_logger:
+            await self.interaction_logger.close()
         self.logger.log("INFO", "Jarvis system shutdown complete")
         self.logger.close()

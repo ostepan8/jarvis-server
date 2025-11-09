@@ -151,9 +151,9 @@ class JarvisBuilder:
 
         jarvis = JarvisSystem(self._config)
 
-        # Create shared client + connect usage logger
+        # Create shared client + connect MongoDB loggers
         ai_client = jarvis._create_ai_client()
-        await jarvis._connect_usage_logger()
+        await jarvis._connect_mongo_loggers()
 
         factory = AgentFactory(jarvis.config, jarvis.logger)
         refs = {}

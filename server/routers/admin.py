@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from bson import ObjectId
 from ..dependencies import get_auth_db, get_jarvis, get_fact_service
 from jarvis import JarvisSystem
-from jarvis.protocols.loggers.mongo_logger import ProtocolUsageLogger, InteractionLogger
 from jarvis.services.fact_memory import FactMemoryService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -20,20 +19,6 @@ def get_logs_db() -> sqlite3.Connection:
     """Get connection to jarvis_logs.db"""
     db_path = os.getenv("LOG_DB_PATH", "jarvis_logs.db")
     return sqlite3.connect(db_path, check_same_thread=False)
-
-
-def get_mongo_logger() -> ProtocolUsageLogger:
-    """Get MongoDB logger instance"""
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-    db_name = os.getenv("MONGO_DB_NAME", "protocol")
-    return ProtocolUsageLogger(mongo_uri=mongo_uri, db_name=db_name)
-
-
-def get_interaction_logger() -> InteractionLogger:
-    """Get InteractionLogger instance"""
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-    db_name = os.getenv("MONGO_DB_NAME", "protocol")
-    return InteractionLogger(mongo_uri=mongo_uri, db_name=db_name)
 
 
 @router.get("/dashboard")
@@ -69,58 +54,57 @@ async def get_dashboard_summary(
         "top_protocols": [],
     }
 
-    try:
-        logger = get_mongo_logger()
-        await logger.connect()
-        total_executions = await logger._collection.count_documents({})
-        successful = await logger._collection.count_documents({"success": True})
-        success_rate = (
-            (successful / total_executions * 100) if total_executions > 0 else 0.0
-        )
+    if jarvis and jarvis.usage_logger:
+        try:
+            logger = jarvis.usage_logger
+            total_executions = await logger._collection.count_documents({})
+            successful = await logger._collection.count_documents({"success": True})
+            success_rate = (
+                (successful / total_executions * 100) if total_executions > 0 else 0.0
+            )
 
-        protocol_pipeline = [
-            {
-                "$group": {
-                    "_id": "$protocol_name",
-                    "count": {"$sum": 1},
-                    "successful": {
-                        "$sum": {"$cond": [{"$eq": ["$success", True]}, 1, 0]}
-                    },
-                    "avg_latency": {"$avg": "$latency_ms"},
+            protocol_pipeline = [
+                {
+                    "$group": {
+                        "_id": "$protocol_name",
+                        "count": {"$sum": 1},
+                        "successful": {
+                            "$sum": {"$cond": [{"$eq": ["$success", True]}, 1, 0]}
+                        },
+                        "avg_latency": {"$avg": "$latency_ms"},
+                    }
+                },
+                {"$sort": {"count": -1}},
+            ]
+            protocol_results = await logger._collection.aggregate(
+                protocol_pipeline
+            ).to_list(10)
+            executions_by_protocol = [
+                {
+                    "protocol_name": item["_id"],
+                    "total": item["count"],
+                    "successful": item["successful"],
+                    "success_rate": (
+                        (item["successful"] / item["count"] * 100)
+                        if item["count"] > 0
+                        else 0
+                    ),
+                    "avg_latency_ms": item["avg_latency"],
                 }
-            },
-            {"$sort": {"count": -1}},
-        ]
-        protocol_results = await logger._collection.aggregate(
-            protocol_pipeline
-        ).to_list(10)
-        executions_by_protocol = [
-            {
-                "protocol_name": item["_id"],
-                "total": item["count"],
-                "successful": item["successful"],
-                "success_rate": (
-                    (item["successful"] / item["count"] * 100)
-                    if item["count"] > 0
-                    else 0
-                ),
-                "avg_latency_ms": item["avg_latency"],
-            }
-            for item in protocol_results
-        ]
+                for item in protocol_results
+            ]
 
-        protocol_stats = {
-            "total_executions": total_executions,
-            "success_rate": round(success_rate, 2),
-            "average_latency_ms": None,
-            "executions_by_protocol": executions_by_protocol,
-            "executions_by_day": [],
-            "recent_executions": [],
-            "top_protocols": executions_by_protocol[:10],
-        }
-        await logger.close()
-    except Exception:
-        pass
+            protocol_stats = {
+                "total_executions": total_executions,
+                "success_rate": round(success_rate, 2),
+                "average_latency_ms": None,
+                "executions_by_protocol": executions_by_protocol,
+                "executions_by_day": [],
+                "recent_executions": [],
+                "top_protocols": executions_by_protocol[:10],
+            }
+        except Exception:
+            pass
 
     # User stats
     user_stats = {
@@ -181,38 +165,37 @@ async def get_dashboard_summary(
         "average_latency_ms": None,
     }
 
-    try:
-        interaction_logger = get_interaction_logger()
-        await interaction_logger.connect()
-        total_interactions = await interaction_logger._collection.count_documents({})
-        successful_interactions = await interaction_logger._collection.count_documents(
-            {"success": True}
-        )
-        interaction_success_rate = (
-            (successful_interactions / total_interactions * 100)
-            if total_interactions > 0
-            else 0.0
-        )
+    if jarvis and jarvis.interaction_logger:
+        try:
+            interaction_logger = jarvis.interaction_logger
+            total_interactions = await interaction_logger._collection.count_documents({})
+            successful_interactions = await interaction_logger._collection.count_documents(
+                {"success": True}
+            )
+            interaction_success_rate = (
+                (successful_interactions / total_interactions * 100)
+                if total_interactions > 0
+                else 0.0
+            )
 
-        # Calculate average latency
-        latency_pipeline = [
-            {"$match": {"latency_ms": {"$exists": True, "$ne": None}}},
-            {"$group": {"_id": None, "avg_latency": {"$avg": "$latency_ms"}}},
-        ]
-        latency_result = await interaction_logger._collection.aggregate(
-            latency_pipeline
-        ).to_list(1)
-        avg_latency = latency_result[0]["avg_latency"] if latency_result else None
+            # Calculate average latency
+            latency_pipeline = [
+                {"$match": {"latency_ms": {"$exists": True, "$ne": None}}},
+                {"$group": {"_id": None, "avg_latency": {"$avg": "$latency_ms"}}},
+            ]
+            latency_result = await interaction_logger._collection.aggregate(
+                latency_pipeline
+            ).to_list(1)
+            avg_latency = latency_result[0]["avg_latency"] if latency_result else None
 
-        interaction_stats = {
-            "total_interactions": total_interactions,
-            "successful_interactions": successful_interactions,
-            "interaction_success_rate": round(interaction_success_rate, 2),
-            "average_latency_ms": round(avg_latency, 2) if avg_latency else None,
-        }
-        await interaction_logger.close()
-    except Exception:
-        pass
+            interaction_stats = {
+                "total_interactions": total_interactions,
+                "successful_interactions": successful_interactions,
+                "interaction_success_rate": round(interaction_success_rate, 2),
+                "average_latency_ms": round(avg_latency, 2) if avg_latency else None,
+            }
+        except Exception:
+            pass
 
     # Memory stats
     memory_stats = {"total_memories": 0, "memories_by_user": {}, "collection_names": []}
@@ -406,18 +389,25 @@ async def get_memories_html() -> HTMLResponse:
 
 @router.get("/interactions")
 async def get_interactions(
+    jarvis: Optional[JarvisSystem] = Depends(get_jarvis),
     limit: int = 100,
     user_id: Optional[int] = None,
     intent: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Get interaction history from MongoDB."""
+    if not jarvis or not jarvis.interaction_logger:
+        return {
+            "interactions": [],
+            "total": 0,
+            "limit": limit,
+            "error": "Jarvis system or interaction logger not available",
+        }
+    
     try:
-        logger = get_interaction_logger()
-        await logger.connect()
+        logger = jarvis.interaction_logger
         interactions = await logger.get_recent_interactions(
             limit=limit, user_id=user_id, intent=intent
         )
-        await logger.close()
 
         # Convert MongoDB documents to JSON-serializable format
         # Convert ObjectId to string and handle datetime serialization
