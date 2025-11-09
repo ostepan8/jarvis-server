@@ -8,6 +8,7 @@ from ...logging import JarvisLogger
 from .function_registry import WeatherFunctionRegistry
 from .prompt import get_weather_enhanced_prompt
 from .tools.tools import tools as weather_tools
+from ..response import AgentResponse, ErrorInfo
 
 
 class WeatherCommandProcessor:
@@ -127,8 +128,9 @@ class WeatherCommandProcessor:
             self.logger.log("INFO", "=== WEATHER COMMAND COMPLETE ===")
             self.logger.log("INFO", f"Total actions: {len(actions_taken)}")
 
-        return {
-            "response": final_response,
-            "actions": actions_taken,
-            "iterations": iterations,
-        }
+        # Return standardized response format
+        return AgentResponse.success_response(
+            response=final_response,
+            actions=actions_taken,
+            metadata={"iterations": iterations},
+        ).to_dict()

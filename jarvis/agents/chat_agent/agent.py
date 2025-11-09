@@ -9,6 +9,7 @@ from ...ai_clients.base import BaseAIClient
 from ...logging import JarvisLogger
 from ...core.profile import AgentProfile
 from .tools import tools as chat_tools
+from ..response import AgentResponse, ErrorInfo
 
 
 class ChatAgent(NetworkAgent):
@@ -173,7 +174,11 @@ class ChatAgent(NetworkAgent):
             except Exception:
                 pass  # Don't fail the chat if fact extraction fails
 
-        return {"response": response_text, "actions": actions}
+        # Return standardized response format
+        return AgentResponse.success_response(
+            response=response_text,
+            actions=actions,
+        ).to_dict()
 
     # ------------------------------------------------------------------
     # Tool implementations

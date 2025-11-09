@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from ..logging import JarvisLogger
 from .message import Message
+from .response import AgentResponse, merge_responses
 
 
 class AggregationStrategy(Enum):
@@ -50,24 +51,69 @@ class ResponseTracker:
         return False
 
     def get_result(self) -> Dict[str, Any]:
-        """Get aggregated result."""
+        """Get aggregated result in standardized format."""
+        # Handle failure case
         if self.errors and not self.responses:
-            return {"error": "All providers failed", "errors": self.errors}
+            from .response import AgentResponse, ErrorInfo
+            return AgentResponse.error_response(
+                response="All providers failed to respond",
+                error=ErrorInfo(
+                    message="All providers failed",
+                    details={"errors": self.errors}
+                )
+            ).to_dict()
 
+        # Handle empty response case
+        if not self.responses:
+            from .response import AgentResponse, ErrorInfo
+            return AgentResponse.error_response(
+                response="No responses received",
+                error=ErrorInfo(message="No responses")
+            ).to_dict()
+
+        # For FIRST strategy, return the first response
         if self.strategy == AggregationStrategy.FIRST:
-            return self.responses[0] if self.responses else {"error": "No responses"}
+            return self.responses[0].get("content", {})
+        
+        # For other strategies, merge multiple responses
         elif self.strategy in (
             AggregationStrategy.ALL,
             AggregationStrategy.MAJORITY,
             AggregationStrategy.TIMEOUT,
         ):
+            # Try to merge standardized responses
+            agent_responses = []
+            for resp_data in self.responses:
+                content = resp_data.get("content", {})
+                if isinstance(content, dict) and "success" in content:
+                    agent_responses.append(AgentResponse.from_dict(content))
+            
+            if agent_responses:
+                merged = merge_responses(agent_responses)
+                result = merged.to_dict()
+                result["metadata"] = result.get("metadata", {})
+                result["metadata"].update({
+                    "received_from": list(self.received_from),
+                    "expected_from": self.expected_providers,
+                })
+                return result
+            
+            # Fallback for non-standard responses
             return {
-                "responses": self.responses,
-                "errors": self.errors,
-                "received_from": list(self.received_from),
-                "expected_from": self.expected_providers,
+                "success": True,
+                "response": "Multiple responses received",
+                "data": {
+                    "responses": self.responses,
+                    "received_from": list(self.received_from),
+                    "expected_from": self.expected_providers,
+                },
             }
-        return {"error": "Unknown strategy"}
+        
+        from .response import AgentResponse, ErrorInfo
+        return AgentResponse.error_response(
+            response="Unknown aggregation strategy",
+            error=ErrorInfo(message="Unknown strategy")
+        ).to_dict()
 
 
 class ResponseAggregator:

@@ -11,6 +11,7 @@ from ...services.weather_service import WeatherService
 from .function_registry import WeatherFunctionRegistry
 from .command_processor import WeatherCommandProcessor
 from .tools.tools import tools as weather_tools
+from ..response import AgentResponse, ErrorInfo
 
 
 class WeatherAgent(NetworkAgent):
@@ -110,11 +111,11 @@ class WeatherAgent(NetworkAgent):
             if self.logger:
                 self.logger.log("ERROR", f"WeatherAgent error: {e}")
 
-            error_response = {
-                "response": f"I'm having trouble with weather information right now. {str(e)} Could you try again?",
-                "actions": [],
-                "error": str(e),
-            }
+            # Return standardized error response
+            error_response = AgentResponse.error_response(
+                response=f"I'm having trouble with weather information right now. {str(e)} Could you try again?",
+                error=ErrorInfo.from_exception(e),
+            ).to_dict()
 
             await self.send_capability_response(
                 message.from_agent, error_response, message.request_id, message.id

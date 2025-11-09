@@ -495,15 +495,16 @@ class RequestOrchestrator:
             return {"response": error_response}
     
     def _extract_response_text(self, result: Any) -> Optional[str]:
-        """Extract response text from NLU result.
+        """Extract response text from standardized agent result.
         
         Args:
-            result: Result from NLU agent
+            result: Result from agent (should be standardized AgentResponse format)
             
         Returns:
             Response text string or None
         """
         if isinstance(result, dict) and "response" in result:
+            # Standard format: result["response"] contains the text
             return result["response"]
         elif isinstance(result, dict):
             return str(result)
@@ -513,10 +514,10 @@ class RequestOrchestrator:
     def _extract_response_metadata(
         self, result: Any
     ) -> tuple[Optional[str], Optional[str], Optional[Any], Optional[Any]]:
-        """Extract metadata from NLU result.
+        """Extract metadata from agent result.
         
         Args:
-            result: Result from NLU agent
+            result: Result from agent (standardized AgentResponse format)
             
         Returns:
             Tuple of (intent, capability, agent_results, tool_calls)
@@ -524,22 +525,25 @@ class RequestOrchestrator:
         if not isinstance(result, dict):
             return "chat", None, None, None
         
-        intent = result.get("intent", "chat")
-        capability = result.get("capability")
+        # Standard format uses "metadata" field for extra info
+        metadata = result.get("metadata", {})
+        
+        intent = metadata.get("intent", result.get("intent", "chat"))
+        capability = metadata.get("capability", result.get("capability"))
+        
+        # Actions in standard format
+        actions = result.get("actions", [])
+        
+        # Check for nested results (legacy support)
         agent_results = result.get("results")
         tool_calls = result.get("tool_calls")
         
-        # Try to extract from nested results
-        if not capability and agent_results:
-            if isinstance(agent_results, list) and agent_results:
-                first_result = agent_results[0]
-                if isinstance(first_result, dict):
-                    capability = first_result.get("capability")
-                    if not intent or intent == "chat":
-                        intent = first_result.get(
-                            "intent",
-                            "perform_capability" if capability else "chat"
-                        )
+        # Extract from actions if not found
+        if not capability and actions:
+            if isinstance(actions, list) and actions:
+                first_action = actions[0]
+                if isinstance(first_action, dict):
+                    capability = first_action.get("function")
         
         return intent, capability, agent_results, tool_calls
     

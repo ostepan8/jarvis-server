@@ -41,92 +41,48 @@ async def build_jarvis():
 
 
 async def _display_result(result: dict, output: OutputHandler) -> None:
-    print(f"[DISPLAY_START] _display_result called")
-    print(f"[DISPLAY] result type: {type(result)}, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
-    response_data = result.get("response", "")
-    print(f"[DISPLAY] response_data type: {type(response_data)}, value: {str(response_data)[:200]}")
+    """Display a standardized agent response to the user.
+
+    Handles the unified AgentResponse format with success, response, actions, data, and error fields.
+    """
+    # Extract standardized response fields
+    response_text = result.get("response", "")
+    actions = result.get("actions", [])
+    success = result.get("success", True)
+    error = result.get("error")
+
     console_mode = isinstance(output, ConsoleOutput)
-    print(f"[DISPLAY] console_mode: {console_mode}")
-    
-    # Handle the case where response_data is a dict (legacy format with actions)
-    if isinstance(response_data, dict):
-        print(f"[DISPLAY] response_data is dict, keys: {list(response_data.keys())}")
+
+    # Handle errors
+    if error and not success:
+        error_msg = (
+            error.get("message", "Unknown error")
+            if isinstance(error, dict)
+            else str(error)
+        )
         if console_mode:
             await output.send_output(
-                Fore.CYAN + "📋 Response Summary:" + Style.RESET_ALL
+                Fore.RED + f"❌ Error: {error_msg}" + Style.RESET_ALL
             )
-        if "response" in response_data:
-            print(f"[DISPLAY] Found 'response' key in response_data, value: {response_data['response']}")
-            if console_mode:
-                print(f"[DISPLAY] Console mode - sending output with formatting")
-                await output.send_output(
-                    Fore.GREEN + "🗣️ " + response_data["response"] + Style.RESET_ALL
-                )
-                print(f"[DISPLAY] Output sent to console")
-            else:
-                print(f"[DISPLAY] Non-console mode - sending output")
-                await output.send_output(response_data["response"])
-                print(f"[DISPLAY] Output sent")
+        else:
+            await output.send_output(f"Error: {error_msg}")
+        return
 
-        if "actions" in response_data and console_mode:
+    # Display main response
+    if response_text:
+        if console_mode:
+            await output.send_output(Fore.GREEN + str(response_text) + Style.RESET_ALL)
+        else:
+            await output.send_output(str(response_text))
+
+    # Display actions if present (console mode only for brevity)
+    if actions and console_mode:
+        await output.send_output(Fore.YELLOW + "\n🔍 Actions:" + Style.RESET_ALL)
+        for action in actions:
+            function_name = action.get("function", "unknown")
             await output.send_output(
-                Fore.YELLOW + "\n🔍 Actions performed:" + Style.RESET_ALL
+                Fore.BLUE + f"  • {function_name}" + Style.RESET_ALL
             )
-            for action in response_data["actions"]:
-                await output.send_output(
-                    Fore.BLUE + f"  • {action['function']}" + Style.RESET_ALL
-                )
-                result_value = action.get("result")
-                if result_value is None:
-                    continue
-
-                if isinstance(result_value, dict):
-                    for key, value in result_value.items():
-                        str_value = str(value)
-                        if len(str_value) > 100:
-                            str_value = str_value[:97] + "..."
-                        await output.send_output(
-                            f"    - {key}: {Fore.MAGENTA}{str_value}{Style.RESET_ALL}"
-                        )
-                elif isinstance(result_value, list):
-                    shown_items = result_value[:5]
-                    for item in shown_items:
-                        str_item = str(item)
-                        if len(str_item) > 100:
-                            str_item = str_item[:97] + "..."
-                        await output.send_output(
-                            f"    - {Fore.MAGENTA}{str_item}{Style.RESET_ALL}"
-                        )
-                    if len(result_value) > 5:
-                        await output.send_output(
-                            f"    - {Fore.YELLOW}...and {len(result_value) - 5} more items{Style.RESET_ALL}"
-                        )
-                else:
-                    str_result = str(result_value)
-                    if len(str_result) > 100:
-                        str_result = str_result[:97] + "..."
-                    await output.send_output(
-                        f"    - {Fore.MAGENTA}{str_result}{Style.RESET_ALL}"
-                    )
-    # Handle the case where response_data is a simple string (current format)
-    elif response_data:
-        print(f"[DISPLAY] response_data is string, value: {str(response_data)[:200]}")
-        if console_mode:
-            print(f"[DISPLAY] Sending string response to console")
-            await output.send_output(Fore.GREEN + str(response_data) + Style.RESET_ALL)
-            print(f"[DISPLAY] String response sent to console")
-        else:
-            print(f"[DISPLAY] Sending string response (non-console)")
-            await output.send_output(str(response_data))
-            print(f"[DISPLAY] String response sent")
-    # Fallback for empty response
-    else:
-        print(f"[DISPLAY] response_data is empty, using fallback")
-        if console_mode:
-            await output.send_output(Fore.YELLOW + "Request completed." + Style.RESET_ALL)
-        else:
-            await output.send_output("Request completed.")
-        print(f"[DISPLAY] Fallback message sent")
 
 
 async def demo(
@@ -155,7 +111,8 @@ async def demo(
                 {"user_id": default_user_id, "source": "cli"},
                 allowed_agents=None,
             )
-            print(f"[MAIN] Got result from process_request, type: {type(result)}, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            result_keys = list(result.keys()) if isinstance(result, dict) else "N/A"
+            print(f"[MAIN] Got result, type: {type(result)}, keys: {result_keys}")
             print(f"[MAIN] About to call _display_result")
             await _display_result(result, output_handler)
             print(f"[MAIN] _display_result completed")

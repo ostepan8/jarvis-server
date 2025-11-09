@@ -172,11 +172,12 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
             self.logger.log("INFO", "=== ROKU COMMAND COMPLETE ===")
             self.logger.log("INFO", f"Total actions: {len(actions_taken)}")
 
-        return {
-            "response": final_response,
-            "actions": actions_taken,
-            "iterations": iterations,
-        }
+        # Return standardized response format
+        return AgentResponse.success_response(
+            response=final_response,
+            actions=actions_taken,
+            metadata={"iterations": iterations},
+        ).to_dict()
 
     async def _execute_function(
         self, function_name: str, arguments: Dict[str, Any]

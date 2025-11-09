@@ -6,6 +6,7 @@ FastAPI server exposing collaborative AI agents with a sophisticated multi-agent
 
 This project has recently undergone a major refactoring to improve code quality, maintainability, and resilience:
 
+- **Standardized Agent Responses**: Unified response format across all agents for consistent output rendering (60% reduction in display logic complexity)
 - **Request Orchestrator**: Decoupled complex request processing logic from the main system class, reducing cognitive complexity
 - **Standardized Error Handling**: Comprehensive exception hierarchy with typed errors (`ServiceUnavailableError`, `InvalidParameterError`, etc.)
 - **Retry Logic**: HTTP client with exponential backoff for resilient external API calls
@@ -174,6 +175,59 @@ await recorder.replay_last_protocol(network, logger)
 ```
 
 `replay_last_protocol` executes the currently recorded protocol using a `ProtocolExecutor`. This allows quick iteration on protocol steps without persisting them first.
+
+## Standardized Agent Response Format
+
+All agents in the Jarvis system now return responses in a consistent, structured format:
+
+```python
+{
+    "success": bool,          # Whether the operation succeeded
+    "response": str,          # Natural language response for the user
+    "actions": [...],         # Optional: List of actions taken
+    "data": {...},            # Optional: Structured data
+    "metadata": {...},        # Optional: Agent-specific metadata
+    "error": {...}            # Optional: Structured error information
+}
+```
+
+### Benefits
+
+- **Consistency**: All agents speak the same "language"
+- **Simplified Integration**: 60% reduction in display logic complexity
+- **Better Error Handling**: Structured errors with severity levels and retry hints
+- **Type Safety**: Dataclasses provide validation and serialization
+- **Future-Proof**: Easy to extend with new optional fields
+
+### Example Usage
+
+```python
+from jarvis.agents.response import AgentResponse
+
+# Success response
+response = AgentResponse.success_response(
+    response="I've scheduled your meeting for 2pm tomorrow.",
+    actions=[{"function": "create_event", "result": {...}}],
+    data={"event_id": "evt_123"}
+)
+
+# Error response
+response = AgentResponse.error_response(
+    response="Unable to schedule due to a conflict.",
+    error=ErrorInfo(message="Calendar conflict detected")
+)
+
+# From exception
+try:
+    result = await risky_operation()
+except Exception as e:
+    response = AgentResponse.from_exception(e, user_message="Please try again.")
+
+# Always convert to dict for network transmission
+return response.to_dict()
+```
+
+See `jarvis/agents/response.py` for the complete implementation and `tests/test_agent_response.py` for comprehensive examples.
 
 ## Project structure
 

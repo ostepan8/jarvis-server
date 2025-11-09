@@ -6,6 +6,7 @@ from ...services.calendar_service import CalendarService
 from ...logging import JarvisLogger
 from .prompt import get_calendar_system_prompt
 from .function_registry import CalendarFunctionRegistry
+from ..response import AgentResponse, ErrorInfo
 
 
 class CalendarCommandProcessor:
@@ -174,10 +175,19 @@ class CalendarCommandProcessor:
             if self.logger:
                 self.logger.log("INFO", "NL command result", response_text)
 
-            return {"response": response_text, "actions": actions_taken}
+            # Return standardized response format
+            return AgentResponse.success_response(
+                response=response_text,
+                actions=actions_taken,
+            ).to_dict()
 
         except Exception as e:
             error_msg = f"Error processing command: {str(e)}"
             if self.logger:
                 self.logger.log("ERROR", "Command processing failed", error_msg)
-            return {"error": error_msg}
+            
+            # Return standardized error response
+            return AgentResponse.error_response(
+                response=error_msg,
+                error=ErrorInfo.from_exception(e),
+            ).to_dict()

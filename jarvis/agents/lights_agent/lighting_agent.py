@@ -12,6 +12,7 @@ from ...ai_clients.base import BaseAIClient
 from .backend import BaseLightingBackend
 from .phillips_hue_backend import PhillipsHueBackend
 from .yeelight_backend import YeelightBackend
+from ..response import AgentResponse, ErrorInfo
 
 
 class LightingAgent(NetworkAgent):
@@ -159,19 +160,34 @@ class LightingAgent(NetworkAgent):
             elif capability == "lights_toggle":
                 result = await self._process_toggle_command(prompt)
             elif capability == "lights_list":
-                result = {"lights": self._list_lights()}
+                lights_data = self._list_lights()
+                result = AgentResponse.success_response(
+                    response=f"Found {len(lights_data.get('lights', []))} lights",
+                    data=lights_data
+                ).to_dict()
             elif capability == "lights_status":
-                result = {"status": "online", "lights": self._list_lights()}
+                lights_data = self._list_lights()
+                result = AgentResponse.success_response(
+                    response="Lighting system is online",
+                    data={"status": "online", "lights": lights_data}
+                ).to_dict()
             else:
-                result = {"status": "capability_handled", "capability": capability}
+                result = AgentResponse.success_response(
+                    response=f"Capability {capability} handled",
+                    metadata={"capability": capability}
+                ).to_dict()
 
             await self.send_capability_response(
                 message.from_agent, result, message.request_id, message.id
             )
         except Exception as e:
             self.logger.log("ERROR", f"Error processing {capability}", str(e))
-            await self.send_error(
-                message.from_agent, f"Error: {str(e)}", message.request_id
+            error_response = AgentResponse.error_response(
+                response=f"Error: {str(e)}",
+                error=ErrorInfo.from_exception(e)
+            ).to_dict()
+            await self.send_capability_response(
+                message.from_agent, error_response, message.request_id, message.id
             )
 
     async def _process_color_command(self, prompt: str) -> Dict[str, Any]:

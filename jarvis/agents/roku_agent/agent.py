@@ -13,6 +13,7 @@ from ...ai_clients.base import BaseAIClient
 from ...services.roku_service import RokuService
 from .function_registry import RokuFunctionRegistry
 from .command_processor import RokuCommandProcessor
+from ..response import AgentResponse, ErrorInfo
 
 
 class RokuAgent(NetworkAgent):
@@ -119,11 +120,11 @@ class RokuAgent(NetworkAgent):
             if self.logger:
                 self.logger.log("ERROR", f"RokuAgent error: {e}")
 
-            error_response = {
-                "response": f"I'm having trouble controlling the Roku device. {str(e)} Could you try again?",
-                "actions": [],
-                "error": str(e),
-            }
+            # Return standardized error response
+            error_response = AgentResponse.error_response(
+                response=f"I'm having trouble controlling the Roku device. {str(e)} Could you try again?",
+                error=ErrorInfo.from_exception(e),
+            ).to_dict()
 
             await self.send_capability_response(
                 message.from_agent, error_response, message.request_id, message.id
