@@ -590,15 +590,22 @@ class AgentNetwork:
         if allowed_agents is not None:
             providers = [p for p in providers if p in allowed_agents]
 
-        # Create and store the Future with TTL
-        loop = asyncio.get_event_loop()
-        fut = loop.create_future()
-        self._response_futures[request_id] = (fut, time.time())
-        self.logger.log(
-            "DEBUG",
-            f"Created future for capability request",
-            f"request_id={request_id}, capability={capability}, from={from_agent}, total_futures={len(self._response_futures)}",
-        )
+        # Create and store the Future with TTL (only if not already exists)
+        if request_id not in self._response_futures:
+            loop = asyncio.get_event_loop()
+            fut = loop.create_future()
+            self._response_futures[request_id] = (fut, time.time())
+            self.logger.log(
+                "DEBUG",
+                f"Created future for capability request",
+                f"request_id={request_id}, capability={capability}, from={from_agent}, total_futures={len(self._response_futures)}",
+            )
+        else:
+            self.logger.log(
+                "DEBUG",
+                f"Reusing existing future for capability request",
+                f"request_id={request_id}, capability={capability}, from={from_agent}",
+            )
 
         # Broadcast the capability_request
         msg = Message(
