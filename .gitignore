@@ -50,3 +50,7 @@ build/
 
 # vosk model files
 models/*
+
+# Temporary documentation
+COMMIT_MESSAGE.md
+PRE_PUSH_CHECKLIST.md

@@ -200,15 +200,17 @@ async def get_dashboard_summary(
     # Memory stats
     memory_stats = {"total_memories": 0, "memories_by_user": {}, "collection_names": []}
 
-    if jarvis and hasattr(jarvis, "vector_memory") and jarvis.vector_memory:
+    # Access vector_memory through agent refs
+    vector_memory = jarvis._agent_refs.get("vector_memory") if hasattr(jarvis, "_agent_refs") else None
+    if vector_memory:
         try:
-            total_memories = jarvis.vector_memory.collection.count()
+            total_memories = vector_memory.collection.count()
             memory_stats = {
                 "total_memories": total_memories,
                 "memories_by_user": {},
                 "collection_names": (
-                    [jarvis.vector_memory.collection.name]
-                    if hasattr(jarvis.vector_memory.collection, "name")
+                    [vector_memory.collection.name]
+                    if hasattr(vector_memory.collection, "name")
                     else []
                 ),
             }
@@ -298,7 +300,9 @@ async def get_memories(
     user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Get memories from ChromaDB."""
-    if not jarvis or not hasattr(jarvis, "vector_memory") or not jarvis.vector_memory:
+    # Access vector_memory through agent refs
+    vector_memory = jarvis._agent_refs.get("vector_memory") if (jarvis and hasattr(jarvis, "_agent_refs")) else None
+    if not vector_memory:
         return {
             "memories": [],
             "total": 0,
@@ -306,7 +310,7 @@ async def get_memories(
         }
 
     try:
-        collection = jarvis.vector_memory.collection
+        collection = vector_memory.collection
 
         # Get all memories
         where_filter = {}

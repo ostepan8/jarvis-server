@@ -1,26 +1,49 @@
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
 import httpx
 
+from ..utils.retry_client import RetryableHTTPClient, RetryConfig
+
+if TYPE_CHECKING:
+    from ..logging import JarvisLogger
+    from ..core.errors import (
+        AuthenticationError,
+        InvalidParameterError,
+        ServiceUnavailableError,
+        ConfigurationError,
+    )
+
 
 class WeatherService:
-    """Service for weather API interactions"""
+    """Service for weather API interactions with retry logic"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        retry_config: Optional[RetryConfig] = None,
+        logger: Optional["JarvisLogger"] = None,
+    ):
         self.api_key = (
             api_key or os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
         )
         if not self.api_key:
-            raise ValueError(
+            from ..core.errors import ConfigurationError
+            raise ConfigurationError(
                 "Weather API key required. Set WEATHER_API_KEY or OPENWEATHER_API_KEY"
             )
 
-        # Use sync client for sync methods to avoid asyncio.run() issues
+        self.logger = logger
+        
+        # Use retryable clients with configurable retry behavior
+        retry_config = retry_config or RetryConfig(max_retries=3, base_delay=1.0)
         self._sync_client = httpx.Client(timeout=10.0)
-        # Keep async client for async close method
-        self._async_client = httpx.AsyncClient(timeout=10.0)
+        self._async_client = RetryableHTTPClient(
+            retry_config=retry_config,
+            logger=logger,
+            timeout=10.0,
+        )
 
         # Simple cache to avoid repeated API calls
         self.weather_cache = {}
@@ -39,7 +62,10 @@ class WeatherService:
     def _make_sync_api_request(
         self, endpoint: str, params: Dict[str, Any], cache_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Make synchronous API request with caching and error handling"""
+        """Make synchronous API request with caching and typed error handling
+        
+        Note: Sync client doesn't use retry logic. Consider migrating to async methods.
+        """
         # Check cache first
         if cache_key and cache_key in self.weather_cache:
             cached_data, cached_time = self.weather_cache[cache_key]
@@ -56,11 +82,23 @@ class WeatherService:
             )
 
             if response.status_code == 404:
-                raise ValueError(f"Location not found: {params.get('q', 'unknown')}")
+                from ..core.errors import InvalidParameterError
+                raise InvalidParameterError(
+                    f"Location not found: {params.get('q', 'unknown')}",
+                    details={"endpoint": endpoint, "params": params}
+                )
             elif response.status_code == 401:
-                raise ValueError("Invalid API key")
+                from ..core.errors import AuthenticationError
+                raise AuthenticationError(
+                    "Invalid Weather API key",
+                    details={"endpoint": endpoint}
+                )
             elif response.status_code != 200:
-                raise ValueError(f"Weather service error: {response.status_code}")
+                from ..core.errors import ServiceUnavailableError
+                raise ServiceUnavailableError(
+                    f"Weather service error: {response.status_code}",
+                    details={"status_code": response.status_code, "endpoint": endpoint}
+                )
 
             data = response.json()
 
@@ -70,15 +108,34 @@ class WeatherService:
 
             return data
 
-        except httpx.TimeoutException:
-            raise ValueError("Weather service timeout")
         except Exception as e:
-            raise ValueError(f"Weather API error: {str(e)}")
+            # Import error classes here to avoid circular dependency
+            from ..core.errors import (
+                InvalidParameterError,
+                AuthenticationError,
+                ServiceUnavailableError,
+            )
+            
+            # Re-raise our typed exceptions as-is
+            if isinstance(e, (InvalidParameterError, AuthenticationError, ServiceUnavailableError)):
+                raise
+            
+            if isinstance(e, httpx.TimeoutException):
+                raise ServiceUnavailableError(
+                    "Weather service timeout",
+                    details={"endpoint": endpoint},
+                    retry_after=10
+                )
+            
+            raise ServiceUnavailableError(
+                f"Weather API error: {str(e)}",
+                details={"endpoint": endpoint, "error_type": type(e).__name__}
+            )
 
     async def _make_api_request(
         self, endpoint: str, params: Dict[str, Any], cache_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Make async API request with caching and error handling"""
+        """Make async API request with caching, retry logic, and typed error handling"""
         # Check cache first
         if cache_key and cache_key in self.weather_cache:
             cached_data, cached_time = self.weather_cache[cache_key]
@@ -90,16 +147,30 @@ class WeatherService:
         params["units"] = "imperial"  # Use Fahrenheit instead of Celsius
 
         try:
+            # RetryableHTTPClient handles retries automatically
             response = await self._async_client.get(
                 f"https://api.openweathermap.org/data/2.5/{endpoint}", params=params
             )
 
             if response.status_code == 404:
-                raise ValueError(f"Location not found: {params.get('q', 'unknown')}")
+                from ..core.errors import InvalidParameterError
+                raise InvalidParameterError(
+                    f"Location not found: {params.get('q', 'unknown')}",
+                    details={"endpoint": endpoint, "params": params}
+                )
             elif response.status_code == 401:
-                raise ValueError("Invalid API key")
+                from ..core.errors import AuthenticationError
+                raise AuthenticationError(
+                    "Invalid Weather API key",
+                    details={"endpoint": endpoint}
+                )
             elif response.status_code != 200:
-                raise ValueError(f"Weather service error: {response.status_code}")
+                from ..core.errors import ServiceUnavailableError
+                raise ServiceUnavailableError(
+                    f"Weather service error: {response.status_code}",
+                    details={"status_code": response.status_code, "endpoint": endpoint},
+                    retry_after=30,
+                )
 
             data = response.json()
 
@@ -109,10 +180,23 @@ class WeatherService:
 
             return data
 
-        except httpx.TimeoutException:
-            raise ValueError("Weather service timeout")
         except Exception as e:
-            raise ValueError(f"Weather API error: {str(e)}")
+            # Import error classes here to avoid circular dependency
+            from ..core.errors import (
+                InvalidParameterError,
+                AuthenticationError,
+                ServiceUnavailableError,
+            )
+            
+            # Re-raise our typed exceptions as-is
+            if isinstance(e, (InvalidParameterError, AuthenticationError, ServiceUnavailableError)):
+                raise
+            
+            # Wrap any other exceptions
+            raise ServiceUnavailableError(
+                f"Weather API error: {str(e)}",
+                details={"endpoint": endpoint, "error_type": type(e).__name__}
+            )
 
     def _format_time_for_speech(self, timestamp: float) -> str:
         """Format time for natural speech without AM/PM abbreviations"""

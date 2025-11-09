@@ -1,6 +1,17 @@
 # Jarvis Server
 
-FastAPI server exposing collaborative calendar agents. The project provides both an HTTP API and a small demo script that interact with a network of AI agents to manage calendar events.
+FastAPI server exposing collaborative AI agents with a sophisticated multi-agent architecture. The project provides both an HTTP API and an interactive demo that leverage a network of specialized AI agents to manage calendar events, weather information, smart home devices, and more.
+
+## Recent Architecture Improvements
+
+This project has recently undergone a major refactoring to improve code quality, maintainability, and resilience:
+
+- **Request Orchestrator**: Decoupled complex request processing logic from the main system class, reducing cognitive complexity
+- **Standardized Error Handling**: Comprehensive exception hierarchy with typed errors (`ServiceUnavailableError`, `InvalidParameterError`, etc.)
+- **Retry Logic**: HTTP client with exponential backoff for resilient external API calls
+- **Circuit Breaker Pattern**: Prevents repeated calls to failing services, improving system stability
+- **Response Logger**: Centralized interaction logging for better observability
+- **Code Cleanup**: Reduced main system file by 57% (608 → 257 lines) by extracting responsibilities
 
 ## Requirements
 

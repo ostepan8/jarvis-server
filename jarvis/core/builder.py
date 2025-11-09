@@ -179,14 +179,8 @@ class JarvisBuilder:
         if self._opts.with_night_agents and jarvis.config.flags.enable_night_mode:
             refs.update(factory._build_night_agents(jarvis.network, jarvis))
 
-        jarvis.vector_memory = refs.get("vector_memory")
-        jarvis.nlu_agent = refs.get("nlu_agent")
-        jarvis.calendar_service = refs.get("calendar_service")
-        jarvis.chat_agent = refs.get("chat_agent")
-        jarvis.protocol_agent = refs.get("protocol_agent")
-        jarvis.lights_agent = refs.get("lights_agent")
-        jarvis.roku_agent = refs.get("roku_agent")
-        jarvis.canvas_service = refs.get("canvas_service")
+        # Store agent refs internally (properties provide backward-compatible access)
+        jarvis._agent_refs = refs
         jarvis.night_controller = refs.get("night_controller")
         jarvis.night_agents = refs.get("night_agents", [])
 
@@ -197,11 +191,29 @@ class JarvisBuilder:
 
         # Start network
         await jarvis._start_network()
+        
+        # Initialize orchestrator and response logger
+        from .response_logger import ResponseLogger
+        from .orchestrator import RequestOrchestrator
+        jarvis._response_logger = ResponseLogger(jarvis.interaction_logger)
+        jarvis._orchestrator = RequestOrchestrator(
+            network=jarvis.network,
+            protocol_runtime=jarvis.protocol_runtime,
+            response_logger=jarvis._response_logger,
+            logger=jarvis.logger,
+            response_timeout=jarvis.config.response_timeout,
+            max_history_length=10,
+        )
 
+        protocol_count = (
+            len(jarvis.protocol_runtime.registry.protocols)
+            if jarvis.protocol_runtime
+            else 0
+        )
         jarvis.logger.log(
             "INFO",
             "Jarvis built via JarvisBuilder",
             f"Active agents: {list(jarvis.network.agents.keys())}, "
-            f"Protocols loaded: {len(jarvis.protocol_registry.protocols)}",
+            f"Protocols loaded: {protocol_count}",
         )
         return jarvis

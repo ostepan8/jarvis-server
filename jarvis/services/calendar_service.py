@@ -2,23 +2,28 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 import types
 
 import httpx
 
 from ..logging import JarvisLogger
 from ..utils.performance import track_async
+from ..utils.retry_client import RetryableHTTPClient, RetryConfig
+
+if TYPE_CHECKING:
+    from ..core.errors import ServiceUnavailableError, AuthenticationError
 
 
 class CalendarService:
-    """Service responsible for communicating with the calendar API."""
+    """Service responsible for communicating with the calendar API with retry logic."""
 
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
         api_key: Optional[str] = None,
         logger: JarvisLogger | None = None,
+        retry_config: Optional[RetryConfig] = None,
     ) -> None:
         self.base_url = base_url
         self.logger = logger or JarvisLogger()
@@ -49,7 +54,13 @@ class CalendarService:
             # headers["X-API-Key"] = self.api_key
             # headers["API-Key"] = self.api_key
 
-        self.client = httpx.AsyncClient(headers=headers)
+        # Use retryable client with configured retry behavior
+        retry_config = retry_config or RetryConfig(max_retries=3, base_delay=1.0)
+        self.client = RetryableHTTPClient(
+            retry_config=retry_config,
+            logger=logger,
+            headers=headers,
+        )
 
     async def __aenter__(self) -> "CalendarService":
         """Allow use as an async context manager."""

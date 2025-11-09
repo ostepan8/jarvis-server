@@ -62,11 +62,9 @@ async def get_my_profile(
     jarvis: JarvisSystem = Depends(get_jarvis),
 ):
     profile = get_user_profile(db, current_user["id"])
-    if profile:
-        jarvis.user_profiles[current_user["id"]] = jarvis.user_profiles.get(
-            current_user["id"],
-            jarvis.chat_agent.profile.__class__(**profile),
-        )
+    if profile and jarvis._orchestrator:
+        from jarvis.core.profile import AgentProfile
+        jarvis._orchestrator.user_profiles[current_user["id"]] = AgentProfile(**profile)
     return profile or {}
 
 
@@ -79,9 +77,9 @@ async def update_my_profile(
 ):
     set_user_profile(db, current_user["id"], body.dict(exclude_unset=True))
     profile = get_user_profile(db, current_user["id"])
-    jarvis.user_profiles[current_user["id"]] = jarvis.chat_agent.profile.__class__(
-        **profile
-    )
+    if profile and jarvis._orchestrator:
+        from jarvis.core.profile import AgentProfile
+        jarvis._orchestrator.user_profiles[current_user["id"]] = AgentProfile(**profile)
     return {"success": True}
 
 

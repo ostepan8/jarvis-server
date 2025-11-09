@@ -14,7 +14,6 @@ class FeatureFlags:
     enable_canvas: bool = True
     enable_night_mode: bool = True
     enable_roku: bool = True
-    enable_spotify: bool = True
 
 
 @dataclass
@@ -33,6 +32,16 @@ class JarvisConfig:
     )
     memory_dir: Optional[str] = None
     weather_api_key: Optional[str] = None
+
+    # Retry configuration for external service calls
+    max_retries: int = 3
+    retry_base_delay: float = 1.0
+    retry_max_delay: float = 60.0
+    retry_exponential_base: float = 2.0
+
+    # Circuit breaker configuration
+    circuit_breaker_failure_threshold: int = 5
+    circuit_breaker_recovery_timeout: float = 60.0
     hue_bridge_ip: Optional[str] = field(
         default_factory=lambda: os.getenv("PHILLIPS_HUE_BRIDGE_IP")
     )
