@@ -172,7 +172,29 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
             self.logger.log("INFO", "=== ROKU COMMAND COMPLETE ===")
             self.logger.log("INFO", f"Total actions: {len(actions_taken)}")
 
-        # Return standardized response format
+        # Check if any actions resulted in errors
+        has_errors = any("error" in action.get("result", {}) for action in actions_taken)
+        
+        if has_errors:
+            # Extract the first error for error info
+            error_action = next(
+                (action for action in actions_taken if "error" in action.get("result", {})),
+                None
+            )
+            error_msg = error_action["result"]["error"] if error_action else "Unknown error"
+            
+            # Return error response
+            from ..response import ErrorInfo
+            return AgentResponse.error_response(
+                response=final_response,
+                error=ErrorInfo(
+                    message=error_msg,
+                    error_type="FunctionExecutionError",
+                ),
+                actions=actions_taken,
+            ).to_dict()
+        
+        # Return standardized success response
         return AgentResponse.success_response(
             response=final_response,
             actions=actions_taken,

@@ -77,108 +77,144 @@ class ChatAgent(NetworkAgent):
     async def _process_chat(
         self, user_input: str, conversation_history: List[Dict[str, str]] = None
     ) -> Dict[str, Any]:
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": self.system_prompt},
-        ]
-
-        # Add conversation history (last 5 turns for context)
-        # Validate content to avoid API errors with None/empty values
-        if conversation_history:
-            for turn in conversation_history[-5:]:
-                user_content = turn.get("user") or ""
-                assistant_content = turn.get("assistant") or ""
-
-                # Only add if content is non-empty
-                if user_content.strip():
-                    messages.append({"role": "user", "content": user_content})
-                if assistant_content.strip():
-                    messages.append({"role": "assistant", "content": assistant_content})
-
-        # Add current user input
-        messages.append({"role": "user", "content": user_input})
-
-        actions: List[Dict[str, Any]] = []
-        iterations = 0
-        message = None
-        tool_calls = None
-
-        while iterations < 5:
-            message, tool_calls = await self.ai_client.strong_chat(messages, self.tools)
-            if not tool_calls:
-                break
-
-            # Build assistant message with tool_calls
-            # OpenAI requires tool_calls field when there are tool messages following
-            content = message.content if message.content is not None else ""
-            assistant_msg = {
-                "role": "assistant",
-                "content": content,
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {
-                            "name": call.function.name,
-                            "arguments": call.function.arguments,
-                        },
-                    }
-                    for call in tool_calls
-                ],
-            }
-            messages.append(assistant_msg)
-
-            for call in tool_calls:
-                fn = call.function.name
-                args = json.loads(call.function.arguments)
-                try:
-                    result = await self.run_capability(fn, **args)
-                except Exception as exc:
-                    result = {"error": str(exc)}
-                actions.append({"function": fn, "arguments": args, "result": result})
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call.id,
-                        "content": json.dumps(result),
-                    }
-                )
-            iterations += 1
-
-        response_text = message.content if message else ""
-
-        # Store conversation in memory
-        user_id = getattr(self, "current_user_id", None)
         try:
-            await self.store_memory(
-                f"User: {user_input}\nAssistant: {response_text}",
-                {"type": "conversation"},
-                user_id=user_id,
-            )
-        except Exception:
-            pass
+            messages: List[Dict[str, Any]] = [
+                {"role": "system", "content": self.system_prompt},
+            ]
 
-        # Automatically extract and store facts from the conversation
-        if user_id is not None and user_input:
-            try:
-                conversation_text = f"User: {user_input}\nAssistant: {response_text}"
-                if self.network:
-                    req_id = await self.request_capability(
-                        "extract_facts",
+            # Add conversation history (last 5 turns for context)
+            # Validate content to avoid API errors with None/empty values
+            if conversation_history:
+                for turn in conversation_history[-5:]:
+                    user_content = turn.get("user") or ""
+                    assistant_content = turn.get("assistant") or ""
+
+                    # Only add if content is non-empty
+                    if user_content.strip():
+                        messages.append({"role": "user", "content": user_content})
+                    if assistant_content.strip():
+                        messages.append({"role": "assistant", "content": assistant_content})
+
+            # Add current user input
+            messages.append({"role": "user", "content": user_input})
+
+            actions: List[Dict[str, Any]] = []
+            iterations = 0
+            message = None
+            tool_calls = None
+
+            while iterations < 5:
+                message, tool_calls = await self.ai_client.strong_chat(messages, self.tools)
+                if not tool_calls:
+                    break
+
+                # Build assistant message with tool_calls
+                # OpenAI requires tool_calls field when there are tool messages following
+                content = message.content if message.content is not None else ""
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": [
                         {
-                            "conversation_text": conversation_text,
-                            "user_id": user_id,
-                        },
-                    )
-                    # Don't wait for this - run it asynchronously
-                    # Facts will be stored by MemoryAgent
-            except Exception:
-                pass  # Don't fail the chat if fact extraction fails
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
+                        }
+                        for call in tool_calls
+                    ],
+                }
+                messages.append(assistant_msg)
 
-        # Return standardized response format
-        return AgentResponse.success_response(
-            response=response_text,
-            actions=actions,
-        ).to_dict()
+                for call in tool_calls:
+                    fn = call.function.name
+                    args = json.loads(call.function.arguments)
+                    try:
+                        result = await self.run_capability(fn, **args)
+                    except Exception as exc:
+                        result = {"error": str(exc)}
+                    actions.append({"function": fn, "arguments": args, "result": result})
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "content": json.dumps(result),
+                        }
+                    )
+                iterations += 1
+
+            response_text = message.content if message else ""
+
+            # Store conversation in memory
+            user_id = getattr(self, "current_user_id", None)
+            try:
+                await self.store_memory(
+                    f"User: {user_input}\nAssistant: {response_text}",
+                    {"type": "conversation"},
+                    user_id=user_id,
+                )
+            except Exception:
+                pass
+
+            # Automatically extract and store facts from the conversation
+            if user_id is not None and user_input:
+                try:
+                    conversation_text = f"User: {user_input}\nAssistant: {response_text}"
+                    if self.network:
+                        req_id = await self.request_capability(
+                            "extract_facts",
+                            {
+                                "conversation_text": conversation_text,
+                                "user_id": user_id,
+                            },
+                        )
+                        # Don't wait for this - run it asynchronously
+                        # Facts will be stored by MemoryAgent
+                except Exception:
+                    pass  # Don't fail the chat if fact extraction fails
+
+            # Check if any actions resulted in errors
+            has_errors = any("error" in action.get("result", {}) for action in actions)
+            
+            if has_errors:
+                # Extract the first error for error info
+                error_action = next(
+                    (action for action in actions if "error" in action.get("result", {})),
+                    None
+                )
+                error_msg = error_action["result"]["error"] if error_action else "Unknown error"
+                
+                # Return error response
+                return AgentResponse.error_response(
+                    response=response_text,
+                    error=ErrorInfo(
+                        message=error_msg,
+                        error_type="FunctionExecutionError",
+                    ),
+                    actions=actions,
+                ).to_dict()
+            
+            # Return standardized success response
+            return AgentResponse.success_response(
+                response=response_text,
+                actions=actions,
+            ).to_dict()
+        
+        except Exception as e:
+            error_msg = f"Error processing chat: {str(e)}"
+            if self.logger:
+                self.logger.log("ERROR", "Chat processing failed", error_msg)
+            
+            # Return standardized error response
+            return AgentResponse.error_response(
+                response=error_msg,
+                error=ErrorInfo(
+                    message=error_msg,
+                    error_type="ChatProcessingError",
+                ),
+            ).to_dict()
 
     # ------------------------------------------------------------------
     # Tool implementations

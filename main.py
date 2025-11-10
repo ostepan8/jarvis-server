@@ -9,6 +9,7 @@ from colorama import Fore, Style, init as colorama_init
 
 # NEW: use the builder
 from jarvis.core import JarvisBuilder
+from jarvis import JarvisLogger
 
 from jarvis.io import (
     InputHandler,
@@ -53,22 +54,35 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
 
     console_mode = isinstance(output, ConsoleOutput)
 
-    # Handle errors
-    if error and not success:
-        error_msg = (
-            error.get("message", "Unknown error")
-            if isinstance(error, dict)
-            else str(error)
-        )
-        if console_mode:
-            await output.send_output(
-                Fore.RED + f"❌ Error: {error_msg}" + Style.RESET_ALL
+    # Handle errors (both explicit and implicit success=False)
+    if error or not success:
+        error_msg = None
+        if error:
+            error_msg = (
+                error.get("message", "Unknown error")
+                if isinstance(error, dict)
+                else str(error)
             )
+
+        if console_mode:
+            # If we have response text, show it in red
+            if response_text:
+                await output.send_output(
+                    Fore.RED + "❌ " + str(response_text) + Style.RESET_ALL
+                )
+            # If we have a separate error message, show that too
+            if error_msg and error_msg != response_text:
+                await output.send_output(
+                    Fore.RED + f"   Error details: {error_msg}" + Style.RESET_ALL
+                )
         else:
-            await output.send_output(f"Error: {error_msg}")
+            if response_text:
+                await output.send_output(f"Error: {response_text}")
+            elif error_msg:
+                await output.send_output(f"Error: {error_msg}")
         return
 
-    # Display main response
+    # Display main response (success case)
     if response_text:
         if console_mode:
             await output.send_output(Fore.GREEN + str(response_text) + Style.RESET_ALL)
@@ -97,6 +111,9 @@ async def demo(
 
     # Get default user_id from environment or default to 1
     default_user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
+    
+    # Get logger from jarvis system
+    logger = jarvis.logger
 
     try:
         while True:
@@ -104,7 +121,7 @@ async def demo(
             if user_command.strip().lower() in {"exit", "quit"}:
                 break
 
-            print(f"[MAIN] About to call jarvis.process_request with: {user_command}")
+            logger.log("DEBUG", "Processing user request", {"command": user_command})
             result = await jarvis.process_request(
                 user_command,
                 tz_name,
@@ -112,10 +129,8 @@ async def demo(
                 allowed_agents=None,
             )
             result_keys = list(result.keys()) if isinstance(result, dict) else "N/A"
-            print(f"[MAIN] Got result, type: {type(result)}, keys: {result_keys}")
-            print(f"[MAIN] About to call _display_result")
+            logger.log("DEBUG", "Request completed", {"result_type": str(type(result)), "result_keys": result_keys})
             await _display_result(result, output_handler)
-            print(f"[MAIN] _display_result completed")
     finally:
         await jarvis.shutdown()
 
@@ -177,7 +192,7 @@ async def run_voice() -> None:
             return resp.get("response", "Command completed, sir.")
         return str(resp) if resp else "Command completed, sir."
 
-    print("Voice system ready. Say 'Jarvis' to activate...")
+    jarvis.logger.log("INFO", "Voice system ready", {"message": "Say 'Jarvis' to activate"})
     await system.run_forever(handler)
     await jarvis.shutdown()
 

@@ -73,9 +73,6 @@ def main():
         print("Error: GCAL_ACTION and GCAL_CREDS must be set", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Action: {action}")
-    print(f"Calendar ID: {calendar_id}")
-
     try:
         # Calendar service is needed for event actions
         cal_service = get_calendar_service(creds_file)
@@ -183,7 +180,7 @@ def main():
                 title = os.environ.get("GCAL_TITLE")
                 start_str = os.environ.get("GCAL_START")
                 tz = os.environ.get("GCAL_TZ", "UTC")
-                print(f"Primary delete failed for {gcal_event_id}: {e}. Attempting fallback search…")
+                # Attempting fallback search silently
                 if title and start_str:
                     try:
                         # Narrow time window around provided start

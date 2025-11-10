@@ -110,10 +110,12 @@ app = create_app()
 
 def run():
     import uvicorn
+    import logging
 
     # Allow PORT environment variable to override default port
     port = int(os.getenv("PORT", DEFAULT_PORT))
-    print(f"Starting Jarvis server on port {port}")
+    logger = logging.getLogger("jarvis.server")
+    logger.info(f"Starting Jarvis server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 

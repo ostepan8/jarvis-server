@@ -17,4 +17,7 @@ class ConsoleInput(InputHandler):
 
 class ConsoleOutput(OutputHandler):
     async def send_output(self, message: str) -> None:
-        print(message)
+        # Console output is intentional for user-facing messages
+        import sys
+        sys.stdout.write(message + "\n")
+        sys.stdout.flush()

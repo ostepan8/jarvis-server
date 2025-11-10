@@ -18,7 +18,8 @@ except (ImportError, AttributeError):
         # Try alternative import
         import PyJWT as jwt
     except ImportError:
-        print("Please install PyJWT: pip install PyJWT")
+        import sys
+        sys.stderr.write("Please install PyJWT: pip install PyJWT\n")
         raise ImportError("PyJWT is required for authentication")
 
 

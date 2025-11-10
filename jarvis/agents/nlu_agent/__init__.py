@@ -218,9 +218,42 @@ class NLUAgent(NetworkAgent):
                     f"request_id={request_id}",
                 )
 
+                # Check if any agent results indicate failure
+                has_errors = False
+                error_info = None
+                for result in results:
+                    result_data = result.get("result", {})
+                    if isinstance(result_data, dict):
+                        # Check for explicit success=False
+                        if result_data.get("success") is False:
+                            has_errors = True
+                            error_info = result_data.get("error")
+                            break
+                        # Check for error field presence
+                        if "error" in result_data:
+                            has_errors = True
+                            error_info = result_data.get("error")
+                            break
+
+                # Build response with proper error propagation
+                if has_errors:
+                    response_payload = {
+                        "response": final_response,
+                        "results": results,
+                        "success": False,
+                    }
+                    if error_info:
+                        response_payload["error"] = error_info
+                else:
+                    response_payload = {
+                        "response": final_response,
+                        "results": results,
+                        "success": True,
+                    }
+
                 await self.send_capability_response(
                     to_agent=original_requester,
-                    result={"response": final_response, "results": results},
+                    result=response_payload,
                     request_id=request_id,
                     original_message_id=message.id,
                 )
@@ -263,6 +296,43 @@ class NLUAgent(NetworkAgent):
                 "WARNING",
                 f"No original_requester found for request {request_id}",
                 f"request_info={request_info}",
+            )
+
+    async def _handle_error(self, message: Message) -> None:
+        """Handle error messages from agents and propagate them back to the requester."""
+        request_id = message.request_id
+        error_content = message.content.get("error", "Unknown error")
+        
+        self.logger.log(
+            "ERROR",
+            f"Error from {message.from_agent}",
+            f"{error_content}",
+        )
+        
+        # Look up the original requester for this request
+        request_info = self.active_requests.get(request_id)
+        if request_info:
+            original_requester = request_info["original_requester"]
+            
+            # Send error response back to original requester
+            await self.send_capability_response(
+                to_agent=original_requester,
+                result={
+                    "response": f"Error: {error_content}",
+                    "success": False,
+                    "error": {"message": error_content, "error_type": "AgentError"},
+                },
+                request_id=request_id,
+                original_message_id=message.id,
+            )
+            
+            # Clean up
+            del self.active_requests[request_id]
+        else:
+            self.logger.log(
+                "WARNING",
+                f"Received error for unknown request {request_id}",
+                f"error={error_content}",
             )
 
     async def _handle_capability_request(self, message: Message) -> None:

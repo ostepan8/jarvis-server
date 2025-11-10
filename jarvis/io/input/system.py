@@ -37,7 +37,12 @@ class VoiceInputSystem:
                 metadata={"listener": type(self.wake_listener).__name__},
             ):
                 await self.wake_listener.wait_for_wake_word()
-            print("Wake word detected! Listening...")
+            
+            logger = getattr(self.stt_engine, "logger", None) or getattr(
+                self.tts_engine, "logger", None
+            )
+            if logger:
+                logger.log("DEBUG", "Wake word detected, listening for speech")
 
             async with tracker.timer(
                 "stt",
@@ -51,7 +56,8 @@ class VoiceInputSystem:
                     await self.tts_engine.speak("I didn't catch that, sir.")
                 return
 
-            print(f"Heard: {text}")
+            if logger:
+                logger.log("DEBUG", "Speech recognized", {"text": text})
 
             if handler is not None:
                 async with tracker.timer("handler"):
@@ -65,7 +71,11 @@ class VoiceInputSystem:
                 await self.tts_engine.speak(response)
 
         except Exception as exc:
-            print(f"Error in listen_and_respond: {exc}")
+            logger = getattr(self.stt_engine, "logger", None) or getattr(
+                self.tts_engine, "logger", None
+            )
+            if logger:
+                logger.log("ERROR", "Error in listen_and_respond", {"error": str(exc)})
             try:
                 await self.tts_engine.speak("I'm having technical difficulties, sir.")
             except Exception:
@@ -77,9 +87,7 @@ class VoiceInputSystem:
                 self.tts_engine, "logger", None
             )
             if logger:
-                logger.log("INFO", "Performance summary", tracker.summary())
-            else:
-                print("Performance summary:", tracker.summary())
+                logger.log("DEBUG", "Performance summary", tracker.summary())
 
     async def run_forever(
         self,
@@ -90,20 +98,24 @@ class VoiceInputSystem:
         consecutive_errors = 0
         max_consecutive_errors = 5
 
+        logger = getattr(self.stt_engine, "logger", None) or getattr(
+            self.tts_engine, "logger", None
+        )
         while self._running:
             try:
                 await self.listen_and_respond(handler)
                 consecutive_errors = 0
             except KeyboardInterrupt:
-                print("Voice system stopped by user")
+                if logger:
+                    logger.log("INFO", "Voice system stopped by user")
                 break
             except Exception as exc:
                 consecutive_errors += 1
-                print(
-                    f"Voice system error ({consecutive_errors}/{max_consecutive_errors}): {exc}"
-                )
+                if logger:
+                    logger.log("ERROR", f"Voice system error ({consecutive_errors}/{max_consecutive_errors})", {"error": str(exc)})
                 if consecutive_errors >= max_consecutive_errors:
-                    print("Too many consecutive errors, stopping voice system")
+                    if logger:
+                        logger.log("ERROR", "Too many consecutive errors, stopping voice system")
                     break
                 await asyncio.sleep(2.0)
 

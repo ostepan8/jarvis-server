@@ -50,7 +50,6 @@ async def run_protocol(
     results = await jarvis_system.protocol_executor.run_protocol(
         proto, req.arguments, allowed_agents=allowed
     )
-    print(results)
     return {
         "protocol": proto.name,
         "response": results.response,

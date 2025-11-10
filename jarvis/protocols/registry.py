@@ -80,7 +80,7 @@ class ProtocolRegistry(BaseRegistry[Protocol]):
         if directory is not None:
             directory = Path(directory)
             if not directory.exists():
-                print(f"Directory {directory} does not exist")
+                self.logger.log("WARNING", f"Directory {directory} does not exist")
                 return
 
             for json_file in directory.glob("*.json"):
@@ -88,7 +88,7 @@ class ProtocolRegistry(BaseRegistry[Protocol]):
                     protocol = Protocol.from_file(json_file)
                     self.register(protocol)
                 except Exception as e:
-                    print(f"Failed to load protocol from {json_file}: {e}")
+                    self.logger.log("ERROR", f"Failed to load protocol from {json_file}", {"error": str(e)})
             return
 
         rows = self.conn.execute(

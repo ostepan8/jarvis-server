@@ -45,9 +45,6 @@ async def jarvis(
     response = await jarvis_system.process_request(
         req.command, tz_name, metadata, allowed_agents=allowed
     )
-    import json
-
-    print(json.dumps(response, indent=2))
     return response
 
 

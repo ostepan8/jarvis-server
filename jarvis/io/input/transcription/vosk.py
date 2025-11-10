@@ -115,8 +115,8 @@ class VoskSTTEngine(SpeechToTextEngine):
                             text = ""
                         if text:
                             results.append(text)
-                            if self.debug:
-                                print(Fore.GREEN + "✔️  " + text + Style.RESET_ALL)
+                            if self.debug and self.logger:
+                                self.logger.log("DEBUG", "Partial transcription", {"text": text})
                         break
                     else:
                         # partial update
@@ -127,7 +127,8 @@ class VoskSTTEngine(SpeechToTextEngine):
                             p = ""
                         if self.debug and p and p != last_partial:
                             last_partial = p
-                            print(Fore.YELLOW + "… " + p + Style.RESET_ALL, end="\r")
+                            if self.logger:
+                                self.logger.log("DEBUG", "Partial transcription update", {"partial": p})
 
         except Exception as e:
             self.logger.log("ERROR", "Audio recording failed", str(e))
@@ -140,8 +141,8 @@ class VoskSTTEngine(SpeechToTextEngine):
             final = ""
         if final:
             results.append(final)
-            if self.debug:
-                print(Fore.GREEN + "✔️  " + final + Style.RESET_ALL)
+            if self.debug and self.logger:
+                self.logger.log("DEBUG", "Final transcription", {"text": final})
 
         text = " ".join(results).strip()
         if text:

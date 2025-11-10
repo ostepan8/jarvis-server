@@ -238,6 +238,56 @@ class MemoryAgent(NetworkAgent):
             except Exception as exc:
                 await self.send_error(message.from_agent, str(exc), message.request_id)
 
+        elif capability == "search_facts":
+            query = data.get("prompt", "")
+            limit = data.get("limit", 10)
+
+            if not query:
+                await self.send_error(
+                    message.from_agent,
+                    "No query provided for search",
+                    message.request_id,
+                )
+                return
+
+            try:
+                # Search structured facts if user_id is provided
+                if user_id is not None:
+                    facts = self.fact_service.search_facts(user_id, query, limit=limit)
+                    fact_results = [
+                        {
+                            "id": f.id,
+                            "text": f.fact_text,
+                            "category": f.category,
+                            "entity": f.entity,
+                            "confidence": f.confidence,
+                        }
+                        for f in facts
+                    ]
+                    
+                    response_text = (
+                        f"Found {len(fact_results)} facts matching '{query}'."
+                        if fact_results
+                        else f"No facts found matching '{query}'."
+                    )
+                else:
+                    # No user_id, cannot search facts
+                    fact_results = []
+                    response_text = "Unable to search facts without user context."
+
+                await self.send_capability_response(
+                    message.from_agent,
+                    {
+                        "response": response_text,
+                        "facts": fact_results,
+                        "count": len(fact_results),
+                    },
+                    message.request_id,
+                    message.id,
+                )
+            except Exception as exc:
+                await self.send_error(message.from_agent, str(exc), message.request_id)
+
         elif capability == "recall_from_memory":
             query = data.get("prompt", "")
             top_k = data.get("top_k", 5)

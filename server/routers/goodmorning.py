@@ -43,8 +43,8 @@ async def _handle_goodmorning(request: Request, jarvis_system: JarvisSystem):
         "json": json_body,
     }
 
-    print("[/goodmorning] Incoming request:")
-    print(_json.dumps(payload, indent=2))
+    logger = jarvis_system.logger
+    logger.log("DEBUG", "[/goodmorning] Incoming request", payload)
 
     # Fire-and-forget morning routine
     asyncio.create_task(_run_wake_sequence(jarvis_system, json_body or {}))
@@ -57,6 +57,7 @@ async def _handle_goodmorning(request: Request, jarvis_system: JarvisSystem):
 # ---------------------------
 async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None:
     """Run morning wake routine: exit night mode, turn on lights, speak greeting."""
+    logger = jarvis.logger
     try:
         # 1) Exit night mode if a wake protocol exists
         try:
@@ -66,7 +67,7 @@ async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None
                 if wake_proto is not None:
                     await runtime.executor.run_protocol(wake_proto, arguments={})
         except Exception as exc:
-            print(f"[goodmorning] Failed to run wake_up protocol: {exc}")
+            logger.log("ERROR", "[goodmorning] Failed to run wake_up protocol", {"error": str(exc)})
 
         # 2) Turn on the lights via protocol if lights agent is available
         try:
@@ -80,22 +81,22 @@ async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None
                     if lights_proto is not None:
                         await runtime.executor.run_protocol(lights_proto, arguments={})
                     else:
-                        print("[goodmorning] 'lights_on' protocol not found")
+                        logger.log("WARNING", "[goodmorning] 'lights_on' protocol not found")
                 else:
-                    print("[goodmorning] Protocol runtime not initialized")
+                    logger.log("WARNING", "[goodmorning] Protocol runtime not initialized")
             else:
-                print("[goodmorning] Skipping lights_on: LightingAgent not active")
+                logger.log("DEBUG", "[goodmorning] Skipping lights_on: LightingAgent not active")
         except Exception as exc:
-            print(f"[goodmorning] Failed to run lights_on protocol: {exc}")
+            logger.log("ERROR", "[goodmorning] Failed to run lights_on protocol", {"error": str(exc)})
 
         # 3) Build a short greeting from scheduler context
         greeting = _build_greeting(data)
 
         # 4) Speak via TTS (prefer ElevenLabs; fall back to OpenAI on any failure)
-        await _speak_tts(greeting)
+        await _speak_tts(greeting, logger)
 
     except Exception as exc:
-        print(f"[goodmorning] Wake sequence error: {exc}")
+        logger.log("ERROR", "[goodmorning] Wake sequence error", {"error": str(exc)})
 
 
 def _build_greeting(data: Dict[str, Any]) -> str:
@@ -144,7 +145,7 @@ def _build_greeting(data: Dict[str, Any]) -> str:
 # ---------------------------
 # TTS with robust fallback
 # ---------------------------
-async def _speak_tts(text: str) -> None:
+async def _speak_tts(text: str, logger) -> None:
     """Speak text using ElevenLabs if available; fall back to OpenAI on failure."""
     if not text:
         return
@@ -158,7 +159,7 @@ async def _speak_tts(text: str) -> None:
             await _speak_with_elevenlabs(text)
             return
         except Exception as e:
-            print(f"[goodmorning] ElevenLabs failed, will try OpenAI fallback: {e}")
+            logger.log("WARNING", "[goodmorning] ElevenLabs failed, will try OpenAI fallback", {"error": str(e)})
 
     # Fallback: OpenAI TTS (if configured)
     if openai_key_present:
@@ -166,13 +167,13 @@ async def _speak_tts(text: str) -> None:
             await _speak_with_openai(text)
             return
         except Exception as e:
-            print(f"[goodmorning] OpenAI TTS error: {e}")
+            logger.log("ERROR", "[goodmorning] OpenAI TTS error", {"error": str(e)})
 
     # If we get here, we have no working TTS
     if not eleven_key_present and not openai_key_present:
-        print("[goodmorning] TTS skipped: neither ELEVENLABS_API_KEY nor OPENAI_API_KEY is set")
+        logger.log("WARNING", "[goodmorning] TTS skipped: neither ELEVENLABS_API_KEY nor OPENAI_API_KEY is set")
     else:
-        print("[goodmorning] TTS failed: all providers errored")
+        logger.log("ERROR", "[goodmorning] TTS failed: all providers errored")
 
 
 async def _speak_with_elevenlabs(text: str) -> None:

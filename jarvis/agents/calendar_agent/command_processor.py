@@ -175,7 +175,28 @@ class CalendarCommandProcessor:
             if self.logger:
                 self.logger.log("INFO", "NL command result", response_text)
 
-            # Return standardized response format
+            # Check if any actions resulted in errors
+            has_errors = any("error" in action.get("result", {}) for action in actions_taken)
+            
+            if has_errors:
+                # Extract the first error for error info
+                error_action = next(
+                    (action for action in actions_taken if "error" in action.get("result", {})),
+                    None
+                )
+                error_msg = error_action["result"]["error"] if error_action else "Unknown error"
+                
+                # Return error response
+                return AgentResponse.error_response(
+                    response=response_text,
+                    error=ErrorInfo(
+                        message=error_msg,
+                        error_type="FunctionExecutionError",
+                    ),
+                    actions=actions_taken,
+                ).to_dict()
+            
+            # Return standardized success response
             return AgentResponse.success_response(
                 response=response_text,
                 actions=actions_taken,

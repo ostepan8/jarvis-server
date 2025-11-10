@@ -454,7 +454,14 @@ class RequestOrchestrator:
                 source=metadata.source,
             )
             
-            return {"response": response_text} if response_text else result
+            # Return response with error status preserved
+            response_dict = {"response": response_text} if response_text else result
+            # Preserve success and error fields if present
+            if "success" in result:
+                response_dict["success"] = result["success"]
+            if "error" in result:
+                response_dict["error"] = result["error"]
+            return response_dict
         
         except asyncio.TimeoutError:
             self.logger.log(
