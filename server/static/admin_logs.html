@@ -400,6 +400,8 @@
         let currentOffset = 0;
         let currentLimit = 100;
         let currentLevel = '';
+        let isLoadingLogs = false;
+        let autoReloadInterval = null;
         
         function getApiBase() {
             const stored = localStorage.getItem('jarvis_api_base');
@@ -466,6 +468,9 @@
         }
         
         async function loadLogs() {
+            if (isLoadingLogs) return;
+            isLoadingLogs = true;
+            
             const container = document.getElementById('logsContainer');
             const errorContainer = document.getElementById('errorContainer');
             errorContainer.innerHTML = '';
@@ -493,6 +498,8 @@
             } catch (error) {
                 showError(error.message);
                 container.innerHTML = '<div class="error">FAILED TO LOAD LOGS</div>';
+            } finally {
+                isLoadingLogs = false;
             }
         }
         
@@ -507,10 +514,22 @@
         }
         
         // Load logs on page load
-        window.addEventListener('DOMContentLoaded', loadLogs);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadLogs();
+            // Auto-reload disabled for performance - use manual refresh button
+            // autoReloadInterval = setInterval(() => {
+            //     if (!isLoadingLogs) {
+            //         loadLogs();
+            //     }
+            // }, 60000);
+        });
         
-        // Auto-reload every 30 seconds
-        setInterval(loadLogs, 30000);
+        // Clean up interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoReloadInterval) {
+                clearInterval(autoReloadInterval);
+            }
+        });
     </script>
 </body>
 </html>

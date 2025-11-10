@@ -541,6 +541,379 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(0, 240, 255, 0.5);
         }
+        
+        /* Query Interface Styles */
+        .query-interface {
+            background: rgba(0, 240, 255, 0.05);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.5s ease-out;
+            position: relative;
+        }
+        
+        .query-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        }
+        
+        .query-title-section {
+            flex: 1;
+        }
+        
+        .query-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #00f0ff;
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .query-subtitle {
+            font-family: 'Rajdhani', monospace;
+            font-size: 0.9em;
+            color: rgba(0, 240, 255, 0.6);
+            font-weight: 400;
+        }
+        
+        .query-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 0;
+        }
+        
+        .status-indicator-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator-dot.processing {
+            background: #ff9100;
+            box-shadow: 0 0 8px #ff9100;
+        }
+        
+        .status-text {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.75em;
+            color: rgba(0, 240, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .query-input-container {
+            margin-bottom: 20px;
+        }
+        
+        .query-input-wrapper {
+            position: relative;
+        }
+        
+        .input-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .input-label {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85em;
+            color: rgba(0, 240, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .input-hint {
+            font-family: 'Rajdhani', monospace;
+            font-size: 0.75em;
+            color: rgba(0, 240, 255, 0.5);
+            font-style: italic;
+        }
+        
+        .query-textarea {
+            width: 100%;
+            min-height: 120px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(0, 240, 255, 0.3);
+            color: #00f0ff;
+            padding: 18px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.6;
+            resize: vertical;
+            transition: all 0.3s ease;
+            outline: none;
+            box-sizing: border-box;
+        }
+        
+        .query-textarea:focus {
+            border-color: rgba(0, 240, 255, 0.6);
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 
+                0 0 20px rgba(0, 240, 255, 0.2),
+                inset 0 0 20px rgba(0, 240, 255, 0.05);
+        }
+        
+        .query-textarea::placeholder {
+            color: rgba(0, 240, 255, 0.4);
+            font-style: italic;
+        }
+        
+        .input-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+        }
+        
+        .char-count {
+            font-family: 'Rajdhani', monospace;
+            font-size: 0.8em;
+            color: rgba(0, 240, 255, 0.5);
+        }
+        
+        .input-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .query-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: 1px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .query-action-btn.primary {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(255, 145, 0, 0.2) 100%);
+            border-color: rgba(0, 240, 255, 0.5);
+            color: #00f0ff;
+        }
+        
+        .query-action-btn.primary:hover:not(:disabled) {
+            border-color: #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .query-action-btn.secondary {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            color: rgba(0, 240, 255, 0.8);
+        }
+        
+        .query-action-btn.secondary:hover {
+            border-color: rgba(0, 240, 255, 0.6);
+            background: rgba(0, 240, 255, 0.15);
+        }
+        
+        .query-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-icon {
+            font-size: 1.1em;
+            line-height: 1;
+        }
+        
+        .query-history {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(0, 240, 255, 0.2);
+        }
+        
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .history-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.8em;
+            color: rgba(0, 240, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .history-clear {
+            background: none;
+            border: none;
+            color: rgba(0, 240, 255, 0.5);
+            font-family: 'Rajdhani', monospace;
+            font-size: 0.75em;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: color 0.3s;
+        }
+        
+        .history-clear:hover {
+            color: rgba(0, 240, 255, 0.9);
+        }
+        
+        .history-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .history-item {
+            padding: 6px 12px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: rgba(0, 240, 255, 0.8);
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .history-item:hover {
+            border-color: rgba(0, 240, 255, 0.5);
+            background: rgba(0, 240, 255, 0.15);
+            transform: translateY(-1px);
+        }
+        
+        .query-response-container {
+            margin-top: 25px;
+            border-top: 1px solid rgba(0, 240, 255, 0.2);
+            padding-top: 20px;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .response-title-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .response-icon {
+            font-size: 1.2em;
+        }
+        
+        .response-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9em;
+            color: rgba(0, 240, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .response-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .response-action {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: rgba(0, 240, 255, 0.8);
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+        
+        .response-action:hover {
+            border-color: rgba(0, 240, 255, 0.6);
+            background: rgba(0, 240, 255, 0.15);
+        }
+        
+        .response-content-wrapper {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .response-content-wrapper.collapsed {
+            max-height: 0;
+        }
+        
+        .query-response-content {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 20px;
+            color: #00f0ff;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border-radius: 0;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .query-response-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .query-response-content::-webkit-scrollbar-track {
+            background: rgba(0, 240, 255, 0.05);
+        }
+        
+        .query-response-content::-webkit-scrollbar-thumb {
+            background: rgba(0, 240, 255, 0.3);
+        }
+        
+        .query-response-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 240, 255, 0.5);
+        }
+        
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        
+        .typing-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 1em;
+            background: #00f0ff;
+            animation: pulse 1s infinite;
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
@@ -566,12 +939,83 @@
                 <div class="api-base">
                     <label for="apiBase">API ENDPOINT:</label>
                     <input type="text" id="apiBase" placeholder="Auto-detect">
-                    <button class="refresh-btn" onclick="loadDashboard()">SYNC</button>
+                    <button class="refresh-btn" onclick="loadDashboard(true)" id="refreshBtn">SYNC</button>
                 </div>
             </div>
         </header>
         
         <div id="errorContainer"></div>
+        
+        <div class="query-interface">
+            <div class="query-header">
+                <div class="query-title-section">
+                    <h2 class="query-title">Command Interface</h2>
+                    <div class="query-subtitle">Direct access to Jarvis AI system</div>
+                </div>
+                <div class="query-status" id="queryStatus">
+                    <span class="status-indicator-dot"></span>
+                    <span class="status-text">Ready</span>
+                </div>
+            </div>
+            
+            <div class="query-input-container">
+                <div class="query-input-wrapper">
+                    <div class="input-label-row">
+                        <label for="queryInput" class="input-label">Your Command</label>
+                        <span class="input-hint">Press Enter to send • Shift+Enter for new line</span>
+                    </div>
+                    <textarea 
+                        id="queryInput" 
+                        class="query-textarea"
+                        placeholder="Ask Jarvis anything... (e.g., 'What's the weather?', 'Show my calendar', 'Turn on the lights')"
+                        rows="3"
+                        autocomplete="off"
+                        spellcheck="false"
+                    ></textarea>
+                    <div class="input-footer">
+                        <div class="char-count" id="charCount">0 characters</div>
+                        <div class="input-actions">
+                            <button class="query-action-btn secondary" onclick="clearQuery()" id="clearBtn">
+                                <span class="btn-icon">×</span>
+                                Clear
+                            </button>
+                            <button class="query-action-btn primary" onclick="sendQuery()" id="queryBtn">
+                                <span class="btn-icon">→</span>
+                                <span class="btn-text">Send</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="query-history" id="queryHistory" style="display: none;">
+                <div class="history-header">
+                    <span class="history-title">Recent Queries</span>
+                    <button class="history-clear" onclick="clearHistory()">Clear</button>
+                </div>
+                <div class="history-items" id="historyItems"></div>
+            </div>
+            
+            <div class="query-response-container" id="queryResponse" style="display: none;">
+                <div class="response-header">
+                    <div class="response-title-section">
+                        <span class="response-icon">⚡</span>
+                        <span class="response-title">Response</span>
+                    </div>
+                    <div class="response-actions">
+                        <button class="response-action" onclick="copyResponse()" title="Copy response">
+                            <span>📋</span>
+                        </button>
+                        <button class="response-action" onclick="toggleResponse()" title="Toggle visibility">
+                            <span id="toggleIcon">−</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="response-content-wrapper" id="responseContentWrapper">
+                    <div id="queryResponseContent" class="query-response-content"></div>
+                </div>
+            </div>
+        </div>
         
         <div id="dashboardContent">
             <div class="loading">INITIALIZING</div>
@@ -784,14 +1228,41 @@
             `;
         }
         
-        async function loadDashboard() {
+        let isLoadingDashboard = false;
+        let lastDashboardLoad = 0;
+        const DASHBOARD_CACHE_TIME = 5000; // 5 seconds (matches server cache)
+        
+        async function loadDashboard(forceRefresh = false) {
+            if (isLoadingDashboard) return;
+            
+            // Use cache if available and fresh (unless force refresh)
+            const now = Date.now();
+            if (!forceRefresh && (now - lastDashboardLoad) < DASHBOARD_CACHE_TIME) {
+                return; // Use cached data
+            }
+            
+            isLoadingDashboard = true;
+            lastDashboardLoad = now;
+            
             const container = document.getElementById('dashboardContent');
             const errorContainer = document.getElementById('errorContainer');
+            const refreshBtn = document.getElementById('refreshBtn');
+            
             errorContainer.innerHTML = '';
-            container.innerHTML = '<div class="loading">LOADING</div>';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'SYNCING...';
+            }
+            
+            // Don't show loading if we have cached content
+            if (!container.innerHTML.includes('card')) {
+                container.innerHTML = '<div class="loading">LOADING</div>';
+            }
             
             try {
-                const dashboard = await fetchAPI('/admin/dashboard');
+                // Add cache-busting parameter if force refresh
+                const endpoint = forceRefresh ? '/admin/dashboard?use_cache=false' : '/admin/dashboard';
+                const dashboard = await fetchAPI(endpoint);
                 
                 let html = renderOverview(dashboard.overview);
                 html += renderLogStats(dashboard.log_stats);
@@ -801,7 +1272,252 @@
                 container.innerHTML = html;
             } catch (error) {
                 showError(error.message);
-                container.innerHTML = '<div class="error">FAILED TO ESTABLISH CONNECTION. VERIFY API ENDPOINT AND SERVER STATUS.</div>';
+                if (!container.innerHTML.includes('card')) {
+                    container.innerHTML = '<div class="error">FAILED TO ESTABLISH CONNECTION. VERIFY API ENDPOINT AND SERVER STATUS.</div>';
+                }
+            } finally {
+                isLoadingDashboard = false;
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = 'SYNC';
+                }
+            }
+        }
+        
+        // Query interface state
+        let queryHistory = JSON.parse(localStorage.getItem('jarvis_query_history') || '[]');
+        let isResponseCollapsed = false;
+        
+        function updateCharCount() {
+            const input = document.getElementById('queryInput');
+            const count = document.getElementById('charCount');
+            const length = input.value.length;
+            count.textContent = `${length} character${length !== 1 ? 's' : ''}`;
+        }
+        
+        function updateStatus(status, isProcessing = false) {
+            const statusEl = document.getElementById('queryStatus');
+            const dot = statusEl.querySelector('.status-indicator-dot');
+            const text = statusEl.querySelector('.status-text');
+            
+            text.textContent = status;
+            if (isProcessing) {
+                dot.classList.add('processing');
+            } else {
+                dot.classList.remove('processing');
+            }
+        }
+        
+        function addToHistory(query) {
+            // Remove if already exists
+            queryHistory = queryHistory.filter(q => q !== query);
+            // Add to front
+            queryHistory.unshift(query);
+            // Keep only last 10
+            queryHistory = queryHistory.slice(0, 10);
+            localStorage.setItem('jarvis_query_history', JSON.stringify(queryHistory));
+            renderHistory();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function renderHistory() {
+            const historyContainer = document.getElementById('queryHistory');
+            const historyItems = document.getElementById('historyItems');
+            
+            if (queryHistory.length === 0) {
+                historyContainer.style.display = 'none';
+                return;
+            }
+            
+            historyContainer.style.display = 'block';
+            historyItems.innerHTML = queryHistory.map((query, index) => {
+                const escaped = escapeHtml(query);
+                const safeQuery = query.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `<div class="history-item" onclick="useHistoryQuery(${index})" title="${escaped}">${escaped}</div>`;
+            }).join('');
+        }
+        
+        function useHistoryQuery(index) {
+            if (index >= 0 && index < queryHistory.length) {
+                const query = queryHistory[index];
+                const input = document.getElementById('queryInput');
+                input.value = query;
+                input.focus();
+                updateCharCount();
+            }
+        }
+        
+        function clearHistory() {
+            queryHistory = [];
+            localStorage.removeItem('jarvis_query_history');
+            renderHistory();
+        }
+        
+        function formatResponse(data) {
+            if (typeof data === 'string') {
+                return data;
+            }
+            
+            if (data.response) {
+                return data.response;
+            }
+            
+            if (data.error) {
+                return `Error: ${data.error}`;
+            }
+            
+            // Try to extract meaningful content
+            if (data.result) {
+                return typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+            }
+            
+            if (data.message) {
+                return data.message;
+            }
+            
+            // Last resort: pretty JSON
+            return JSON.stringify(data, null, 2);
+        }
+        
+        let isQueryInProgress = false;
+        let queryDebounceTimer = null;
+        
+        async function sendQuery() {
+            // Debounce rapid clicks
+            if (queryDebounceTimer) {
+                clearTimeout(queryDebounceTimer);
+            }
+            
+            queryDebounceTimer = setTimeout(async () => {
+                if (isQueryInProgress) return;
+                isQueryInProgress = true;
+                
+                const queryInput = document.getElementById('queryInput');
+                const queryBtn = document.getElementById('queryBtn');
+                const clearBtn = document.getElementById('clearBtn');
+                const responseDiv = document.getElementById('queryResponse');
+                const responseContent = document.getElementById('queryResponseContent');
+                const errorContainer = document.getElementById('errorContainer');
+                
+                const query = queryInput.value.trim();
+                if (!query) {
+                    isQueryInProgress = false;
+                    showError('Please enter a command');
+                    queryInput.focus();
+                    return;
+                }
+                
+                // Add to history
+                addToHistory(query);
+                
+                // Update UI state
+                queryBtn.disabled = true;
+                clearBtn.disabled = true;
+                queryInput.disabled = true;
+                queryBtn.querySelector('.btn-text').textContent = 'Processing...';
+                updateStatus('Processing', true);
+                
+                // Show response area
+                responseDiv.style.display = 'block';
+                responseContent.textContent = '';
+                errorContainer.innerHTML = '';
+                
+                // Show typing indicator
+                const typingIndicator = document.createElement('span');
+                typingIndicator.className = 'typing-indicator';
+                responseContent.appendChild(typingIndicator);
+                
+                try {
+                    const apiBase = getApiBase();
+                    const startTime = Date.now();
+                    
+                    const response = await fetch(`${apiBase}/admin/query`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ command: query })
+                    });
+                    
+                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+                        const errorMsg = errorData.detail || `HTTP error! status: ${response.status}`;
+                        throw new Error(errorMsg);
+                    }
+                    
+                    const data = await response.json();
+                    const formatted = formatResponse(data);
+                    
+                    // Remove typing indicator
+                    typingIndicator.remove();
+                    
+                    // Display response with a subtle animation
+                    responseContent.textContent = formatted;
+                    updateStatus(`Completed in ${elapsed}s`, false);
+                    
+                } catch (error) {
+                    typingIndicator.remove();
+                    showError(error.message);
+                    responseContent.textContent = `Error: ${error.message}`;
+                    updateStatus('Error', false);
+                } finally {
+                    queryBtn.disabled = false;
+                    clearBtn.disabled = false;
+                    queryInput.disabled = false;
+                    queryBtn.querySelector('.btn-text').textContent = 'Send';
+                    queryInput.focus();
+                    isQueryInProgress = false;
+                }
+            }, 100); // 100ms debounce
+        }
+        
+        function clearQuery() {
+            const queryInput = document.getElementById('queryInput');
+            const responseDiv = document.getElementById('queryResponse');
+            const errorContainer = document.getElementById('errorContainer');
+            
+            queryInput.value = '';
+            queryInput.focus();
+            responseDiv.style.display = 'none';
+            errorContainer.innerHTML = '';
+            updateCharCount();
+            updateStatus('Ready', false);
+        }
+        
+        function copyResponse() {
+            const responseContent = document.getElementById('queryResponseContent');
+            const text = responseContent.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target.closest('.response-action');
+                const original = btn.innerHTML;
+                btn.innerHTML = '<span>✓</span>';
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+        
+        function toggleResponse() {
+            const wrapper = document.getElementById('responseContentWrapper');
+            const icon = document.getElementById('toggleIcon');
+            isResponseCollapsed = !isResponseCollapsed;
+            
+            if (isResponseCollapsed) {
+                wrapper.classList.add('collapsed');
+                icon.textContent = '+';
+            } else {
+                wrapper.classList.remove('collapsed');
+                icon.textContent = '−';
             }
         }
         
@@ -818,8 +1534,29 @@
                 setApiBase(apiBaseInput.value);
             });
             
-            // Load dashboard
+            // Initialize query interface
+            const queryInput = document.getElementById('queryInput');
+            queryInput.addEventListener('input', updateCharCount);
+            queryInput.addEventListener('keydown', (e) => {
+                // Enter to submit, Shift+Enter for new line
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendQuery();
+                }
+            });
+            
+            // Render history
+            renderHistory();
+            updateCharCount();
+            
+            // Focus input on load
+            queryInput.focus();
+            
+            // Load dashboard (no auto-reload to reduce server load)
             loadDashboard();
+            
+            // Optional: Manual refresh button only, no auto-reload
+            // Remove any auto-reload intervals
         });
     </script>
 </body>

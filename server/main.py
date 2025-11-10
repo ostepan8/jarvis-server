@@ -92,15 +92,27 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
-        jarvis_system: JarvisSystem | None = getattr(app.state, "jarvis_system", None)
-        if jarvis_system:
-            await jarvis_system.shutdown()
+        import asyncio
+        
+        try:
+            jarvis_system: JarvisSystem | None = getattr(app.state, "jarvis_system", None)
+            if jarvis_system:
+                # Add timeout to prevent hanging
+                try:
+                    await asyncio.wait_for(jarvis_system.shutdown(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    pass  # Continue shutdown even if jarvis hangs
 
-        logger: JarvisLogger | None = getattr(app.state, "logger", None)
-        if logger:
-            logger.close()
+            logger: JarvisLogger | None = getattr(app.state, "logger", None)
+            if logger:
+                try:
+                    logger.close()
+                except Exception:
+                    pass
 
-        close_database(getattr(app.state, "auth_db", None))
+            close_database(getattr(app.state, "auth_db", None))
+        except Exception:
+            pass  # Don't let shutdown errors prevent exit
 
     return app
 
@@ -111,12 +123,23 @@ app = create_app()
 def run():
     import uvicorn
     import logging
+    import signal
+    import sys
 
     # Allow PORT environment variable to override default port
     port = int(os.getenv("PORT", DEFAULT_PORT))
     logger = logging.getLogger("jarvis.server")
     logger.info(f"Starting Jarvis server on port {port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    
+    # Handle SIGINT (Ctrl+C) more aggressively
+    def signal_handler(sig, frame):
+        logger.info("Received interrupt signal, forcing exit...")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=5)
 
 
 if __name__ == "__main__":

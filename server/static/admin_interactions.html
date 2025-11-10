@@ -432,6 +432,9 @@
     </div>
     
     <script>
+        let isLoadingInteractions = false;
+        let autoReloadInterval = null;
+        
         function getApiBase() {
             const stored = localStorage.getItem('jarvis_api_base');
             return stored || window.location.origin;
@@ -546,6 +549,9 @@
         }
         
         async function loadInteractions() {
+            if (isLoadingInteractions) return;
+            isLoadingInteractions = true;
+            
             const container = document.getElementById('interactionsContainer');
             const errorContainer = document.getElementById('errorContainer');
             errorContainer.innerHTML = '';
@@ -577,14 +583,28 @@
             } catch (error) {
                 showError(error.message);
                 container.innerHTML = '<div class="error">FAILED TO LOAD INTERACTIONS</div>';
+            } finally {
+                isLoadingInteractions = false;
             }
         }
         
         // Load interactions on page load
-        window.addEventListener('DOMContentLoaded', loadInteractions);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadInteractions();
+            // Auto-reload disabled for performance - use manual refresh button
+            // autoReloadInterval = setInterval(() => {
+            //     if (!isLoadingInteractions) {
+            //         loadInteractions();
+            //     }
+            // }, 60000);
+        });
         
-        // Auto-reload every 30 seconds
-        setInterval(loadInteractions, 30000);
+        // Clean up interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoReloadInterval) {
+                clearInterval(autoReloadInterval);
+            }
+        });
     </script>
 </body>
 </html>

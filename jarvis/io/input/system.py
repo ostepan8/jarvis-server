@@ -37,7 +37,7 @@ class VoiceInputSystem:
                 metadata={"listener": type(self.wake_listener).__name__},
             ):
                 await self.wake_listener.wait_for_wake_word()
-            
+
             logger = getattr(self.stt_engine, "logger", None) or getattr(
                 self.tts_engine, "logger", None
             )
@@ -112,10 +112,17 @@ class VoiceInputSystem:
             except Exception as exc:
                 consecutive_errors += 1
                 if logger:
-                    logger.log("ERROR", f"Voice system error ({consecutive_errors}/{max_consecutive_errors})", {"error": str(exc)})
+                    logger.log(
+                        "ERROR",
+                        f"Voice system error ({consecutive_errors}/{max_consecutive_errors})",
+                        {"error": str(exc)},
+                    )
                 if consecutive_errors >= max_consecutive_errors:
                     if logger:
-                        logger.log("ERROR", "Too many consecutive errors, stopping voice system")
+                        logger.log(
+                            "ERROR",
+                            "Too many consecutive errors, stopping voice system",
+                        )
                     break
                 await asyncio.sleep(2.0)
 

@@ -371,6 +371,8 @@
     <script>
         let currentLimit = 50;
         let currentUserId = null;
+        let isLoadingMemories = false;
+        let autoReloadInterval = null;
         
         function getApiBase() {
             const stored = localStorage.getItem('jarvis_api_base');
@@ -418,6 +420,9 @@
         }
         
         async function loadMemories() {
+            if (isLoadingMemories) return;
+            isLoadingMemories = true;
+            
             const container = document.getElementById('memoriesContainer');
             const statsContainer = document.getElementById('stats');
             const errorContainer = document.getElementById('errorContainer');
@@ -458,14 +463,28 @@
             } catch (error) {
                 showError(error.message);
                 container.innerHTML = '<div class="error">FAILED TO ACCESS MEMORY BANK</div>';
+            } finally {
+                isLoadingMemories = false;
             }
         }
         
         // Load memories on page load
-        window.addEventListener('DOMContentLoaded', loadMemories);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadMemories();
+            // Auto-reload disabled for performance - use manual refresh button
+            // autoReloadInterval = setInterval(() => {
+            //     if (!isLoadingMemories) {
+            //         loadMemories();
+            //     }
+            // }, 120000);
+        });
         
-        // Auto-reload every 60 seconds
-        setInterval(loadMemories, 60000);
+        // Clean up interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoReloadInterval) {
+                clearInterval(autoReloadInterval);
+            }
+        });
     </script>
 </body>
 </html>
