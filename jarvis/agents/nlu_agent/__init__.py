@@ -573,6 +573,7 @@ Rules:
 - If two capabilities don't depend on each other, they can run in parallel (empty dependencies)
 - Only list dependencies if one capability truly needs the result of another
 - For independent tasks (e.g., "turn lights red" and "get weather"), use empty dependencies []
+- For conditional actions (e.g., "if X then Y"), the conditional action depends on the condition check
 - If only one capability is needed, return single capability with empty dependencies
 
 Example for "turn lights red and tell me the weather":
@@ -585,6 +586,12 @@ Example for "pause the tv and make the lights red":
 {{"dag": {{
   "roku_pause": [],
   "lights_color": []
+}}}}
+
+Example for "check weather and if sunny make lights red":
+{{"dag": {{
+  "get_weather": [],
+  "lights_color": ["get_weather"]  // Lights depend on weather result
 }}}}
 
 Example for "book a meeting tomorrow and send me a reminder":
@@ -907,6 +914,9 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 **Decision Logic:**
 - Does the user want MULTIPLE distinct actions (e.g., "pause tv AND make lights red",
   "turn on lights AND get weather")? → {{"intent": null, "capability": null}}
+- Does the user want CONDITIONAL actions based on another action's result?
+  (e.g., "check weather and IF sunny THEN make lights red", 
+   "get calendar and IF busy THEN turn on lights")? → {{"intent": null, "capability": null}}
 - Does the user want ONE simple action that matches ONE capability? → "perform_capability"
 - Is this general conversation? → "chat"
 - Does it match a known protocol pattern? → "run_protocol"
@@ -914,8 +924,10 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 
 **Key Indicators of Multiple Capabilities:**
 - Words like "and", "also", "then" connecting different actions
+- Conditional words like "if", "when", "based on", "depending on", "otherwise"
 - Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get")
 - Different target objects (e.g., "tv" and "lights", "calendar" and "weather")
+- Actions that depend on results from other actions (e.g., "check X and do Y with the result")
 
 **User Input**
 \"\"\"{user_input}\"\"\"
@@ -927,6 +939,8 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 **Examples:**
 - "Turn on the lights" → {{"intent": "perform_capability", "capability": "lights_on"}}
 - "Pause the tv and make the lights red" → {{"intent": null, "capability": null}}
+- "Check weather and if sunny make lights red" → {{"intent": null, "capability": null}}
+- "Get calendar and if busy turn on lights" → {{"intent": null, "capability": null}}
 - "Schedule a meeting" → {{"intent": "perform_capability", "capability": "schedule_appointment"}}
 - "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
 - "Turn on lights and get weather" → {{"intent": null, "capability": null}}
