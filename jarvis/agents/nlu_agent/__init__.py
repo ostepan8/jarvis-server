@@ -916,18 +916,22 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
   "turn on lights AND get weather")? → {{"intent": null, "capability": null}}
 - Does the user want CONDITIONAL actions based on another action's result?
   (e.g., "check weather and IF sunny THEN make lights red", 
-   "get calendar and IF busy THEN turn on lights")? → {{"intent": null, "capability": null}}
+   "get calendar and IF busy THEN turn on lights",
+   "find X and if Y then do Z")? → {{"intent": null, "capability": null}}
 - Does the user want ONE simple action that matches ONE capability? → "perform_capability"
 - Is this general conversation? → "chat"
 - Does it match a known protocol pattern? → "run_protocol"
 - Not sure? Default to "perform_capability" if it matches any single capability
 
-**Key Indicators of Multiple Capabilities:**
+**Key Indicators of Multiple Capabilities (return null intent):**
 - Words like "and", "also", "then" connecting different actions
-- Conditional words like "if", "when", "based on", "depending on", "otherwise"
-- Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get")
-- Different target objects (e.g., "tv" and "lights", "calendar" and "weather")
-- Actions that depend on results from other actions (e.g., "check X and do Y with the result")
+- Conditional words like "if", "when", "based on", "depending on", "otherwise", "if else"
+- Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get", "find" + "make")
+- Different target objects (e.g., "tv" and "lights", "calendar" and "weather", "date" and "lights")
+- Actions that depend on results from other actions (e.g., "check X and do Y with the result", "find X and if condition then do Y")
+- Phrases like "if X then Y", "if X else Y", "when X do Y"
+
+**IMPORTANT:** If the request contains ANY conditional logic (if/then/else/when) that requires checking a result before taking another action, return null intent to trigger DAG execution.
 
 **User Input**
 \"\"\"{user_input}\"\"\"
@@ -941,6 +945,8 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 - "Pause the tv and make the lights red" → {{"intent": null, "capability": null}}
 - "Check weather and if sunny make lights red" → {{"intent": null, "capability": null}}
 - "Get calendar and if busy turn on lights" → {{"intent": null, "capability": null}}
+- "Find date and if before 2010 make lights red" → {{"intent": null, "capability": null}}
+- "Search facts and if found make lights blue" → {{"intent": null, "capability": null}}
 - "Schedule a meeting" → {{"intent": "perform_capability", "capability": "schedule_appointment"}}
 - "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
 - "Turn on lights and get weather" → {{"intent": null, "capability": null}}
