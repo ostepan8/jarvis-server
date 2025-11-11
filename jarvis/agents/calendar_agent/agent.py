@@ -111,8 +111,24 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 )
                 return
 
-            if self.logger:
-                self.logger.log("INFO", "Processing prompt", prompt)
+            # Extract context and enhance prompt with previous results from DAG
+            context_info = self._extract_context_from_message(message)
+            previous_results = context_info.get("previous_results", [])
+            
+            if previous_results:
+                enhanced_prompt = self._enhance_prompt_with_context(
+                    prompt, previous_results
+                )
+                if self.logger:
+                    self.logger.log(
+                        "INFO",
+                        "Enhanced prompt with previous results",
+                        f"Original: {prompt[:50]}... | Previous steps: {len(previous_results)}",
+                    )
+                prompt = enhanced_prompt
+            else:
+                if self.logger:
+                    self.logger.log("INFO", "Processing prompt", prompt)
 
             result = await self.command_processor.process_command(prompt)
 
