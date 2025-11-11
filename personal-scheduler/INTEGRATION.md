@@ -147,3 +147,4 @@ The scheduler server provides the following endpoints that Jarvis uses:
 The scheduler uses SQLite and creates `events.db` in the `personal-scheduler` directory automatically on first run.
 
 
+

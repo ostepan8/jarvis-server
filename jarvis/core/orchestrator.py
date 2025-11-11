@@ -412,6 +412,7 @@ class RequestOrchestrator:
             data={
                 "input": user_input,
                 "conversation_history": conversation_history,
+                "user_id": metadata.user_id,
             },
             request_id=request_id,
             allowed_agents=allowed_agents,

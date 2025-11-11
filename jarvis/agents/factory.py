@@ -13,11 +13,13 @@ from ..agents.calendar_agent.agent import CollaborativeCalendarAgent
 from ..agents.weather_agent import WeatherAgent
 from ..agents.memory_agent import MemoryAgent
 from ..agents.chat_agent import ChatAgent
+from ..agents.search_agent import SearchAgent
 from ..agents.canvas import CanvasAgent
 from ..agents.roku_agent import RokuAgent
 from ..services.vector_memory import VectorMemoryService
 from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
+from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
 from ..utils import get_location_from_ip
 from ..night_agents import (
@@ -49,6 +51,7 @@ class AgentFactory:
         refs.update(self._build_nlu(network, ai_client))
         refs.update(self._build_calendar(network, ai_client))
         refs.update(self._build_chat(network, ai_client))
+        refs.update(self._build_search(network))
 
         if self.config.flags.enable_weather:
             refs.update(self._build_weather(network, ai_client))
@@ -108,6 +111,29 @@ class AgentFactory:
         chat_agent = ChatAgent(ai_client, self.logger)
         network.register_agent(chat_agent)
         return {"chat_agent": chat_agent}
+
+    def _build_search(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register SearchAgent if credentials are available."""
+        if not self.config.google_search_api_key or not self.config.google_search_engine_id:
+            self.logger.log(
+                "INFO",
+                "Skipping SearchAgent",
+                "Google Search API credentials not configured",
+            )
+            return {}
+
+        try:
+            search_service = GoogleSearchService(
+                api_key=self.config.google_search_api_key,
+                search_engine_id=self.config.google_search_engine_id,
+                logger=self.logger,
+            )
+            search_agent = SearchAgent(search_service, self.logger)
+            network.register_agent(search_agent)
+            return {"search_agent": search_agent, "search_service": search_service}
+        except Exception as exc:
+            self.logger.log("WARNING", "SearchAgent init failed", str(exc))
+            return {}
 
     def _build_weather(
         self, network: AgentNetwork, ai_client: BaseAIClient

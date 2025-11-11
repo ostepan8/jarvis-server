@@ -67,6 +67,12 @@ class JarvisConfig:
     roku_password: Optional[str] = field(
         default_factory=lambda: os.getenv("ROKU_PASSWORD")
     )
+    google_search_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("GOOGLE_SEARCH_API_KEY")
+    )
+    google_search_engine_id: Optional[str] = field(
+        default_factory=lambda: os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+    )
     flags: FeatureFlags = field(default_factory=FeatureFlags)
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")

@@ -153,9 +153,16 @@ class NLUAgent(NetworkAgent):
             )
 
             # Route to next capability - use same request_id (simplified)
+            capability_data = {
+                "prompt": user_input,
+                "context": {"previous_results": results},
+            }
+            seq_user_id = request_info.get("user_id")
+            if seq_user_id is not None:
+                capability_data["user_id"] = seq_user_id
             await self.request_capability(
                 capability=next_capability,
-                data={"prompt": user_input, "context": {"previous_results": results}},
+                data=capability_data,
                 request_id=request_id,  # Reuse same request_id
             )
             return
@@ -177,12 +184,16 @@ class NLUAgent(NetworkAgent):
                 request_info["step"] = request_info.get("step", 0) + 1
                 request_info["current_capability"] = followup_capability
                 # Use same request_id for follow-up (simplified)
+                capability_data = {
+                    "prompt": agent_result.get("followup_prompt", user_input),
+                    "context": {"previous_results": results},
+                }
+                followup_user_id = request_info.get("user_id")
+                if followup_user_id is not None:
+                    capability_data["user_id"] = followup_user_id
                 await self.request_capability(
                     capability=followup_capability,
-                    data={
-                        "prompt": agent_result.get("followup_prompt", user_input),
-                        "context": {"previous_results": results},
-                    },
+                    data=capability_data,
                     request_id=request_id,  # Reuse same request_id
                 )
                 return
@@ -310,24 +321,40 @@ class NLUAgent(NetworkAgent):
         )
 
         # Look up the original requester for this request
+        # Try direct match first, then check for sub-requests (format: "parent_id:capability")
         request_info = self.active_requests.get(request_id)
+        if not request_info and ":" in request_id:
+            # This might be a sub-request, try to find parent
+            parent_id = request_id.split(":", 1)[0]
+            request_info = self.active_requests.get(parent_id)
+            if request_info:
+                # Use parent request_id for response
+                request_id = parent_id
+
         if request_info:
-            original_requester = request_info["original_requester"]
+            original_requester = request_info.get("original_requester")
+            if original_requester:
+                # Send error response back to original requester
+                await self.send_capability_response(
+                    to_agent=original_requester,
+                    result={
+                        "response": f"Error: {error_content}",
+                        "success": False,
+                        "error": {"message": error_content, "error_type": "AgentError"},
+                    },
+                    request_id=request_id,
+                    original_message_id=message.id,
+                )
 
-            # Send error response back to original requester
-            await self.send_capability_response(
-                to_agent=original_requester,
-                result={
-                    "response": f"Error: {error_content}",
-                    "success": False,
-                    "error": {"message": error_content, "error_type": "AgentError"},
-                },
-                request_id=request_id,
-                original_message_id=message.id,
-            )
-
-            # Clean up
-            del self.active_requests[request_id]
+                # Clean up
+                if request_id in self.active_requests:
+                    del self.active_requests[request_id]
+            else:
+                self.logger.log(
+                    "ERROR",
+                    f"NLUAgent message handling error: 'original_requester'",
+                    f"request_id={request_id}, request_info={list(request_info.keys())}",
+                )
         else:
             self.logger.log(
                 "WARNING",
@@ -342,6 +369,7 @@ class NLUAgent(NetworkAgent):
         user_input = message.content["data"]["input"]
         context = message.content["data"].get("context", {})
         conversation_history = message.content["data"].get("conversation_history", [])
+        user_id = message.content["data"].get("user_id")
         request_id = message.request_id
         original_requester = message.from_agent
         # Extract allowed_agents from the capability request (passed through network)
@@ -368,6 +396,7 @@ class NLUAgent(NetworkAgent):
                 self.active_requests[request_id] = {
                     "user_input": user_input,
                     "original_requester": original_requester,
+                    "user_id": user_id,
                     "agent_results": [],
                     "step": 1,
                     "original_message_id": message.id,
@@ -385,9 +414,12 @@ class NLUAgent(NetworkAgent):
                     )
 
                     # Request the capability from the target agent using SAME request_id
+                    capability_data = {"prompt": user_input, "context": context}
+                    if user_id is not None:
+                        capability_data["user_id"] = user_id
                     await self.request_capability(
                         capability=capability,
-                        data={"prompt": user_input, "context": context},
+                        data=capability_data,
                         request_id=request_id,  # Use same request_id
                         allowed_agents=set(allowed_agents) if allowed_agents else None,
                     )
@@ -417,14 +449,18 @@ class NLUAgent(NetworkAgent):
             self.active_requests[request_id] = {
                 "user_input": user_input,
                 "original_requester": original_requester,
+                "user_id": user_id,
                 "agent_results": [],
                 "step": 1,
                 "original_message_id": message.id,
                 "current_capability": capability,
             }
+            capability_data = {"prompt": user_input, "context": context}
+            if user_id is not None:
+                capability_data["user_id"] = user_id
             await self.request_capability(
                 capability=capability,
-                data={"prompt": user_input, "context": context},
+                data=capability_data,
                 request_id=request_id,  # Use same request_id
                 allowed_agents=set(allowed_agents) if allowed_agents else None,
             )
@@ -460,6 +496,7 @@ class NLUAgent(NetworkAgent):
             self.active_requests[request_id] = {
                 "user_input": user_input,
                 "original_requester": original_requester,
+                "user_id": user_id,
                 "agent_results": [],
                 "dag": dag,  # Store the full DAG
                 "completed_caps": completed_caps,
@@ -569,36 +606,43 @@ Return JSON with a DAG structure where each capability lists its dependencies:
   "capability3": ["capability1"]  // Depends on capability1 completing first
 }}}}
 
-Rules:
-- If two capabilities don't depend on each other, they can run in parallel (empty dependencies)
-- Only list dependencies if one capability truly needs the result of another
-- For independent tasks (e.g., "turn lights red" and "get weather"), use empty dependencies []
-- For conditional actions (e.g., "if X then Y"), the conditional action depends on the condition check
-- If only one capability is needed, return single capability with empty dependencies
+**CRITICAL RULES:**
+1. **GENERAL KNOWLEDGE QUESTIONS** (facts about the world, history, science, etc.):
+   - Examples: "what's the capital of X", "who wrote Y", "when did X happen", "when did X come out"
+   - ALWAYS use "search" capability for these questions (NOT "chat")
+   - NEVER use "extract_facts", "search_facts", or "get_facts" for general knowledge
+   - NEVER use "chat" for general knowledge questions - use "search" instead
+   - "extract_facts", "search_facts", "get_facts" are ONLY for user-specific information
 
-Example for "turn lights red and tell me the weather":
-{{"dag": {{
-  "lights_color": [],
-  "get_weather": []
-}}}}
+2. **CONDITIONAL LOGIC**:
+   - If the request asks a question first, then takes action based on the answer
+   - The question capability should have NO dependencies (runs first)
+   - The conditional action should depend on the question capability
+   - Example: "when did X come out. if in 2018 make lights blue"
+     → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 
-Example for "pause the tv and make the lights red":
-{{"dag": {{
-  "roku_pause": [],
-  "lights_color": []
-}}}}
+3. **DEPENDENCIES**:
+   - If two capabilities don't depend on each other, they can run in parallel (empty dependencies)
+   - Only list dependencies if one capability truly needs the result of another
+   - For conditional actions (e.g., "if X then Y"), the conditional action depends on the condition check
 
-Example for "check weather and if sunny make lights red":
-{{"dag": {{
-  "get_weather": [],
-  "lights_color": ["get_weather"]  // Lights depend on weather result
-}}}}
+Examples:
+- "turn lights red and tell me the weather":
+  {{"dag": {{"lights_color": [], "get_weather": []}}}}
 
-Example for "book a meeting tomorrow and send me a reminder":
-{{"dag": {{
-  "schedule_appointment": [],
-  "send_message": ["schedule_appointment"]  // Reminder needs meeting details
-}}}}"""
+- "pause the tv and make the lights red":
+  {{"dag": {{"roku_pause": [], "lights_color": []}}}}
+
+- "check weather and if sunny make lights red":
+  {{"dag": {{"get_weather": [], "lights_color": ["get_weather"]}}}}
+
+- "when did X come out. if in 2018 make lights blue else make it green":
+  {{"dag": {{"search": [], "lights_color": ["search"]}}}}
+  // search answers the question, lights_color depends on search's answer
+
+- "what's the weather and turn on lights":
+  {{"dag": {{"get_weather": [], "lights_on": []}}}}
+  // Independent actions, no dependencies"""
 
         try:
             response = await self.ai_client.weak_chat(
@@ -711,11 +755,15 @@ Example for "book a meeting tomorrow and send me a reminder":
             request_info["capability_request_ids"][cap] = sub_request_id
 
             # Track sub-request with correlation to parent
+            # Copy original_requester from parent request
+            parent_request_info = self.active_requests.get(request_id, {})
             self.active_requests[sub_request_id] = {
                 "parent_request_id": request_id,  # For correlation
                 "capability": cap,
                 "user_input": user_input,
                 "current_capability": cap,
+                "original_requester": parent_request_info.get("original_requester"),
+                "user_id": parent_request_info.get("user_id"),
             }
 
             # Build context with previous results for dependent capabilities
@@ -729,9 +777,13 @@ Example for "book a meeting tomorrow and send me a reminder":
 
             # Execute capability (non-blocking - they'll run in parallel)
             # Use sub_request_id but responses will correlate back to parent
+            capability_data = {"prompt": user_input, "context": enhanced_context}
+            dag_user_id = request_info.get("user_id")
+            if dag_user_id is not None:
+                capability_data["user_id"] = dag_user_id
             await self.request_capability(
                 capability=cap,
-                data={"prompt": user_input, "context": enhanced_context},
+                data=capability_data,
                 request_id=sub_request_id,
                 allowed_agents=allowed_agents,
             )
@@ -911,25 +963,52 @@ Your job is to analyze the user input and return **only** a JSON object—no pro
    - null = Multiple capabilities needed (will trigger parallel execution)
 DO NOT USE "orchestrate_tasks" - that's deprecated.
 
-**Decision Logic:**
-- Does the user want MULTIPLE distinct actions (e.g., "pause tv AND make lights red",
-  "turn on lights AND get weather")? → {{"intent": null, "capability": null}}
-- Does the user want CONDITIONAL actions based on another action's result?
-  (e.g., "check weather and IF sunny THEN make lights red", 
-   "get calendar and IF busy THEN turn on lights",
-   "find X and if Y then do Z")? → {{"intent": null, "capability": null}}
-- Is this a GENERAL KNOWLEDGE question (geography, history, science, literature, math, etc.)?
-  Examples: "what's the capital of X", "who wrote Y", "what is Z", "when did X happen"
-  → {{"intent": "chat", "capability": null}}
-  (DO NOT use search_facts or get_facts for general knowledge)
-- Is this asking about USER-SPECIFIC information the user previously told you?
-  Examples: "what's my favorite color", "what restaurant did I mention", "what did I say about X"
-  → {{"intent": "perform_capability", "capability": "search_facts"}} or
-    {{"intent": "perform_capability", "capability": "get_facts"}}
-- Is this general conversation or chit-chat? → "chat"
-- Does the user want ONE simple action that matches ONE capability? → "perform_capability"
-- Does it match a known protocol pattern? → "run_protocol"
-- Not sure? Default to "perform_capability" if it matches any single capability
+**Decision Logic (APPLY IN THIS ORDER):**
+
+1. **CONDITIONAL LOGIC CHECK (HIGHEST PRIORITY):**
+   - If the request contains ANY conditional words like "if", "if else", "when",
+     "based on", "depending on", "otherwise", "then", "else"
+   - AND the conditional depends on a result from another action
+     (e.g., "find X and if Y then do Z", "check weather and if sunny make lights red",
+     "search for X and if above Y make lights blue", "find X and if condition then do Y")
+   - → ALWAYS return {{"intent": null, "capability": null}} to trigger DAG execution
+   - Examples: "when did X come out. if in 2018 make lights blue else make it green"
+     → null intent
+   - Examples: "check weather and if sunny make lights red" → null intent
+   - Examples: "search for X and if above 70 make lights blue else make them red" → null intent
+   - Examples: "find X and if condition then do Y" → null intent
+   - **CRITICAL:** Even if the query starts with "search for" or "find", if it contains
+     conditional logic ("if", "else", "then") that depends on the search result, return null intent
+
+2. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
+   - **GENERAL KNOWLEDGE** (facts about the world, history, science, etc.):
+     Examples: "what's the capital of X", "who wrote Y", "what is Z",
+     "when did X happen", "when did X come out"
+     → ALWAYS {{"intent": "perform_capability", "capability": "search"}}
+     → NEVER use search_facts or get_facts for general knowledge questions
+     → NEVER use "chat" for general knowledge - use "search" capability instead
+   - **USER-SPECIFIC** (information the user previously told you):
+     Examples: "what's my favorite color", "what restaurant did I mention",
+     "what did I say about X"
+     → {{"intent": "perform_capability", "capability": "search_facts"}} or
+       {{"intent": "perform_capability", "capability": "get_facts"}}
+
+3. **MULTIPLE ACTIONS:**
+   - Does the user want MULTIPLE distinct actions
+     (e.g., "pause tv AND make lights red", "turn on lights AND get weather")?
+   - → {{"intent": null, "capability": null}}
+
+4. **SINGLE ACTION:**
+   - Does the user want ONE simple action that matches ONE capability?
+   - → "perform_capability"
+
+5. **PROTOCOL MATCH:**
+   - Does it match a known protocol pattern?
+   - → "run_protocol"
+
+6. **DEFAULT:**
+   - General conversation or chit-chat? → "chat"
+   - Not sure? Default to "chat" for questions, "perform_capability" for commands
 
 **Key Indicators of Multiple Capabilities (return null intent):**
 - Words like "and", "also", "then" connecting different actions
@@ -950,20 +1029,33 @@ checking a result before taking another action, return null intent to trigger DA
 **Available Capabilities:**
 {cap_list}
 
-**Examples:**
+**CRITICAL EXAMPLES:**
+- "when did dbfz come out. if in 2018 make lights blue else make it green"
+  → {{"intent": null, "capability": null}} (conditional logic + general knowledge)
+- "when did X come out. if in 2018 make lights blue" → {{"intent": null, "capability": null}} (conditional logic)
+- "search for most hotdogs eaten in competition and if above 70 make the lights blue else made them red"
+  → {{"intent": null, "capability": null}} (conditional logic - search result determines light color)
+- "search for X and if above Y make lights blue else make them red"
+  → {{"intent": null, "capability": null}} (conditional logic - search result determines action)
 - "Turn on the lights" → {{"intent": "perform_capability", "capability": "lights_on"}}
-- "Pause the tv and make the lights red" → {{"intent": null, "capability": null}}
-- "Check weather and if sunny make lights red" → {{"intent": null, "capability": null}}
-- "Get calendar and if busy turn on lights" → {{"intent": null, "capability": null}}
-- "Find date and if before 2010 make lights red" → {{"intent": null, "capability": null}}
-- "Search facts and if found make lights blue" → {{"intent": null, "capability": null}}
+- "Pause the tv and make the lights red" → {{"intent": null, "capability": null}} (multiple actions)
+- "Check weather and if sunny make lights red" → {{"intent": null, "capability": null}} (conditional logic)
+- "Get calendar and if busy turn on lights" → {{"intent": null, "capability": null}} (conditional logic)
+- "Find date and if before 2010 make lights red" → {{"intent": null, "capability": null}} (conditional logic)
 - "Schedule a meeting" → {{"intent": "perform_capability", "capability": "schedule_appointment"}}
 - "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
-- "Turn on lights and get weather" → {{"intent": null, "capability": null}}
+- "Turn on lights and get weather" → {{"intent": null, "capability": null}} (multiple actions)
 - "How are you?" → {{"intent": "chat", "capability": null}}
-- "What's the capital of Illinois?" → {{"intent": "chat", "capability": null}} (general knowledge)
-- "Who wrote Romeo and Juliet?" → {{"intent": "chat", "capability": null}} (general knowledge)
-- "What's my favorite color?" → {{"intent": "perform_capability", "capability": "search_facts"}} (user-specific)
+- "What's the capital of Illinois?" → {{"intent": "perform_capability", "capability": "search"}}
+  (general knowledge - use search, NEVER search_facts or chat)
+- "Who wrote Romeo and Juliet?" → {{"intent": "perform_capability", "capability": "search"}}
+  (general knowledge - use search, NEVER search_facts or chat)
+- "When did X happen?" → {{"intent": "perform_capability", "capability": "search"}}
+  (general knowledge - use search, NEVER search_facts or chat)
+- "When did X come out?" → {{"intent": "perform_capability", "capability": "search"}}
+  (general knowledge - use search, NEVER search_facts or chat)
+- "What's my favorite color?" → {{"intent": "perform_capability", "capability": "search_facts"}}
+  (user-specific)
 - "What restaurant did I mention I like?"
   → {{"intent": "perform_capability", "capability": "search_facts"}} (user-specific)
 

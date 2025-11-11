@@ -20,6 +20,7 @@ class BuilderOptions:
     with_nlu: bool = True
     with_calendar: bool = True
     with_chat: bool = True
+    with_search: bool = True
     with_weather: bool = True
     with_protocols: bool = True
     with_lights: bool = True
@@ -63,6 +64,10 @@ class JarvisBuilder:
 
     def chat(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_chat = enabled
+        return self
+
+    def search(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_search = enabled
         return self
 
     def weather(self, enabled: bool = True) -> "JarvisBuilder":
@@ -165,6 +170,8 @@ class JarvisBuilder:
             refs.update(factory._build_calendar(jarvis.network, ai_client))
         if self._opts.with_chat:
             refs.update(factory._build_chat(jarvis.network, ai_client))
+        if self._opts.with_search:
+            refs.update(factory._build_search(jarvis.network))
         if self._opts.with_weather and jarvis.config.flags.enable_weather:
             refs.update(factory._build_weather(jarvis.network, ai_client))
         if self._opts.with_protocols:

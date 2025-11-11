@@ -150,7 +150,7 @@ class LightingAgent(NetworkAgent):
         # Extract context and enhance prompt with previous results from DAG
         context_info = self._extract_context_from_message(message)
         previous_results = context_info.get("previous_results", [])
-        
+
         if previous_results:
             prompt = self._enhance_prompt_with_context(prompt, previous_results)
             self.logger.log(
@@ -175,18 +175,18 @@ class LightingAgent(NetworkAgent):
                 lights_data = self._list_lights()
                 result = AgentResponse.success_response(
                     response=f"Found {len(lights_data.get('lights', []))} lights",
-                    data=lights_data
+                    data=lights_data,
                 ).to_dict()
             elif capability == "lights_status":
                 lights_data = self._list_lights()
                 result = AgentResponse.success_response(
                     response="Lighting system is online",
-                    data={"status": "online", "lights": lights_data}
+                    data={"status": "online", "lights": lights_data},
                 ).to_dict()
             else:
                 result = AgentResponse.success_response(
                     response=f"Capability {capability} handled",
-                    metadata={"capability": capability}
+                    metadata={"capability": capability},
                 ).to_dict()
 
             await self.send_capability_response(
@@ -195,8 +195,7 @@ class LightingAgent(NetworkAgent):
         except Exception as e:
             self.logger.log("ERROR", f"Error processing {capability}", str(e))
             error_response = AgentResponse.error_response(
-                response=f"Error: {str(e)}",
-                error=ErrorInfo.from_exception(e)
+                response=f"Error: {str(e)}", error=ErrorInfo.from_exception(e)
             ).to_dict()
             await self.send_capability_response(
                 message.from_agent, error_response, message.request_id, message.id

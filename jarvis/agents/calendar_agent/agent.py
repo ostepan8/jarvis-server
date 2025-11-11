@@ -11,6 +11,7 @@ from ...ai_clients import BaseAIClient
 from ...logging import JarvisLogger
 from .function_registry import CalendarFunctionRegistry
 from .command_processor import CalendarCommandProcessor
+
 # Import the tools list explicitly from the tools module. Using
 # `from .tools import tools` would import the submodule instead of the
 # variable due to Python's import resolution order.
@@ -114,7 +115,7 @@ class CollaborativeCalendarAgent(NetworkAgent):
             # Extract context and enhance prompt with previous results from DAG
             context_info = self._extract_context_from_message(message)
             previous_results = context_info.get("previous_results", [])
-            
+
             if previous_results:
                 enhanced_prompt = self._enhance_prompt_with_context(
                     prompt, previous_results

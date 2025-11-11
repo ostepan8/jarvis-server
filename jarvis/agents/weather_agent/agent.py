@@ -104,7 +104,7 @@ class WeatherAgent(NetworkAgent):
             # Extract context and enhance prompt with previous results from DAG
             context_info = self._extract_context_from_message(message)
             previous_results = context_info.get("previous_results", [])
-            
+
             if previous_results:
                 command = self._enhance_prompt_with_context(command, previous_results)
                 if self.logger:

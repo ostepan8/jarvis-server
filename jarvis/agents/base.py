@@ -302,7 +302,7 @@ class NetworkAgent:
     def _extract_context_from_message(self, message: Message) -> Dict[str, Any]:
         """
         Extract context from a capability request message.
-        
+
         Returns:
             Dict with:
             - 'context': The full context dict (may be empty)
@@ -311,7 +311,7 @@ class NetworkAgent:
         """
         data = message.content.get("data", {})
         context = data.get("context", {})
-        
+
         return {
             "context": context,
             "previous_results": context.get("previous_results", []),
@@ -323,54 +323,56 @@ class NetworkAgent:
     ) -> str:
         """
         Enhance a prompt with information from previous results in DAG execution.
-        
+
         This method formats previous results into a readable format that can be
         appended to the prompt, allowing agents to use information from earlier
         capabilities in the DAG.
-        
+
         Args:
             prompt: The original user prompt
             previous_results: List of results from previous capabilities
             conversation_history: Optional conversation history
-            
+
         Returns:
             Enhanced prompt string with previous results information
         """
         if not previous_results:
             return prompt
-        
+
         # Format previous results into readable text
         context_parts = []
         context_parts.append("\n\n--- Context from previous steps ---")
-        
+
         for i, result in enumerate(previous_results, 1):
             capability = result.get("capability", "unknown")
             from_agent = result.get("from_agent", "unknown")
             result_data = result.get("result", {})
-            
+
             # Extract response text if available
             response_text = result_data.get("response", "")
             if not response_text and isinstance(result_data, dict):
                 response_text = result_data.get("message", "")
             if not response_text and isinstance(result_data, str):
                 response_text = result_data
-            
+
             # Extract structured data if available
             data = result_data.get("data", {}) if isinstance(result_data, dict) else {}
-            
+
             context_parts.append(f"\nStep {i}: {capability} (from {from_agent})")
             if response_text:
                 context_parts.append(f"Result: {response_text}")
             if data:
                 # Format key data points
                 data_summary = ", ".join(
-                    f"{k}: {v}" for k, v in data.items() if not isinstance(v, (dict, list))
+                    f"{k}: {v}"
+                    for k, v in data.items()
+                    if not isinstance(v, (dict, list))
                 )
                 if data_summary:
                     context_parts.append(f"Data: {data_summary}")
-        
+
         context_parts.append("--- End of context ---\n")
-        
+
         enhanced_prompt = prompt + "\n".join(context_parts)
         return enhanced_prompt
 
@@ -379,13 +381,13 @@ class NetworkAgent:
     ) -> Optional[Dict[str, Any]]:
         """
         Get a specific previous result by capability name.
-        
+
         Useful for agents that need structured data from a specific previous step.
-        
+
         Args:
             previous_results: List of previous results
             capability: Name of the capability to find
-            
+
         Returns:
             The result dict for that capability, or None if not found
         """
