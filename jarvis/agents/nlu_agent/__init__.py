@@ -302,18 +302,18 @@ class NLUAgent(NetworkAgent):
         """Handle error messages from agents and propagate them back to the requester."""
         request_id = message.request_id
         error_content = message.content.get("error", "Unknown error")
-        
+
         self.logger.log(
             "ERROR",
             f"Error from {message.from_agent}",
             f"{error_content}",
         )
-        
+
         # Look up the original requester for this request
         request_info = self.active_requests.get(request_id)
         if request_info:
             original_requester = request_info["original_requester"]
-            
+
             # Send error response back to original requester
             await self.send_capability_response(
                 to_agent=original_requester,
@@ -325,7 +325,7 @@ class NLUAgent(NetworkAgent):
                 request_id=request_id,
                 original_message_id=message.id,
             )
-            
+
             # Clean up
             del self.active_requests[request_id]
         else:
@@ -918,8 +918,16 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
   (e.g., "check weather and IF sunny THEN make lights red", 
    "get calendar and IF busy THEN turn on lights",
    "find X and if Y then do Z")? → {{"intent": null, "capability": null}}
+- Is this a GENERAL KNOWLEDGE question (geography, history, science, literature, math, etc.)?
+  Examples: "what's the capital of X", "who wrote Y", "what is Z", "when did X happen"
+  → {{"intent": "chat", "capability": null}}
+  (DO NOT use search_facts or get_facts for general knowledge)
+- Is this asking about USER-SPECIFIC information the user previously told you?
+  Examples: "what's my favorite color", "what restaurant did I mention", "what did I say about X"
+  → {{"intent": "perform_capability", "capability": "search_facts"}} or
+    {{"intent": "perform_capability", "capability": "get_facts"}}
+- Is this general conversation or chit-chat? → "chat"
 - Does the user want ONE simple action that matches ONE capability? → "perform_capability"
-- Is this general conversation? → "chat"
 - Does it match a known protocol pattern? → "run_protocol"
 - Not sure? Default to "perform_capability" if it matches any single capability
 
@@ -928,10 +936,12 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 - Conditional words like "if", "when", "based on", "depending on", "otherwise", "if else"
 - Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get", "find" + "make")
 - Different target objects (e.g., "tv" and "lights", "calendar" and "weather", "date" and "lights")
-- Actions that depend on results from other actions (e.g., "check X and do Y with the result", "find X and if condition then do Y")
+- Actions that depend on results from other actions
+  (e.g., "check X and do Y with the result", "find X and if condition then do Y")
 - Phrases like "if X then Y", "if X else Y", "when X do Y"
 
-**IMPORTANT:** If the request contains ANY conditional logic (if/then/else/when) that requires checking a result before taking another action, return null intent to trigger DAG execution.
+**IMPORTANT:** If the request contains ANY conditional logic (if/then/else/when) that requires
+checking a result before taking another action, return null intent to trigger DAG execution.
 
 **User Input**
 \"\"\"{user_input}\"\"\"
@@ -951,6 +961,11 @@ DO NOT USE "orchestrate_tasks" - that's deprecated.
 - "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
 - "Turn on lights and get weather" → {{"intent": null, "capability": null}}
 - "How are you?" → {{"intent": "chat", "capability": null}}
+- "What's the capital of Illinois?" → {{"intent": "chat", "capability": null}} (general knowledge)
+- "Who wrote Romeo and Juliet?" → {{"intent": "chat", "capability": null}} (general knowledge)
+- "What's my favorite color?" → {{"intent": "perform_capability", "capability": "search_facts"}} (user-specific)
+- "What restaurant did I mention I like?"
+  → {{"intent": "perform_capability", "capability": "search_facts"}} (user-specific)
 
 **Return ONLY this JSON:**
 {{

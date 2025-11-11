@@ -29,7 +29,13 @@ class ChatAgent(NetworkAgent):
         }
         self.system_prompt = (
             "You are a friendly assistant chatting with the user. "
-            "Use the available tools to remember facts and preferences when helpful."
+            "IMPORTANT: Answer ALL general knowledge questions (geography, history, science, literature, etc.) "
+            "directly using your own knowledge. DO NOT use the get_facts tool for general knowledge questions. "
+            "Examples of general knowledge: 'what's the capital of Illinois', 'who wrote Romeo and Juliet', "
+            "'what is the speed of light'. "
+            "The get_facts tool is ONLY for user-specific information that the user has explicitly told you "
+            "(e.g., 'what's my favorite color', 'what restaurant did I mention I like'). "
+            "If you call get_facts and it returns no results, you MUST still answer the question from your own knowledge."
         )
 
     # ------------------------------------------------------------------
@@ -244,7 +250,7 @@ class ChatAgent(NetworkAgent):
         user_id = getattr(self, "current_user_id", None)
         results = await self.search_memory(query, top_k=top_k, user_id=user_id)
         if not results:
-            return "no relevant facts found"
+            return "No user-specific facts found. This is a general knowledge question. You MUST answer it directly from your own knowledge. Do not say you cannot help - just provide the answer."
         return "\n".join(r.get("text", "") for r in results)
 
     async def _update_profile(self, field: str, value: str) -> str:
