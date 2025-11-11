@@ -10,6 +10,7 @@ from ...ai_clients.base import BaseAIClient
 from ...logging import JarvisLogger
 from .function_registry import RokuFunctionRegistry
 from .tools.tools import tools
+from ..response import AgentResponse, ErrorInfo
 
 
 class RokuCommandProcessor:
@@ -184,7 +185,6 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
             error_msg = error_action["result"]["error"] if error_action else "Unknown error"
             
             # Return error response
-            from ..response import ErrorInfo
             return AgentResponse.error_response(
                 response=final_response,
                 error=ErrorInfo(
