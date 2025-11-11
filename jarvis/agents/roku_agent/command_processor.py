@@ -174,16 +174,38 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
             self.logger.log("INFO", f"Total actions: {len(actions_taken)}")
 
         # Check if any actions resulted in errors
-        has_errors = any("error" in action.get("result", {}) for action in actions_taken)
-        
+        # Only treat as error if "error" key exists AND has a truthy value
+        # (True or non-empty string, but not False)
+        has_errors = any(
+            result.get("error") is True
+            or (isinstance(result.get("error"), str) and result.get("error"))
+            for action in actions_taken
+            for result in [action.get("result", {})]
+        )
+
         if has_errors:
             # Extract the first error for error info
             error_action = next(
-                (action for action in actions_taken if "error" in action.get("result", {})),
-                None
+                (
+                    action
+                    for action in actions_taken
+                    if (
+                        action.get("result", {}).get("error") is True
+                        or (
+                            isinstance(action.get("result", {}).get("error"), str)
+                            and action.get("result", {}).get("error")
+                        )
+                    )
+                ),
+                None,
             )
-            error_msg = error_action["result"]["error"] if error_action else "Unknown error"
-            
+            error_msg = (
+                error_action["result"]["error"] if error_action else "Unknown error"
+            )
+            # If error is True (boolean), convert to a message
+            if error_msg is True:
+                error_msg = "An error occurred during execution"
+
             # Return error response
             return AgentResponse.error_response(
                 response=final_response,
@@ -193,7 +215,7 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
                 ),
                 actions=actions_taken,
             ).to_dict()
-        
+
         # Return standardized success response
         return AgentResponse.success_response(
             response=final_response,
