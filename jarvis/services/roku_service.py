@@ -337,10 +337,14 @@ class RokuService:
             # Get position and duration
             position = root.find("position")
             duration = root.find("duration")
-            if position is not None:
-                info["position_ms"] = int(position.text)
-            if duration is not None:
-                info["duration_ms"] = int(duration.text)
+            if position is not None and position.text:
+                # Strip " ms" suffix if present
+                position_text = position.text.strip().replace(" ms", "").replace("ms", "")
+                info["position_ms"] = int(position_text) if position_text else 0
+            if duration is not None and duration.text:
+                # Strip " ms" suffix if present
+                duration_text = duration.text.strip().replace(" ms", "").replace("ms", "")
+                info["duration_ms"] = int(duration_text) if duration_text else 0
 
             return info
         except Exception as e:
