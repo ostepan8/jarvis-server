@@ -70,27 +70,69 @@ class YeelightBackend(BaseLightingBackend):
             return [(light_name, self.bulbs[light_name])]
         return [(ip, bulb) for ip, bulb in self.bulbs.items()]
 
+    def _reconnect_bulb(self, ip: str) -> Bulb | None:
+        """Attempt to reconnect to a bulb by creating a fresh connection."""
+        try:
+            new_bulb = Bulb(ip)
+            new_bulb.get_properties()  # Test the connection
+            self.bulbs[ip] = new_bulb
+            self.logger.log("INFO", f"Reconnected to bulb {ip}")
+            return new_bulb
+        except Exception as e:
+            self.logger.log("WARNING", f"Failed to reconnect to bulb {ip}", str(e))
+            return None
+
     def _execute_bulb_operations_parallel(
         self, operation_name: str, bulbs: List[Tuple[str, Bulb]], operation
     ) -> Tuple[int, List[Tuple[str, str]]]:
         """Execute operation on multiple bulbs in parallel using ThreadPoolExecutor.
-        Returns (success_count, [(ip, error), ...])."""
+        Returns (success_count, [(ip, error), ...]).
+        
+        Automatically attempts reconnection if a bulb connection is stale."""
         if not bulbs:
             return (0, [])
 
         successes = 0
         failures = []
 
+        def execute_with_retry(ip: str, bulb: Bulb):
+            """Execute operation with one reconnection attempt on failure."""
+            try:
+                operation(bulb)
+                return True, None
+            except Exception as e:
+                error_msg = str(e).lower()
+                # Check for connection-related errors that warrant a retry
+                if "closed" in error_msg or "connection" in error_msg or "socket" in error_msg:
+                    self.logger.log(
+                        "INFO", f"Connection lost to {ip}, attempting reconnect..."
+                    )
+                    new_bulb = self._reconnect_bulb(ip)
+                    if new_bulb:
+                        try:
+                            operation(new_bulb)
+                            return True, None
+                        except Exception as retry_e:
+                            return False, str(retry_e)
+                return False, str(e)
+
         with ThreadPoolExecutor(max_workers=min(len(bulbs), 10)) as executor:
-            future_to_bulb = {
-                executor.submit(operation, bulb): (ip, bulb) for ip, bulb in bulbs
+            future_to_ip = {
+                executor.submit(execute_with_retry, ip, bulb): ip 
+                for ip, bulb in bulbs
             }
 
-            for future in as_completed(future_to_bulb):
-                ip, bulb = future_to_bulb[future]
+            for future in as_completed(future_to_ip):
+                ip = future_to_ip[future]
                 try:
-                    future.result()
-                    successes += 1
+                    success, error_msg = future.result()
+                    if success:
+                        successes += 1
+                    else:
+                        self.logger.log(
+                            "WARNING", f"{operation_name} failed for bulb {ip}", error_msg
+                        )
+                        failures.append((ip, error_msg))
                 except Exception as e:
                     error_msg = str(e)
                     self.logger.log(
