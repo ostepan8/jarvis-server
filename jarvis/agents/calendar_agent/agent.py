@@ -122,10 +122,14 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
             mission_brief_data = data.get("mission_brief")
             if mission_brief_data:
                 brief = MissionBrief.from_dict(mission_brief_data)
-                result = await self._execute_as_lead(prompt, brief)
-                await self.send_capability_response(
-                    message.from_agent, result, message.request_id, message.id
-                )
+                try:
+                    result = await self._execute_as_lead(prompt, brief)
+                    await self.send_capability_response(
+                        message.from_agent, result, message.request_id, message.id
+                    )
+                finally:
+                    # Cleanup active_tasks to prevent memory leak
+                    self.active_tasks.pop(message.request_id, None)
                 return
 
             # Extract context and enhance prompt with previous results from DAG

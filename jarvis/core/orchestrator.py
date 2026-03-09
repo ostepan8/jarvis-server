@@ -714,9 +714,14 @@ class RequestOrchestrator:
 
             result = json.loads(response_text)
 
-            # Validate required fields
-            if "complexity" not in result:
+            # Validate required fields and types
+            if not isinstance(result.get("complexity"), str):
                 return {"complexity": "simple"}
+            if result["complexity"] == "complex":
+                if not isinstance(result.get("lead_agent"), str):
+                    return {"complexity": "simple"}
+                if not isinstance(result.get("lead_capability"), str):
+                    return {"complexity": "simple"}
 
             return result
 

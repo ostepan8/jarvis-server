@@ -29,6 +29,16 @@ class CollaborationMixin:
     - Budget enforcement, cycle detection, and context accumulation
     """
 
+    # Lock protecting budget mutations during parallel recruits
+    _budget_lock: asyncio.Lock
+
+    @property
+    def budget_lock(self) -> asyncio.Lock:
+        """Lazy-init lock to avoid __init__ requirements in mixin."""
+        if not hasattr(self, "_budget_lock") or self._budget_lock is None:
+            self._budget_lock = asyncio.Lock()
+        return self._budget_lock
+
     async def recruit(
         self,
         capability: str,
@@ -56,36 +66,38 @@ class CollaborationMixin:
         budget = brief.budget
         context = brief.context
 
-        # Guard: budget check
-        if not budget.can_recruit:
-            raise BudgetExhaustedError(
-                f"Cannot recruit: depth={budget.remaining_depth}, "
-                f"recruitments={budget.remaining_recruitments}, "
-                f"expired={budget.is_expired}",
-                details={
-                    "remaining_depth": budget.remaining_depth,
-                    "remaining_recruitments": budget.remaining_recruitments,
-                    "is_expired": budget.is_expired,
-                },
-            )
+        # Atomic budget check + decrement under lock to prevent race
+        # conditions when multiple recruits run concurrently
+        async with self.budget_lock:
+            if not budget.can_recruit:
+                raise BudgetExhaustedError(
+                    f"Cannot recruit: depth={budget.remaining_depth}, "
+                    f"recruitments={budget.remaining_recruitments}, "
+                    f"expired={budget.is_expired}",
+                    details={
+                        "remaining_depth": budget.remaining_depth,
+                        "remaining_recruitments": budget.remaining_recruitments,
+                        "is_expired": budget.is_expired,
+                    },
+                )
 
-        # Guard: find provider agent for this capability
-        provider_agent = self._find_capability_provider(capability, brief)
-        if not provider_agent:
-            raise CapabilityNotFoundError(
-                f"No agent provides capability '{capability}'",
-                details={"capability": capability},
-            )
+            # Guard: find provider agent for this capability
+            provider_agent = self._find_capability_provider(capability, brief)
+            if not provider_agent:
+                raise CapabilityNotFoundError(
+                    f"No agent provides capability '{capability}'",
+                    details={"capability": capability},
+                )
 
-        # Guard: cycle detection
-        if context.has_visited(provider_agent):
-            raise CircularRecruitmentError(
-                f"Circular recruitment detected: {' -> '.join(context.recruitment_chain)} -> {provider_agent}",
-                details={"chain": context.recruitment_chain + [provider_agent]},
-            )
+            # Guard: cycle detection
+            if context.has_visited(provider_agent):
+                raise CircularRecruitmentError(
+                    f"Circular recruitment detected: {' -> '.join(context.recruitment_chain)} -> {provider_agent}",
+                    details={"chain": context.recruitment_chain + [provider_agent]},
+                )
 
-        # Decrement parent budget
-        budget.remaining_recruitments -= 1
+            # Decrement parent budget (inside lock)
+            budget.remaining_recruitments -= 1
 
         # Calculate timeout
         effective_timeout = timeout if timeout is not None else budget.time_remaining
@@ -249,9 +261,15 @@ class CollaborationMixin:
             if brief.budget.is_expired:
                 break
 
-            response_message, tool_calls = await self.ai_client.strong_chat(
-                messages, tools
-            )
+            # Wrap LLM call with budget timeout to prevent API hangs
+            llm_timeout = brief.budget.time_remaining
+            try:
+                response_message, tool_calls = await asyncio.wait_for(
+                    self.ai_client.strong_chat(messages, tools),
+                    timeout=llm_timeout if llm_timeout > 0 else 0.1,
+                )
+            except asyncio.TimeoutError:
+                break
             if not tool_calls:
                 break
 
@@ -277,7 +295,14 @@ class CollaborationMixin:
             # Execute tool calls concurrently
             async def _exec_tool(call):
                 fn_name = call.function.name
-                args = json.loads(call.function.arguments)
+                try:
+                    args = json.loads(call.function.arguments)
+                except (json.JSONDecodeError, TypeError):
+                    args = {}
+                    return call, fn_name, args, {
+                        "error": f"Invalid arguments for {fn_name}: "
+                        f"{call.function.arguments!r}"
+                    }
                 if fn_name == "recruit_agent":
                     result = await self._handle_recruit_tool_call(args, brief)
                 else:

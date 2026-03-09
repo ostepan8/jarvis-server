@@ -233,3 +233,36 @@ class TestCalendarAgentMissionBriefDetection:
             assert result["actions"][0]["function"] == "recruit_agent"
         finally:
             await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_active_tasks_cleaned_up_after_lead_execution(self):
+        """active_tasks should not leak after lead execution completes."""
+        ai_client = MockAIClient([
+            ("Calendar is clear!", None),
+        ])
+        cal = CollaborativeCalendarAgent(ai_client, make_mock_calendar_service())
+        network = await setup_network(cal)
+
+        try:
+            brief = make_brief()
+            msg = Message(
+                from_agent="JarvisSystem",
+                to_agent="CalendarAgent",
+                message_type="capability_request",
+                content={
+                    "capability": "create_event",
+                    "data": {
+                        "prompt": "Check my calendar",
+                        "mission_brief": brief.to_dict(),
+                    },
+                },
+                request_id="req_cleanup_test",
+            )
+            await cal.receive_message(msg)
+            import asyncio
+            await asyncio.sleep(0.3)
+
+            # active_tasks should have been cleaned up
+            assert "req_cleanup_test" not in cal.active_tasks
+        finally:
+            await network.stop()

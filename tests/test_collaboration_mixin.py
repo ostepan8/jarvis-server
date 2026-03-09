@@ -587,3 +587,150 @@ class TestBuildLeadSystemPrompt:
         prompt = agent._build_lead_system_prompt(brief)
         assert "WeatherAgent" in prompt
         assert "get_weather" in prompt
+
+
+class TestMalformedToolArguments:
+    """Tests for handling malformed LLM tool call arguments."""
+
+    @pytest.mark.asyncio
+    async def test_empty_arguments_string(self):
+        """Empty arguments string should return error, not crash."""
+        call = MagicMock()
+        call.id = "call_1"
+        call.function = MagicMock()
+        call.function.name = "recruit_agent"
+        call.function.arguments = ""  # Empty string — invalid JSON
+
+        ai_client = ToolCallAIClient([
+            ("", [call]),
+            ("I'll handle this myself.", None),
+        ])
+        lead = LeadTestAgent("LeadAgent", ai_client=ai_client)
+        network = await setup_network_with_agents(lead)
+
+        try:
+            brief = make_brief()
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            # Should have an error in the action, not a crash
+            assert "error" in result["actions"][0]["result"]
+            assert "Invalid arguments" in result["actions"][0]["result"]["error"]
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_none_arguments(self):
+        """None arguments should return error, not crash."""
+        call = MagicMock()
+        call.id = "call_1"
+        call.function = MagicMock()
+        call.function.name = "recruit_agent"
+        call.function.arguments = None  # None — will TypeError in json.loads
+
+        ai_client = ToolCallAIClient([
+            ("", [call]),
+            ("Handled it.", None),
+        ])
+        lead = LeadTestAgent("LeadAgent", ai_client=ai_client)
+        network = await setup_network_with_agents(lead)
+
+        try:
+            brief = make_brief()
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            assert "error" in result["actions"][0]["result"]
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_invalid_json_arguments(self):
+        """Malformed JSON arguments should return error, not crash."""
+        call = MagicMock()
+        call.id = "call_1"
+        call.function = MagicMock()
+        call.function.name = "recruit_agent"
+        call.function.arguments = '{"capability": "get_weather", "prompt": '  # Truncated
+
+        ai_client = ToolCallAIClient([
+            ("", [call]),
+            ("Handled without weather.", None),
+        ])
+        lead = LeadTestAgent("LeadAgent", ai_client=ai_client)
+        network = await setup_network_with_agents(lead)
+
+        try:
+            brief = make_brief()
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            assert "error" in result["actions"][0]["result"]
+        finally:
+            await network.stop()
+
+
+class TestBudgetLockConcurrency:
+    """Tests for budget lock preventing race conditions."""
+
+    @pytest.mark.asyncio
+    async def test_parallel_recruits_respect_budget_limit(self):
+        """Two parallel recruits with budget=1 should only allow one."""
+        lead = LeadTestAgent("LeadAgent")
+        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        lighting = ProviderAgent("LightingAgent", {"set_color"}, {"response": "warm"})
+        network = await setup_network_with_agents(lead, weather, lighting)
+
+        try:
+            brief = make_brief(
+                budget=MissionBudget(
+                    remaining_depth=3,
+                    remaining_recruitments=1,  # Only 1 recruit allowed
+                    deadline=time.time() + 30,
+                )
+            )
+
+            async def recruit_weather():
+                return await lead.recruit("get_weather", {"prompt": "w"}, brief)
+
+            async def recruit_lights():
+                return await lead.recruit("set_color", {"prompt": "l"}, brief)
+
+            # Run both concurrently — only one should succeed
+            results = await asyncio.gather(
+                recruit_weather(), recruit_lights(), return_exceptions=True
+            )
+
+            successes = [r for r in results if not isinstance(r, Exception)]
+            errors = [r for r in results if isinstance(r, BudgetExhaustedError)]
+            assert len(successes) == 1
+            assert len(errors) == 1
+        finally:
+            await network.stop()
+
+
+class TestLLMCallTimeout:
+    """Tests for LLM API call timeout in lead execution."""
+
+    @pytest.mark.asyncio
+    async def test_llm_hang_times_out_gracefully(self):
+        """If strong_chat hangs, lead should timeout and return partial results."""
+
+        class HangingAIClient:
+            async def strong_chat(self, messages, tools=None):
+                await asyncio.sleep(100)  # Simulate hang
+
+        lead = LeadTestAgent("LeadAgent", ai_client=HangingAIClient())
+        network = await setup_network_with_agents(lead)
+
+        try:
+            brief = make_brief(
+                budget=MissionBudget(
+                    remaining_depth=3,
+                    remaining_recruitments=5,
+                    deadline=time.time() + 0.2,  # 200ms deadline
+                )
+            )
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            # Should have timed out, not hung forever
+            assert result["metadata"].get("budget_expired") is True
+        finally:
+            await network.stop()

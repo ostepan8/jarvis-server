@@ -211,6 +211,70 @@ class TestClassifyComplexity:
             await network.stop()
 
     @pytest.mark.asyncio
+    async def test_missing_complexity_field_returns_simple(self):
+        """Response with no 'complexity' field should fall back to simple."""
+        ai_client = MockAIClient('{"lead_agent": "ChatAgent"}')
+        chat = SimpleAgent("ChatAgent", {"chat"})
+        orchestrator, network = await setup_orchestrator([chat], ai_client=ai_client)
+
+        try:
+            result = await orchestrator._classify_complexity(
+                "test", {"ChatAgent": ["chat"]}
+            )
+            assert result["complexity"] == "simple"
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_non_string_complexity_returns_simple(self):
+        """Non-string complexity value should fall back to simple."""
+        ai_client = MockAIClient('{"complexity": 42, "lead_agent": "ChatAgent"}')
+        chat = SimpleAgent("ChatAgent", {"chat"})
+        orchestrator, network = await setup_orchestrator([chat], ai_client=ai_client)
+
+        try:
+            result = await orchestrator._classify_complexity(
+                "test", {"ChatAgent": ["chat"]}
+            )
+            assert result["complexity"] == "simple"
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_complex_with_non_string_lead_agent_returns_simple(self):
+        """Complex response with non-string lead_agent should fall back to simple."""
+        ai_client = MockAIClient(
+            '{"complexity": "complex", "lead_agent": 123, "lead_capability": "chat"}'
+        )
+        chat = SimpleAgent("ChatAgent", {"chat"})
+        orchestrator, network = await setup_orchestrator([chat], ai_client=ai_client)
+
+        try:
+            result = await orchestrator._classify_complexity(
+                "test", {"ChatAgent": ["chat"]}
+            )
+            assert result["complexity"] == "simple"
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_complex_with_missing_lead_capability_returns_simple(self):
+        """Complex response with missing lead_capability should fall back to simple."""
+        ai_client = MockAIClient(
+            '{"complexity": "complex", "lead_agent": "ChatAgent"}'
+        )
+        chat = SimpleAgent("ChatAgent", {"chat"})
+        orchestrator, network = await setup_orchestrator([chat], ai_client=ai_client)
+
+        try:
+            result = await orchestrator._classify_complexity(
+                "test", {"ChatAgent": ["chat"]}
+            )
+            assert result["complexity"] == "simple"
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
     async def test_strips_markdown_fences(self):
         ai_client = MockAIClient(
             '```json\n{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}\n```'
