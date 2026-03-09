@@ -10,8 +10,6 @@ from colorama import Fore, Style, init as colorama_init
 # NEW: use the builder
 from jarvis.core import JarvisBuilder
 from jarvis import JarvisLogger
-<<<<<<< Updated upstream
-=======
 from jarvis.cli.config_dashboard import run_config_dashboard, show_agents_detail
 from jarvis.cli.commands_dashboard import (
     show_commands_overview,
@@ -19,7 +17,6 @@ from jarvis.cli.commands_dashboard import (
     show_commands_all,
 )
 from jarvis.cli.modes import show_modes_dashboard, enter_mode_by_slug
->>>>>>> Stashed changes
 
 from jarvis.io import (
     InputHandler,
@@ -131,8 +128,8 @@ async def demo(
             if user_command.strip().lower() in {"exit", "quit"}:
                 break
 
-<<<<<<< Updated upstream
-=======
+            cmd = user_command.strip().lower()
+
             # Slash commands
             if cmd == "/config":
                 await run_config_dashboard(jarvis)
@@ -174,7 +171,6 @@ async def demo(
                 await enter_mode_by_slug(jarvis, "roku")
                 continue
 
->>>>>>> Stashed changes
             logger.log("DEBUG", "Processing user request", {"command": user_command})
             result = await jarvis.process_request(
                 user_command,
