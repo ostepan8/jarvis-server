@@ -210,6 +210,8 @@ class JarvisBuilder:
             logger=jarvis.logger,
             response_timeout=jarvis.config.response_timeout,
             max_history_length=10,
+            ai_client=ai_client,
+            enable_coordinator=jarvis.config.flags.enable_coordinator,
         )
 
         protocol_count = (

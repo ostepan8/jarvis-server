@@ -5,7 +5,9 @@ import asyncio
 import functools
 from datetime import datetime, timezone
 from ..base import NetworkAgent
+from ..collaboration import CollaborationMixin
 from ..message import Message
+from ...core.mission import MissionBrief
 from ...services.calendar_service import CalendarService
 from ...ai_clients import BaseAIClient
 from ...logging import JarvisLogger
@@ -18,8 +20,12 @@ from .command_processor import CalendarCommandProcessor
 from .tools.tools import tools as calendar_tools
 
 
-class CollaborativeCalendarAgent(NetworkAgent):
-    """Calendar agent that collaborates with other agents"""
+class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
+    """Calendar agent that collaborates with other agents.
+
+    When acting as a lead agent (mission_brief in request data),
+    uses CollaborationMixin._execute_as_lead() for multi-agent coordination.
+    """
 
     def __init__(
         self,
@@ -49,6 +55,10 @@ class CollaborativeCalendarAgent(NetworkAgent):
     @property
     def capabilities(self) -> Set[str]:
         return self.function_registry.capabilities
+
+    @property
+    def supports_dialogue(self) -> bool:
+        return True
 
     async def run_capability(self, capability: str, **kwargs: Any) -> Any:
         """Execute a calendar capability via the function registry."""
@@ -88,6 +98,17 @@ class CollaborativeCalendarAgent(NetworkAgent):
         if capability not in self.capabilities:
             return
 
+        # Handle dialogue context (multi-turn agent-to-agent conversation)
+        dialogue_context = data.get("dialogue_context")
+        if dialogue_context:
+            result = await self._respond_to_dialogue(
+                data.get("prompt", ""), dialogue_context
+            )
+            await self.send_capability_response(
+                message.from_agent, result, message.request_id, message.id
+            )
+            return
+
         if self.logger:
             self.logger.log(
                 "INFO", f"Handling {capability}", self._safe_json_dumps(data)
@@ -110,6 +131,20 @@ class CollaborativeCalendarAgent(NetworkAgent):
                 await self.send_error(
                     message.from_agent, "Invalid prompt", message.request_id
                 )
+                return
+
+            # Check for mission brief → act as lead agent
+            mission_brief_data = data.get("mission_brief")
+            if isinstance(mission_brief_data, dict):
+                brief = MissionBrief.from_dict(mission_brief_data)
+                try:
+                    result = await self._execute_as_lead(prompt, brief)
+                    await self.send_capability_response(
+                        message.from_agent, result, message.request_id, message.id
+                    )
+                finally:
+                    # Cleanup active_tasks to prevent memory leak
+                    self.active_tasks.pop(message.request_id, None)
                 return
 
             # Extract context and enhance prompt with previous results from DAG
@@ -143,6 +178,26 @@ class CollaborativeCalendarAgent(NetworkAgent):
             if self.logger:
                 self.logger.log("ERROR", f"Error processing command", error_msg)
             await self.send_error(message.from_agent, error_msg, message.request_id)
+
+    # ------------------------------------------------------------------
+    # Lead agent support
+    # ------------------------------------------------------------------
+    def _build_lead_system_prompt(self, brief: MissionBrief) -> str:
+        """Override to include CalendarAgent's scheduling personality."""
+        capability_info = self.format_recruitment_context(brief)
+
+        return (
+            "You are a scheduling-focused assistant acting as the lead agent "
+            "for a calendar-related complex request.\n\n"
+            f"Original request: {brief.user_input}\n\n"
+            f"{capability_info}\n\n"
+            "Your job is to:\n"
+            "1. Handle all calendar operations using your own calendar tools\n"
+            "2. Recruit other agents when the request involves non-calendar tasks "
+            "(e.g., weather checks, light adjustments)\n"
+            "3. Synthesize all results into a clear, organized response\n\n"
+            "Be precise with dates and times. Provide a complete response."
+        )
 
     async def _handle_capability_response(self, message: Message) -> None:
         """Handle responses from other agents"""

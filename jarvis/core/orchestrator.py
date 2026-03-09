@@ -7,17 +7,20 @@ into focused, single-responsibility components.
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 import uuid
-from contextlib import nullcontext
 from os import getenv
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .response_logger import ResponseLogger, RequestTimer
 from .profile import AgentProfile
+from .mission import MissionBrief, MissionBudget, MissionComplexity, MissionContext
 from ..utils.performance import PerfTracker, get_tracker
 
 if TYPE_CHECKING:
     from ..agents.agent_network import AgentNetwork
+    from ..ai_clients.base import BaseAIClient
     from ..protocols.runtime import ProtocolRuntime
     from ..logging import JarvisLogger
 
@@ -55,9 +58,11 @@ class RequestOrchestrator:
         logger: "JarvisLogger",
         response_timeout: float = 15.0,
         max_history_length: int = 10,
+        ai_client: Optional["BaseAIClient"] = None,
+        enable_coordinator: bool = True,
     ):
         """Initialize request orchestrator.
-        
+
         Args:
             network: The agent network for communication
             protocol_runtime: Protocol execution runtime
@@ -65,6 +70,8 @@ class RequestOrchestrator:
             logger: System logger
             response_timeout: Timeout for capability requests
             max_history_length: Maximum conversation history to maintain
+            ai_client: AI client for coordinator triage (None disables coordinator)
+            enable_coordinator: Feature flag to enable/disable coordinator
         """
         self.network = network
         self.protocol_runtime = protocol_runtime
@@ -72,13 +79,15 @@ class RequestOrchestrator:
         self.logger = logger
         self.response_timeout = response_timeout
         self.max_history_length = max_history_length
-        
+        self.ai_client = ai_client
+        self.enable_coordinator = enable_coordinator
+
         # Conversation history: user_id -> list of turns
         self.conversation_history: Dict[int, List[Dict[str, str]]] = {}
-        
+
         # User profiles: user_id -> AgentProfile
         self.user_profiles: Dict[int, AgentProfile] = {}
-        
+
         # Night mode state
         self.night_mode: bool = False
     
@@ -135,7 +144,18 @@ class RequestOrchestrator:
             )
             if protocol_result:
                 return protocol_result
-            
+
+            # Try coordinator triage (complex request detection)
+            coordinator_result = await self._coordinate_request(
+                user_input,
+                req_metadata,
+                allowed_agents,
+                timer,
+                tracker,
+            )
+            if coordinator_result:
+                return coordinator_result
+
             # Fall back to NLU routing
             return await self._route_to_nlu(
                 user_input,
@@ -555,6 +575,281 @@ class RequestOrchestrator:
         
         return intent, capability, agent_results, tool_calls
     
+    # ------------------------------------------------------------------
+    # Coordinator methods
+    # ------------------------------------------------------------------
+
+    async def _coordinate_request(
+        self,
+        user_input: str,
+        metadata: RequestMetadata,
+        allowed_agents: Optional[set[str]],
+        timer: RequestTimer,
+        tracker: Optional[PerfTracker],
+    ) -> Optional[Dict[str, Any]]:
+        """Try coordinator triage to detect and handle complex requests.
+
+        Returns None if the request is simple (falls through to NLU).
+        Returns a response dict if the coordinator handled it.
+        """
+        if not self.ai_client or not self.enable_coordinator:
+            return None
+
+        try:
+            catalog = self._build_capability_catalog(allowed_agents)
+            if not catalog:
+                return None
+
+            classification = await self._classify_complexity(user_input, catalog)
+            complexity = classification.get("complexity", "simple")
+
+            if complexity != "complex":
+                self.logger.log(
+                    "DEBUG",
+                    "Coordinator classified as simple",
+                    f"input='{user_input[:60]}...'",
+                )
+                return None
+
+            lead_agent = classification.get("lead_agent", "ChatAgent")
+            lead_capability = classification.get("lead_capability", "chat")
+
+            # Validate lead agent exists
+            if lead_agent not in self.network.agents:
+                self.logger.log(
+                    "WARNING",
+                    f"Coordinator picked unknown agent '{lead_agent}', falling back to NLU",
+                    "",
+                )
+                return None
+
+            # Validate lead agent provides the lead capability
+            agent_caps = catalog.get(lead_agent, [])
+            if lead_capability not in agent_caps:
+                self.logger.log(
+                    "WARNING",
+                    f"Agent '{lead_agent}' does not provide '{lead_capability}', falling back to NLU",
+                    f"available: {agent_caps}",
+                )
+                return None
+
+            # Build mission brief
+            conversation_history = self.conversation_history.get(
+                metadata.user_id, []
+            )
+            budget = MissionBudget(
+                max_depth=3,
+                remaining_depth=3,
+                deadline=time.time() + self.response_timeout,
+                max_recruitments=5,
+                remaining_recruitments=5,
+            )
+            context = MissionContext(
+                user_input=user_input,
+                conversation_history=conversation_history,
+                recruitment_chain=[lead_agent],
+            )
+            brief = MissionBrief(
+                user_input=user_input,
+                complexity=MissionComplexity.COMPLEX,
+                lead_agent=lead_agent,
+                lead_capability=lead_capability,
+                budget=budget,
+                context=context,
+                available_capabilities=catalog,
+                metadata={
+                    "user_id": metadata.user_id,
+                    "source": metadata.source,
+                },
+            )
+
+            self.logger.log(
+                "INFO",
+                "Coordinator dispatching complex request",
+                f"lead={lead_agent}, capability={lead_capability}",
+            )
+
+            return await self._dispatch_mission(
+                brief, metadata, timer, tracker
+            )
+
+        except Exception as e:
+            self.logger.log(
+                "WARNING",
+                "Coordinator failed, falling back to NLU",
+                str(e),
+            )
+            return None
+
+    async def _classify_complexity(
+        self, user_input: str, catalog: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """Use a weak LLM call to classify request complexity.
+
+        Returns a dict with 'complexity', 'lead_agent', 'lead_capability'.
+        On failure, returns {"complexity": "simple"}.
+        """
+        agent_descriptions = []
+        for agent_name, capabilities in catalog.items():
+            agent_descriptions.append(
+                f"- {agent_name}: {', '.join(capabilities)}"
+            )
+
+        prompt = (
+            "Classify this user request as 'simple' or 'complex'.\n\n"
+            "SIMPLE: Can be handled by a single agent with one capability.\n"
+            "COMPLEX: Requires multiple agents or capabilities working together.\n\n"
+            f"Available agents:\n" + "\n".join(agent_descriptions) + "\n\n"
+            f"User request: \"{user_input}\"\n\n"
+            "Respond with ONLY a JSON object (no markdown, no explanation):\n"
+            '{"complexity": "simple"|"complex", "lead_agent": "<agent_name>", '
+            '"lead_capability": "<capability>"}\n\n'
+            "For simple requests, pick the single best agent. "
+            "For complex requests, pick the agent best suited to lead and coordinate."
+        )
+
+        try:
+            message, _ = await self.ai_client.weak_chat(
+                [{"role": "user", "content": prompt}]
+            )
+            response_text = message.content.strip()
+
+            # Strip markdown fences if present
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                response_text = "\n".join(
+                    line for line in lines
+                    if not line.startswith("```")
+                ).strip()
+
+            result = json.loads(response_text)
+
+            # Validate required fields and types
+            if not isinstance(result.get("complexity"), str):
+                return {"complexity": "simple"}
+            if result["complexity"] == "complex":
+                if not isinstance(result.get("lead_agent"), str):
+                    return {"complexity": "simple"}
+                if not isinstance(result.get("lead_capability"), str):
+                    return {"complexity": "simple"}
+
+            return result
+
+        except (json.JSONDecodeError, AttributeError, KeyError) as e:
+            self.logger.log(
+                "WARNING",
+                "Coordinator classification parse failed",
+                str(e),
+            )
+            return {"complexity": "simple"}
+
+    def _build_capability_catalog(
+        self, allowed_agents: Optional[set[str]] = None
+    ) -> Dict[str, List[str]]:
+        """Build a catalog of agent names to capability lists.
+
+        Filters out intent_matching (NLU internal) and respects allowed_agents.
+        """
+        catalog: Dict[str, List[str]] = {}
+        for capability, providers in self.network.capability_registry.items():
+            if capability == "intent_matching":
+                continue
+            for provider in providers:
+                if allowed_agents and provider not in allowed_agents:
+                    continue
+                catalog.setdefault(provider, []).append(capability)
+        return catalog
+
+    async def _dispatch_mission(
+        self,
+        brief: MissionBrief,
+        metadata: RequestMetadata,
+        timer: RequestTimer,
+        tracker: Optional[PerfTracker],
+    ) -> Optional[Dict[str, Any]]:
+        """Dispatch a mission to the lead agent and wait for response.
+
+        Sends a capability request with the mission_brief in data.
+        """
+        request_id = str(uuid.uuid4())
+
+        # Send capability request with mission brief
+        await self.network.request_capability(
+            from_agent="JarvisSystem",
+            capability=brief.lead_capability,
+            data={
+                "prompt": brief.user_input,
+                "input": brief.user_input,
+                "mission_brief": brief.to_dict(),
+                "context": {
+                    "conversation_history": brief.context.conversation_history,
+                },
+            },
+            request_id=request_id,
+            allowed_agents={brief.lead_agent},
+        )
+
+        try:
+            if tracker:
+                async with tracker.timer(
+                    "coordinator_dispatch",
+                    metadata={"lead_agent": brief.lead_agent},
+                ):
+                    result = await self.network.wait_for_response(
+                        request_id, timeout=brief.budget.time_remaining
+                    )
+            else:
+                result = await self.network.wait_for_response(
+                    request_id, timeout=brief.budget.time_remaining
+                )
+
+            response_text = self._extract_response_text(result)
+
+            # Store conversation turn
+            if response_text:
+                self._store_conversation_turn(
+                    metadata.user_id, brief.user_input, response_text
+                )
+
+            # Log interaction
+            await self.response_logger.log_successful_interaction(
+                user_input=brief.user_input,
+                response=response_text or "",
+                intent="coordinator",
+                capability=brief.lead_capability,
+                latency_ms=timer.elapsed_ms(),
+                user_id=metadata.user_id,
+                device=metadata.device,
+                location=metadata.location,
+                source=metadata.source,
+            )
+
+            response_dict = {"response": response_text} if response_text else result
+            if isinstance(result, dict):
+                if "success" in result:
+                    response_dict["success"] = result["success"]
+                if "error" in result:
+                    response_dict["error"] = result["error"]
+            response_dict["coordinator"] = True
+            response_dict["lead_agent"] = brief.lead_agent
+            return response_dict
+
+        except asyncio.TimeoutError:
+            self.logger.log(
+                "WARNING",
+                "Coordinator mission timed out, falling back to NLU",
+                f"lead={brief.lead_agent}",
+            )
+            return None
+
+        except Exception as e:
+            self.logger.log(
+                "WARNING",
+                "Coordinator mission failed, falling back to NLU",
+                str(e),
+            )
+            return None
+
     def _store_conversation_turn(
         self, user_id: int, user_input: str, response: str
     ) -> None:

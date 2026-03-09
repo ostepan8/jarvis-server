@@ -18,6 +18,7 @@ class FeatureFlags:
     enable_roku: bool = True
     enable_coding: bool = False
     enable_todo: bool = True
+    enable_coordinator: bool = True
 
 
 @dataclass
