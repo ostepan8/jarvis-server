@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from ..core import JarvisConfig
@@ -47,7 +48,7 @@ class AgentFactory:
         ai_client: BaseAIClient,
         system: Optional["JarvisSystem"] = None,
     ) -> Dict[str, Any]:
-        """Create all agents/services and register them with the network."""
+        """Synchronous build — kept for backward compat / tests."""
         refs: Dict[str, Any] = {}
         refs.update(self._build_memory(network, ai_client))
         vector_memory = refs.get("vector_memory")
@@ -77,6 +78,100 @@ class AgentFactory:
 
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
+
+        return refs
+
+    async def build_all_async(
+        self,
+        network: AgentNetwork,
+        ai_client: BaseAIClient,
+        system: Optional["JarvisSystem"] = None,
+    ) -> Dict[str, Any]:
+        """Create all agents with heavy I/O running in parallel.
+
+        ChromaDB init and weather geolocation are offloaded to threads
+        while instant agents are built immediately on the main thread.
+        """
+        refs: Dict[str, Any] = {}
+
+        # --- Kick off slow I/O in background threads ---
+        chromadb_future = asyncio.to_thread(
+            VectorMemoryService,
+            persist_directory=self.config.memory_dir,
+            api_key=self.config.api_key,
+        )
+
+        location_future = None
+        if self.config.flags.enable_weather:
+            location_future = asyncio.to_thread(get_location_from_ip)
+
+        # --- Build all instant agents while I/O runs ---
+        refs.update(self._build_calendar(network, ai_client))
+        refs.update(self._build_chat(network, ai_client))
+        refs.update(self._build_search(network))
+        refs.update(self._build_protocol(network))
+
+        if self.config.flags.enable_canvas:
+            refs.update(self._build_canvas(network, ai_client))
+        if self.config.flags.enable_lights:
+            refs.update(self._build_lights(network, ai_client))
+        if self.config.flags.enable_roku:
+            refs.update(self._build_roku(network, ai_client))
+        if self.config.flags.enable_coding:
+            refs.update(self._build_coding(network, ai_client))
+        if self.config.flags.enable_todo:
+            refs.update(self._build_todo(network, ai_client))
+        if self.config.flags.enable_night_mode and system is not None:
+            refs.update(self._build_night_agents(network, system))
+
+        # --- Await ChromaDB init, then build memory + NLU ---
+        try:
+            vector_memory = await chromadb_future
+        except Exception as exc:
+            self.logger.log("WARNING", "VectorMemoryService init failed", str(exc))
+            vector_memory = None
+
+        if vector_memory is not None:
+            fact_service = FactMemoryService()
+            memory_agent = MemoryAgent(
+                vector_memory, fact_service, self.logger, ai_client
+            )
+            network.register_agent(memory_agent)
+            refs.update({
+                "vector_memory": vector_memory,
+                "fact_service": fact_service,
+                "memory_agent": memory_agent,
+            })
+
+        refs.update(self._build_nlu(network, ai_client, vector_memory))
+
+        # --- Await geolocation, then build weather ---
+        if location_future is not None:
+            try:
+                detected_location = await location_future
+                if not detected_location:
+                    detected_location = "Chicago"
+                    self.logger.log(
+                        "INFO",
+                        "Could not detect location from IP",
+                        f"Using default location '{detected_location}'",
+                    )
+                else:
+                    self.logger.log(
+                        "INFO",
+                        "Detected location from IP address",
+                        f"Using '{detected_location}' as default weather location",
+                    )
+                weather_agent = WeatherAgent(
+                    api_key=self.config.weather_api_key,
+                    logger=self.logger,
+                    ai_client=ai_client,
+                    default_location=detected_location,
+                )
+                network.register_agent(weather_agent)
+                refs["weather_agent"] = weather_agent
+            except Exception as exc:
+                self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
 
         return refs
 

@@ -429,5 +429,137 @@ class TestAgentFactoryNetworkRegistration:
         assert "intent_matching" in network.capability_registry
 
 
+class TestAgentFactoryBuildAllAsync:
+    """Test the async build_all_async method that parallelizes heavy I/O."""
+
+    @pytest.fixture
+    def network(self):
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        return JarvisLogger()
+
+    @pytest.fixture
+    def minimal_config(self):
+        return JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_build_all_async_returns_dict(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all_async returns a dictionary."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = await factory.build_all_async(network, ai_client)
+        assert isinstance(refs, dict)
+
+    @pytest.mark.asyncio
+    async def test_build_all_async_registers_core_agents(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all_async registers the same core agents as sync."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = await factory.build_all_async(network, ai_client)
+        assert "memory_agent" in refs
+        assert "nlu_agent" in refs
+        assert "calendar_service" in refs
+        assert "chat_agent" in refs
+        assert "protocol_agent" in refs
+        assert "MemoryAgent" in network.agents
+        assert "NLUAgent" in network.agents
+        assert "CalendarAgent" in network.agents
+        assert "ChatAgent" in network.agents
+
+    @pytest.mark.asyncio
+    async def test_build_all_async_skips_disabled_agents(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all_async skips agents when flags are off."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = await factory.build_all_async(network, ai_client)
+        assert "weather_agent" not in refs
+        assert "lights_agent" not in refs
+        assert "canvas_agent" not in refs
+        assert "roku_agent" not in refs
+
+    @pytest.mark.asyncio
+    @patch("jarvis.agents.factory.get_location_from_ip", return_value="Boston")
+    async def test_build_all_async_with_weather(
+        self, mock_location, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test build_all_async builds weather agent when enabled."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=True,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            weather_api_key="fake-key",
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = await factory.build_all_async(network, ai_client)
+        assert "weather_agent" in refs
+
+    @pytest.mark.asyncio
+    async def test_build_all_async_handles_chromadb_failure(
+        self, network, ai_client, logger
+    ):
+        """Test build_all_async gracefully handles VectorMemoryService failure."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        with patch(
+            "jarvis.agents.factory.VectorMemoryService",
+            side_effect=ValueError("No API key"),
+        ):
+            factory = AgentFactory(config, logger)
+            refs = await factory.build_all_async(network, ai_client)
+            # Memory agent should not be present but NLU should still be built
+            assert "memory_agent" not in refs
+            assert "nlu_agent" in refs
+
+    @pytest.mark.asyncio
+    async def test_build_all_async_matches_sync_agents(
+        self, mock_vector_memory, minimal_config, ai_client, logger
+    ):
+        """Test async and sync build produce the same set of registered agents."""
+        net_sync = AgentNetwork()
+        net_async = AgentNetwork()
+
+        factory_sync = AgentFactory(minimal_config, logger)
+        factory_async = AgentFactory(minimal_config, logger)
+
+        factory_sync.build_all(net_sync, ai_client)
+        await factory_async.build_all_async(net_async, ai_client)
+
+        assert set(net_sync.agents.keys()) == set(net_async.agents.keys())
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

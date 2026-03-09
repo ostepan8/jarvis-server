@@ -71,22 +71,51 @@ class JarvisSystem:
         self._response_logger: ResponseLogger | None = None
 
     async def initialize(self, load_protocol_directory: bool = False) -> None:
-        """Initialize all agents and start the network."""
+        """Initialize all agents and start the network.
+
+        Heavy I/O (MongoDB, ChromaDB, geolocation, protocol files) runs in
+        parallel via asyncio.gather / to_thread so startup is bounded by
+        the single slowest operation rather than their sum.
+        """
         ai_client = self._create_ai_client()
         self._ai_client = ai_client
-        await self._connect_mongo_loggers()
 
         factory = AgentFactory(self.config, self.logger)
-        refs = factory.build_all(self.network, ai_client, self)
 
-        # Store agent references internally
+        # --- Run ALL heavy I/O concurrently ---
+        mongo_task = self._connect_mongo_loggers()
+        agents_task = factory.build_all_async(self.network, ai_client, self)
+        protocol_task = asyncio.to_thread(
+            self._build_protocol_runtime, load_protocol_directory
+        )
+
+        results = await asyncio.gather(
+            mongo_task, agents_task, protocol_task, return_exceptions=True
+        )
+
+        # Unpack — tolerate mongo failures gracefully
+        if isinstance(results[0], BaseException):
+            self.logger.log(
+                "WARNING",
+                "MongoDB connection failed (non-fatal)",
+                str(results[0]),
+            )
+
+        refs = results[1] if isinstance(results[1], dict) else {}
         self._agent_refs = refs
+
+        if isinstance(results[2], ProtocolRuntime):
+            self.protocol_runtime = results[2]
+        elif isinstance(results[2], BaseException):
+            self.logger.log(
+                "WARNING", "Protocol loading failed", str(results[2])
+            )
 
         # Extract specific references needed for night mode
         self.night_controller = refs.get("night_controller")
         self.night_agents = refs.get("night_agents", [])
 
-        # Initialize fast-path classifier if available
+        # Initialize fast-path classifier (best-effort)
         fast_classifier = refs.get("fast_classifier")
         if fast_classifier:
             try:
@@ -99,7 +128,6 @@ class JarvisSystem:
                     str(exc),
                 )
 
-        self._setup_protocol_system(load_protocol_directory)
         await self._start_network()
 
         # Initialize orchestrator and response logger
@@ -137,9 +165,11 @@ class JarvisSystem:
         )
 
     async def _connect_mongo_loggers(self) -> None:
-        """Connect both MongoDB loggers during initialization."""
-        await self.usage_logger.connect()
-        await self.interaction_logger.connect()
+        """Connect both MongoDB loggers concurrently."""
+        await asyncio.gather(
+            self.usage_logger.connect(),
+            self.interaction_logger.connect(),
+        )
 
     def list_agents(self) -> Dict[str, Any]:
         """List all registered agents in the network."""
@@ -175,29 +205,28 @@ class JarvisSystem:
             return []
         return self.protocol_runtime.list_protocols(allowed_agents)
 
-    def _setup_protocol_system(
+    def _build_protocol_runtime(
         self,
         load_protocol_directory: bool = False,
         definition_dir: Path | None = None,
-    ) -> None:
-        """Initialize the protocol runtime and related helpers."""
+    ) -> ProtocolRuntime:
+        """Build and return a ProtocolRuntime (thread-safe, no self mutation)."""
         if definition_dir is None:
-            # Path from jarvis/core/system.py to jarvis/protocols/defaults/definitions
             definition_dir = (
                 Path(__file__).parent.parent / "protocols" / "defaults" / "definitions"
             )
 
-        # Build skip list from disabled feature flags
         skip_prefixes: list[str] = []
         if not self.config.flags.enable_lights:
             skip_prefixes.append("lights_")
 
-        self.protocol_runtime = ProtocolRuntime(
+        runtime = ProtocolRuntime(
             self.network, self.logger, usage_logger=self.usage_logger
         )
-        self.protocol_runtime.initialize(
+        runtime.initialize(
             load_protocol_directory, definition_dir, skip_prefixes=skip_prefixes
         )
+        return runtime
 
     async def _start_network(self) -> None:
         await self.network.start()
