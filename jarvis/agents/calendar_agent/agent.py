@@ -56,6 +56,10 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
     def capabilities(self) -> Set[str]:
         return self.function_registry.capabilities
 
+    @property
+    def supports_dialogue(self) -> bool:
+        return True
+
     async def run_capability(self, capability: str, **kwargs: Any) -> Any:
         """Execute a calendar capability via the function registry."""
         func = self.function_registry.get_function(capability)
@@ -92,6 +96,17 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
         data = message.content.get("data", {})
 
         if capability not in self.capabilities:
+            return
+
+        # Handle dialogue context (multi-turn agent-to-agent conversation)
+        dialogue_context = data.get("dialogue_context")
+        if dialogue_context:
+            result = await self._respond_to_dialogue(
+                data.get("prompt", ""), dialogue_context
+            )
+            await self.send_capability_response(
+                message.from_agent, result, message.request_id, message.id
+            )
             return
 
         if self.logger:

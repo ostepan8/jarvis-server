@@ -15,17 +15,20 @@ from ..core.errors import (
     BudgetExhaustedError,
     CapabilityNotFoundError,
     CircularRecruitmentError,
+    DialogueError,
 )
 from ..core.mission import MissionBrief
+from .dialogue import DialogueSession, DialogueStatus
 from .response import AgentResponse
 
 
 class CollaborationMixin:
-    """Mixin that adds recruitment and lead-agent capabilities to a NetworkAgent.
+    """Mixin that adds recruitment, dialogue, and lead-agent capabilities to a NetworkAgent.
 
     When mixed into a NetworkAgent subclass, this provides:
-    - recruit(): ask another agent to perform a capability
-    - _execute_as_lead(): run an LLM tool-calling loop with own tools + recruit_agent
+    - recruit(): ask another agent to perform a capability (one-shot)
+    - dialogue(): multi-turn conversation with another agent
+    - _execute_as_lead(): run an LLM tool-calling loop with own tools + recruit_agent + start_dialogue
     - Budget enforcement, cycle detection, and context accumulation
     """
 
@@ -236,10 +239,12 @@ class CollaborationMixin:
         # Build system prompt
         system_prompt = self._build_lead_system_prompt(brief)
 
-        # Build tools: own tools + recruit_agent
+        # Build tools: own tools + recruit_agent + start_dialogue
         tools = list(getattr(self, "tools", []))
         recruit_tool = self._build_recruit_tool_definition(brief)
         tools.append(recruit_tool)
+        dialogue_tool = self._build_dialogue_tool_definition(brief)
+        tools.append(dialogue_tool)
 
         # Build messages
         messages: List[Dict[str, Any]] = [
@@ -309,6 +314,8 @@ class CollaborationMixin:
                     }
                 if fn_name == "recruit_agent":
                     result = await self._handle_recruit_tool_call(args, brief)
+                elif fn_name == "start_dialogue":
+                    result = await self._handle_dialogue_tool_call(args, brief)
                 else:
                     try:
                         result = await self.run_capability(fn_name, **args)
@@ -425,3 +432,326 @@ class CollaborationMixin:
             if capability in caps and agent != self.name:
                 return agent
         return None
+
+    # ------------------------------------------------------------------
+    # Dialogue (multi-turn agent-to-agent conversation)
+    # ------------------------------------------------------------------
+
+    async def dialogue(
+        self,
+        capability: str,
+        initial_message: str,
+        goal: str,
+        brief: MissionBrief,
+        max_turns: int = 5,
+        timeout_per_turn: float | None = None,
+    ) -> DialogueSession:
+        """Conduct a multi-turn dialogue with a specialist agent.
+
+        Each turn to the responder costs 1 ``remaining_recruitment`` from
+        the budget.  Each lead follow-up costs 1 LLM call.
+
+        Args:
+            capability: The capability that identifies the responder agent.
+            initial_message: First message from the lead to the responder.
+            goal: High-level goal description for the dialogue.
+            brief: Current mission brief (budget + context).
+            max_turns: Maximum number of *responder* turns allowed.
+            timeout_per_turn: Per-turn timeout (defaults to budget time_remaining).
+
+        Returns:
+            A ``DialogueSession`` with the full transcript and final status.
+        """
+        budget = brief.budget
+        context = brief.context
+
+        # --- find provider (under lock, with cycle detection) ---
+        async with self.budget_lock:
+            if not budget.can_recruit:
+                raise BudgetExhaustedError(
+                    "Cannot start dialogue: budget exhausted",
+                    details={
+                        "remaining_depth": budget.remaining_depth,
+                        "remaining_recruitments": budget.remaining_recruitments,
+                    },
+                )
+            provider_agent = self._find_capability_provider(capability, brief)
+            if not provider_agent:
+                raise CapabilityNotFoundError(
+                    f"No agent provides capability '{capability}'",
+                    details={"capability": capability},
+                )
+            if context.has_visited(provider_agent):
+                raise CircularRecruitmentError(
+                    f"Circular recruitment detected: "
+                    f"{' -> '.join(context.recruitment_chain)} -> {provider_agent}",
+                    details={"chain": context.recruitment_chain + [provider_agent]},
+                )
+
+        session = DialogueSession(
+            initiator=self.name,
+            responder=provider_agent,
+            goal=goal,
+            capability=capability,
+            max_turns=max_turns,
+        )
+
+        current_message = initial_message
+
+        try:
+            for turn_idx in range(max_turns):
+                # --- budget gate (each responder turn costs 1 recruitment) ---
+                async with self.budget_lock:
+                    if not budget.can_recruit:
+                        session.status = DialogueStatus.TERMINATED
+                        break
+                    budget.remaining_recruitments -= 1
+
+                # Record initiator turn
+                session.add_turn(self.name, current_message)
+
+                # --- send to responder via existing primitive ---
+                effective_timeout = (
+                    timeout_per_turn
+                    if timeout_per_turn is not None
+                    else budget.time_remaining
+                )
+
+                request_id = str(uuid.uuid4())
+                try:
+                    result = await self._request_and_wait_for_agent(
+                        capability=capability,
+                        data={
+                            "prompt": current_message,
+                            "input": current_message,
+                            "dialogue_context": {
+                                "goal": goal,
+                                "transcript": session.format_transcript(),
+                                "capability": capability,
+                            },
+                        },
+                        request_id=request_id,
+                        timeout=effective_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    session.status = DialogueStatus.ERROR
+                    session.add_turn(
+                        provider_agent,
+                        "[timeout — no response]",
+                        error="timeout",
+                    )
+                    break
+                except Exception as exc:
+                    session.status = DialogueStatus.ERROR
+                    session.add_turn(
+                        provider_agent,
+                        f"[error: {exc}]",
+                        error=str(exc),
+                    )
+                    break
+                finally:
+                    self.active_tasks.pop(request_id, None)
+
+                # Record responder turn
+                responder_msg = self._extract_dialogue_response(result)
+                session.add_turn(provider_agent, responder_msg)
+
+                # Check if responder signalled completion
+                if self._extract_dialogue_done_signal(result):
+                    session.status = DialogueStatus.COMPLETED
+                    break
+
+                # Check deadline
+                if budget.is_expired:
+                    session.status = DialogueStatus.TERMINATED
+                    break
+
+                # --- lead generates follow-up (costs 1 LLM call) ---
+                if turn_idx < max_turns - 1:
+                    next_message, should_conclude = await self._generate_dialogue_reply(
+                        session, brief
+                    )
+                    if should_conclude:
+                        session.status = DialogueStatus.COMPLETED
+                        break
+                    current_message = next_message
+
+            # If loop exhausted without explicit status change
+            if session.status == DialogueStatus.ACTIVE:
+                session.status = DialogueStatus.COMPLETED
+
+        except Exception as exc:
+            session.status = DialogueStatus.ERROR
+            session.add_turn(self.name, f"[dialogue error: {exc}]", error=str(exc))
+
+        # Record full transcript in mission context
+        context.add_result(
+            provider_agent,
+            f"dialogue:{capability}",
+            {
+                "transcript": session.format_transcript(),
+                "status": session.status.value,
+                "turns": session.turn_count,
+            },
+        )
+
+        return session
+
+    async def _generate_dialogue_reply(
+        self, session: DialogueSession, brief: MissionBrief
+    ) -> tuple[str, bool]:
+        """Generate the lead agent's next dialogue message via LLM.
+
+        Args:
+            session: Current dialogue session with transcript so far.
+            brief: Current mission brief.
+
+        Returns:
+            Tuple of (next_message, should_conclude).
+        """
+        ai_client = getattr(self, "ai_client", None)
+        if ai_client is None:
+            return ("I have no further questions.", True)
+
+        system_prompt = (
+            f"You are {self.name}, leading a dialogue with {session.responder}.\n"
+            f"Goal: {session.goal}\n\n"
+            f"Transcript so far:\n{session.format_transcript()}\n\n"
+            "Based on the dialogue so far, generate your next message.\n"
+            "Reply with ONLY a JSON object (no markdown fences):\n"
+            '{"message": "your next message", "conclude": true/false}\n\n'
+            "Set \"conclude\" to true if the goal is satisfied or you have "
+            "enough information."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Generate your next dialogue message."},
+        ]
+
+        try:
+            resp_msg, _ = await ai_client.strong_chat(messages, [])
+            content = resp_msg.content if hasattr(resp_msg, "content") else str(resp_msg)
+
+            try:
+                parsed = json.loads(content)
+                return (
+                    parsed.get("message", content),
+                    bool(parsed.get("conclude", False)),
+                )
+            except (json.JSONDecodeError, TypeError):
+                return (content, False)
+        except Exception:
+            return ("I have no further questions.", True)
+
+    def _extract_dialogue_response(self, result: Any) -> str:
+        """Extract the dialogue message from a responder's result.
+
+        Prefers ``dialogue_message``, falls back to ``response``.
+        """
+        if isinstance(result, dict):
+            return str(
+                result.get("dialogue_message", result.get("response", str(result)))
+            )
+        return str(result)
+
+    def _extract_dialogue_done_signal(self, result: Any) -> bool:
+        """Check whether the responder signalled the dialogue is done."""
+        if isinstance(result, dict):
+            return bool(result.get("dialogue_done", False))
+        return False
+
+    def _build_dialogue_tool_definition(
+        self, brief: MissionBrief
+    ) -> Dict[str, Any]:
+        """Build the ``start_dialogue`` tool spec for the LLM tool loop.
+
+        Args:
+            brief: Mission brief with available capabilities.
+
+        Returns:
+            OpenAI-format function tool definition.
+        """
+        recruitable = self.get_recruitable_capabilities(brief)
+
+        all_capabilities: List[str] = []
+        for caps in recruitable.values():
+            all_capabilities.extend(caps)
+        all_capabilities = sorted(set(all_capabilities))
+
+        return {
+            "type": "function",
+            "function": {
+                "name": "start_dialogue",
+                "description": (
+                    "Start a multi-turn dialogue with a specialist agent. "
+                    "Use this for back-and-forth conversation when you need "
+                    "iterative negotiation, refinement, or coordination — "
+                    "not for simple one-shot requests (use recruit_agent for those)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "capability": {
+                            "type": "string",
+                            "description": "The capability of the agent to dialogue with",
+                            "enum": all_capabilities if all_capabilities else ["none"],
+                        },
+                        "initial_message": {
+                            "type": "string",
+                            "description": "Your opening message to the specialist agent",
+                        },
+                        "goal": {
+                            "type": "string",
+                            "description": "The high-level goal of this dialogue",
+                        },
+                        "max_turns": {
+                            "type": "integer",
+                            "description": "Maximum conversation turns (default 3)",
+                            "default": 3,
+                        },
+                    },
+                    "required": ["capability", "initial_message", "goal"],
+                },
+            },
+        }
+
+    async def _handle_dialogue_tool_call(
+        self, args: Dict[str, Any], brief: MissionBrief
+    ) -> Dict[str, Any]:
+        """Handle a ``start_dialogue`` tool call from the LLM loop.
+
+        Args:
+            args: Tool call arguments.
+            brief: Current mission brief.
+
+        Returns:
+            Dict with transcript, status, and turn count.
+        """
+        capability = args.get("capability", "")
+        initial_message = args.get("initial_message", "")
+        goal = args.get("goal", "")
+        max_turns = int(args.get("max_turns", 3))
+
+        try:
+            session = await self.dialogue(
+                capability=capability,
+                initial_message=initial_message,
+                goal=goal,
+                brief=brief,
+                max_turns=max_turns,
+            )
+            return {
+                "transcript": session.format_transcript(),
+                "status": session.status.value,
+                "turns": session.turn_count,
+                "goal": session.goal,
+            }
+        except (
+            BudgetExhaustedError,
+            CircularRecruitmentError,
+            CapabilityNotFoundError,
+        ) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"Dialogue failed: {exc}"}

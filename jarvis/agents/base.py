@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import uuid
 import asyncio
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from ..core.profile import AgentProfile
 from ..services.vector_memory import VectorMemoryService
@@ -46,6 +47,98 @@ class NetworkAgent:
     def capabilities(self) -> Set[str]:
         """Override in subclass."""
         return set()
+
+    @property
+    def supports_dialogue(self) -> bool:
+        """Whether this agent can participate in multi-turn dialogues.
+
+        An agent needs an AI client to reason about dialogue context.
+        Override to return ``True`` in agents with an ``ai_client``.
+        """
+        return False
+
+    async def _respond_to_dialogue(
+        self,
+        message: str,
+        dialogue_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Generate a dialogue response using the agent's AI client.
+
+        Called by the messaging layer when a capability request contains
+        ``dialogue_context``.  Builds an LLM prompt from the transcript,
+        goal, and current message, then asks the AI for a JSON reply with
+        ``message`` and ``done`` fields.
+
+        Args:
+            message: The current turn's message from the initiator.
+            dialogue_context: Dict with ``goal``, ``transcript``, and
+                ``capability`` describing the ongoing dialogue.
+
+        Returns:
+            Dict with keys ``dialogue_message``, ``dialogue_done``,
+            ``response``, and ``success``.
+        """
+        ai_client = getattr(self, "ai_client", None)
+        if ai_client is None:
+            return {
+                "dialogue_message": message,
+                "dialogue_done": True,
+                "response": "This agent does not support multi-turn dialogue.",
+                "success": True,
+            }
+
+        goal = dialogue_context.get("goal", "")
+        transcript = dialogue_context.get("transcript", "")
+        capability = dialogue_context.get("capability", "")
+
+        system_prompt = (
+            f"You are {self.name}, a specialist agent in a multi-turn dialogue.\n"
+            f"Capability being discussed: {capability}\n"
+            f"Goal of this dialogue: {goal}\n\n"
+            "You are having a conversation with the lead agent. "
+            "Respond helpfully based on your expertise.\n\n"
+            "Reply with ONLY a JSON object (no markdown fences):\n"
+            '{"message": "your response text", "done": true/false}\n\n'
+            "Set \"done\" to true when the conversation goal is satisfied "
+            "or you have nothing more to add."
+        )
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        if transcript:
+            messages.append(
+                {"role": "system", "content": f"Dialogue so far:\n{transcript}"}
+            )
+
+        messages.append({"role": "user", "content": message})
+
+        try:
+            resp_msg, _ = await ai_client.strong_chat(messages, [])
+            content = resp_msg.content if hasattr(resp_msg, "content") else str(resp_msg)
+
+            try:
+                parsed = json.loads(content)
+                dialogue_message = parsed.get("message", content)
+                dialogue_done = bool(parsed.get("done", False))
+            except (json.JSONDecodeError, TypeError):
+                dialogue_message = content
+                dialogue_done = False
+
+            return {
+                "dialogue_message": dialogue_message,
+                "dialogue_done": dialogue_done,
+                "response": dialogue_message,
+                "success": True,
+            }
+        except Exception as exc:
+            return {
+                "dialogue_message": f"Error generating dialogue response: {exc}",
+                "dialogue_done": True,
+                "response": f"Error: {exc}",
+                "success": False,
+            }
 
     def set_network(self, network: AgentNetwork) -> None:
         """Set the network this agent belongs to."""

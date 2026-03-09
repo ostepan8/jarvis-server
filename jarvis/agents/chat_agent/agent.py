@@ -55,6 +55,10 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
     def capabilities(self) -> Set[str]:
         return {"chat"}
 
+    @property
+    def supports_dialogue(self) -> bool:
+        return True
+
     # ------------------------------------------------------------------
     # Capability dispatch
     # ------------------------------------------------------------------
@@ -64,6 +68,17 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
             return
 
         data = message.content.get("data", {})
+
+        # Handle dialogue context (multi-turn agent-to-agent conversation)
+        dialogue_context = data.get("dialogue_context")
+        if dialogue_context:
+            result = await self._respond_to_dialogue(
+                data.get("prompt", ""), dialogue_context
+            )
+            await self.send_capability_response(
+                message.from_agent, result, message.request_id, message.id
+            )
+            return
         prompt = data.get("prompt")
         context = data.get("context", {})
         conversation_history = context.get("conversation_history", [])

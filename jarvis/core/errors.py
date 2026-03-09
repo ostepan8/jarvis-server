@@ -125,6 +125,15 @@ class CircularRecruitmentError(AgentError):
     pass
 
 
+class DialogueError(AgentError):
+    """Raised when a dialogue session encounters an unrecoverable error.
+
+    This includes failures during multi-turn agent-to-agent conversations
+    such as responder crashes, malformed responses, or protocol violations.
+    """
+    pass
+
+
 @dataclass
 class ErrorResponse:
     """Standardized error response format for all agents and services.
