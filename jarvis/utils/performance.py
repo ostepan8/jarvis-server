@@ -4,7 +4,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional
 import contextvars
 
@@ -57,12 +57,12 @@ class PerfTracker:
             yield
             return
         start = time.perf_counter()
-        start_time = datetime.utcnow().isoformat() + "Z"
+        start_time = datetime.now(UTC).isoformat()
         try:
             yield
         finally:
             end = time.perf_counter()
-            end_time = datetime.utcnow().isoformat() + "Z"
+            end_time = datetime.now(UTC).isoformat()
             self.events.append(
                 PerfEvent(
                     name=name,
@@ -83,7 +83,7 @@ class PerfTracker:
             "interaction_id": self.interaction_id,
             "timings": ordered,
             "events": events,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def save(self, path: str = "perf_logs.jsonl") -> None:

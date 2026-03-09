@@ -1,0 +1,433 @@
+"""Tests for AgentFactory - agent construction from config."""
+
+import os
+import pytest
+from unittest.mock import MagicMock, patch, AsyncMock
+
+from jarvis.agents.factory import AgentFactory
+from jarvis.agents.agent_network import AgentNetwork
+from jarvis.core.config import JarvisConfig, FeatureFlags
+from jarvis.ai_clients.dummy_client import DummyAIClient
+from jarvis.logging import JarvisLogger
+
+
+# ---------------------------------------------------------------------------
+# Shared fixtures: all build_all tests need to mock VectorMemoryService
+# because it requires an OpenAI API key at construction time.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_vector_memory():
+    """Mock VectorMemoryService to avoid needing OPENAI_API_KEY."""
+    with patch("jarvis.agents.factory.VectorMemoryService") as MockVMS:
+        mock_instance = MagicMock()
+        MockVMS.return_value = mock_instance
+        yield MockVMS
+
+
+class TestAgentFactoryInit:
+    """Test AgentFactory initialization."""
+
+    def test_factory_stores_config_and_logger(self):
+        """Test factory stores the config and logger references."""
+        config = JarvisConfig()
+        logger = JarvisLogger()
+        factory = AgentFactory(config, logger)
+        assert factory.config is config
+        assert factory.logger is logger
+
+
+class TestAgentFactoryBuildAll:
+    """Test AgentFactory.build_all method."""
+
+    @pytest.fixture
+    def network(self):
+        """Create an AgentNetwork."""
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        """Create a DummyAIClient."""
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        """Create a JarvisLogger."""
+        return JarvisLogger()
+
+    @pytest.fixture
+    def minimal_config(self):
+        """Create a config with most optional features disabled."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        return config
+
+    def test_build_all_returns_dict(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all returns a dictionary of built components."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert isinstance(refs, dict)
+
+    def test_build_all_registers_memory_agent(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all always registers a memory agent."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "memory_agent" in refs
+        assert "MemoryAgent" in network.agents
+
+    def test_build_all_registers_nlu_agent(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all always registers an NLU agent."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "nlu_agent" in refs
+        assert "NLUAgent" in network.agents
+
+    def test_build_all_registers_calendar_agent(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all always registers a calendar agent."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "calendar_service" in refs
+        assert "CalendarAgent" in network.agents
+
+    def test_build_all_registers_chat_agent(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all always registers a chat agent."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "chat_agent" in refs
+        assert "ChatAgent" in network.agents
+
+    def test_build_all_registers_protocol_agent(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all always registers a protocol agent."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "protocol_agent" in refs
+        assert "ProtocolAgent" in network.agents
+
+    def test_build_all_skips_weather_when_disabled(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all skips weather agent when flag is disabled."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "weather_agent" not in refs
+
+    def test_build_all_skips_lights_when_disabled(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all skips lights agent when flag is disabled."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "lights_agent" not in refs
+
+    def test_build_all_skips_canvas_when_disabled(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all skips canvas agent when flag is disabled."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "canvas_agent" not in refs
+
+    def test_build_all_skips_roku_when_disabled(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all skips roku agent when flag is disabled."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "roku_agent" not in refs
+
+    def test_build_all_skips_search_when_no_api_key(
+        self, mock_vector_memory, minimal_config, network, ai_client, logger
+    ):
+        """Test build_all skips search agent when no Google API key."""
+        factory = AgentFactory(minimal_config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "search_agent" not in refs
+
+
+class TestAgentFactoryBuildWeather:
+    """Test weather agent building."""
+
+    @pytest.fixture
+    def network(self):
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        return JarvisLogger()
+
+    @patch("jarvis.agents.factory.get_location_from_ip", return_value="New York")
+    def test_build_weather_with_detected_location(
+        self, mock_location, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test weather agent uses detected location."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=True,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            weather_api_key="fake-weather-key",
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "weather_agent" in refs
+
+    @patch("jarvis.agents.factory.get_location_from_ip", return_value=None)
+    def test_build_weather_falls_back_to_chicago(
+        self, mock_location, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test weather agent falls back to Chicago when IP detection fails."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=True,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            weather_api_key="fake-weather-key",
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "weather_agent" in refs
+
+    @patch("jarvis.agents.factory.get_location_from_ip", return_value="Chicago")
+    @patch.dict("os.environ", {}, clear=False)
+    def test_build_weather_skips_without_api_key(
+        self, mock_location, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test weather agent is skipped when no weather API key is configured."""
+        # Remove weather API keys from env to ensure the test is isolated
+        os.environ.pop("WEATHER_API_KEY", None)
+        os.environ.pop("OPENWEATHER_API_KEY", None)
+
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=True,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            weather_api_key=None,
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        # WeatherAgent requires a weather API key; without one, it fails gracefully
+        assert "weather_agent" not in refs
+
+
+class TestAgentFactoryBuildRoku:
+    """Test roku agent building."""
+
+    @pytest.fixture
+    def network(self):
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        return JarvisLogger()
+
+    def test_build_roku_skips_when_no_ip(
+        self, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test roku agent is skipped when no IP address configured."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=True,
+            ),
+            roku_ip_address=None,
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "roku_agent" not in refs
+
+
+class TestAgentFactoryBuildLights:
+    """Test lighting agent building."""
+
+    @pytest.fixture
+    def network(self):
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        return JarvisLogger()
+
+    def test_build_lights_skips_hue_when_no_bridge_ip(
+        self, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test lights agent skipped for hue when no bridge IP."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=True,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            lighting_backend="phillips_hue",
+            hue_bridge_ip=None,
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "lights_agent" not in refs
+
+
+class TestAgentFactoryBuildSearch:
+    """Test search agent building."""
+
+    @pytest.fixture
+    def network(self):
+        return AgentNetwork()
+
+    @pytest.fixture
+    def ai_client(self):
+        return DummyAIClient()
+
+    @pytest.fixture
+    def logger(self):
+        return JarvisLogger()
+
+    def test_build_search_skips_without_api_key(
+        self, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test search agent skipped when no API key."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "search_agent" not in refs
+
+    def test_build_search_skips_without_engine_id(
+        self, mock_vector_memory, network, ai_client, logger
+    ):
+        """Test search agent skipped when no engine ID."""
+        config = JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key="some-key",
+            google_search_engine_id=None,
+        )
+        factory = AgentFactory(config, logger)
+        refs = factory.build_all(network, ai_client)
+        assert "search_agent" not in refs
+
+
+class TestAgentFactoryNetworkRegistration:
+    """Test agents are properly registered in the network."""
+
+    @pytest.fixture
+    def minimal_config(self):
+        return JarvisConfig(
+            flags=FeatureFlags(
+                enable_weather=False,
+                enable_lights=False,
+                enable_canvas=False,
+                enable_night_mode=False,
+                enable_roku=False,
+            ),
+            google_search_api_key=None,
+            google_search_engine_id=None,
+        )
+
+    def test_agents_have_network_set(self, mock_vector_memory, minimal_config):
+        """Test all registered agents have their network reference set."""
+        network = AgentNetwork()
+        logger = JarvisLogger()
+        ai_client = DummyAIClient()
+        factory = AgentFactory(minimal_config, logger)
+        factory.build_all(network, ai_client)
+
+        for agent_name, agent in network.agents.items():
+            assert agent.network is network, (
+                f"Agent {agent_name} does not have network set"
+            )
+
+    def test_capability_registry_populated(self, mock_vector_memory, minimal_config):
+        """Test the network capability registry has entries."""
+        network = AgentNetwork()
+        logger = JarvisLogger()
+        ai_client = DummyAIClient()
+        factory = AgentFactory(minimal_config, logger)
+        factory.build_all(network, ai_client)
+
+        # Should have some capabilities registered
+        assert len(network.capability_registry) > 0
+
+    def test_nlu_capability_registered(self, mock_vector_memory, minimal_config):
+        """Test intent_matching capability is registered."""
+        network = AgentNetwork()
+        logger = JarvisLogger()
+        ai_client = DummyAIClient()
+        factory = AgentFactory(minimal_config, logger)
+        factory.build_all(network, ai_client)
+
+        assert "intent_matching" in network.capability_registry
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

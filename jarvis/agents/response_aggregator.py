@@ -52,9 +52,10 @@ class ResponseTracker:
 
     def get_result(self) -> Dict[str, Any]:
         """Get aggregated result in standardized format."""
+        from .response import ErrorInfo
+
         # Handle failure case
         if self.errors and not self.responses:
-            from .response import AgentResponse, ErrorInfo
             return AgentResponse.error_response(
                 response="All providers failed to respond",
                 error=ErrorInfo(
@@ -65,7 +66,6 @@ class ResponseTracker:
 
         # Handle empty response case
         if not self.responses:
-            from .response import AgentResponse, ErrorInfo
             return AgentResponse.error_response(
                 response="No responses received",
                 error=ErrorInfo(message="No responses")
@@ -74,7 +74,7 @@ class ResponseTracker:
         # For FIRST strategy, return the first response
         if self.strategy == AggregationStrategy.FIRST:
             return self.responses[0].get("content", {})
-        
+
         # For other strategies, merge multiple responses
         elif self.strategy in (
             AggregationStrategy.ALL,
@@ -87,7 +87,7 @@ class ResponseTracker:
                 content = resp_data.get("content", {})
                 if isinstance(content, dict) and "success" in content:
                     agent_responses.append(AgentResponse.from_dict(content))
-            
+
             if agent_responses:
                 merged = merge_responses(agent_responses)
                 result = merged.to_dict()
@@ -97,7 +97,7 @@ class ResponseTracker:
                     "expected_from": self.expected_providers,
                 })
                 return result
-            
+
             # Fallback for non-standard responses
             return {
                 "success": True,
@@ -108,8 +108,7 @@ class ResponseTracker:
                     "expected_from": self.expected_providers,
                 },
             }
-        
-        from .response import AgentResponse, ErrorInfo
+
         return AgentResponse.error_response(
             response="Unknown aggregation strategy",
             error=ErrorInfo(message="Unknown strategy")

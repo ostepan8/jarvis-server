@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from jarvis.agents.roku_agent import RokuAgent
 from jarvis.agents.message import Message
@@ -151,7 +151,7 @@ async def test_roku_service_power_operations(monkeypatch):
     # Mock the HTTP client
     mock_response = AsyncMock()
     mock_response.status_code = 200
-    mock_response.raise_for_status = AsyncMock()
+    mock_response.raise_for_status = MagicMock()
 
     async def mock_post(url):
         return mock_response
