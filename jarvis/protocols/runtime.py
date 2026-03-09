@@ -38,12 +38,13 @@ class ProtocolRuntime:
         self,
         load_directory: bool = True,
         definitions_dir: Path | None = None,
+        skip_prefixes: list[str] | None = None,
     ) -> None:
         """Load protocol definitions and prepare matcher."""
         if load_directory:
             if definitions_dir is None:
                 definitions_dir = Path(__file__).parent / "defaults" / "definitions"
-            self.loader.load_directory(definitions_dir)
+            self.loader.load_directory(definitions_dir, skip_prefixes=skip_prefixes)
         self.voice_matcher = VoiceTriggerMatcher(self.registry.protocols)
 
     # ------------------------------------------------------------------

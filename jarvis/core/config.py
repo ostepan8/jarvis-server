@@ -12,7 +12,7 @@ class FeatureFlags:
     """Feature toggles controlling optional subsystems."""
 
     enable_weather: bool = True
-    enable_lights: bool = True
+    enable_lights: bool = False
     enable_canvas: bool = True
     enable_night_mode: bool = True
     enable_roku: bool = True

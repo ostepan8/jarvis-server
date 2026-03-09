@@ -183,10 +183,18 @@ class JarvisSystem:
             definition_dir = (
                 Path(__file__).parent.parent / "protocols" / "defaults" / "definitions"
             )
+
+        # Build skip list from disabled feature flags
+        skip_prefixes: list[str] = []
+        if not self.config.flags.enable_lights:
+            skip_prefixes.append("lights_")
+
         self.protocol_runtime = ProtocolRuntime(
             self.network, self.logger, usage_logger=self.usage_logger
         )
-        self.protocol_runtime.initialize(load_protocol_directory, definition_dir)
+        self.protocol_runtime.initialize(
+            load_protocol_directory, definition_dir, skip_prefixes=skip_prefixes
+        )
 
     async def _start_network(self) -> None:
         await self.network.start()
