@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, List
 import os
 
@@ -106,3 +108,88 @@ class UserConfig:
     roku_ip_address: Optional[str] = None
     roku_username: Optional[str] = None
     roku_password: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Config persistence & profiles
+# ---------------------------------------------------------------------------
+
+CONFIG_DIR = Path.home() / ".jarvis"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+FLAG_NAMES = [f.name for f in FeatureFlags.__dataclass_fields__.values()]
+
+CONNECTION_KEYS = [
+    "lighting_backend",
+    "hue_bridge_ip",
+    "hue_username",
+    "roku_ip_address",
+    "yeelight_bulb_ips",
+]
+
+
+@dataclass
+class ConfigProfile:
+    """A named configuration profile (e.g. 'Boston House')."""
+
+    label: str
+    feature_flags: dict = field(default_factory=dict)
+    connections: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "feature_flags": dict(self.feature_flags),
+            "connections": dict(self.connections),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ConfigProfile:
+        return cls(
+            label=data.get("label", "Unnamed"),
+            feature_flags=data.get("feature_flags", {}),
+            connections=data.get("connections", {}),
+        )
+
+    @classmethod
+    def from_config(cls, label: str, config: JarvisConfig) -> ConfigProfile:
+        """Snapshot current JarvisConfig into a profile."""
+        flags = {name: getattr(config.flags, name) for name in FLAG_NAMES}
+        conns = {key: getattr(config, key, None) for key in CONNECTION_KEYS}
+        return cls(label=label, feature_flags=flags, connections=conns)
+
+
+def save_config(active_profile: str, profiles: dict[str, ConfigProfile]) -> None:
+    """Persist config to ~/.jarvis/config.json."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    data = {
+        "active_profile": active_profile,
+        "profiles": {k: v.to_dict() for k, v in profiles.items()},
+    }
+    CONFIG_FILE.write_text(json.dumps(data, indent=2, default=str))
+
+
+def load_config() -> tuple[str | None, dict[str, ConfigProfile]]:
+    """Load config from disk. Returns (active_profile_key, profiles_dict)."""
+    if not CONFIG_FILE.exists():
+        return None, {}
+    try:
+        data = json.loads(CONFIG_FILE.read_text())
+        active = data.get("active_profile")
+        profiles = {
+            k: ConfigProfile.from_dict(v)
+            for k, v in data.get("profiles", {}).items()
+        }
+        return active, profiles
+    except (json.JSONDecodeError, KeyError):
+        return None, {}
+
+
+def apply_profile(config: JarvisConfig, profile: ConfigProfile) -> None:
+    """Mutate a JarvisConfig with values from a ConfigProfile."""
+    for flag_name, value in profile.feature_flags.items():
+        if hasattr(config.flags, flag_name):
+            setattr(config.flags, flag_name, value)
+    for conn_key, value in profile.connections.items():
+        if hasattr(config, conn_key) and value is not None:
+            setattr(config, conn_key, value)
