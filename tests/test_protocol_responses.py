@@ -1,9 +1,9 @@
-import asyncio
 import pytest
 
-from jarvis.core import JarvisSystem
-from jarvis.core import JarvisConfig
 from jarvis.protocols import Protocol, ProtocolStep, ProtocolResponse, ResponseMode
+from jarvis.protocols.runtime import ProtocolRuntime
+from jarvis.agents.agent_network import AgentNetwork
+from jarvis.logging import JarvisLogger
 
 
 class DummyAIClient:
@@ -22,11 +22,30 @@ class DummyChatAgent:
     def __init__(self):
         self.ai_client = DummyAIClient()
 
+    @property
+    def name(self):
+        return "ChatAgent"
+
+    @property
+    def capabilities(self):
+        return set()
+
+    @property
+    def description(self):
+        return "Chat"
+
+    def set_network(self, network):
+        pass
+
 
 @pytest.mark.asyncio
 async def test_static_response():
-    jarvis = JarvisSystem(JarvisConfig())
-    jarvis.chat_agent = DummyChatAgent()
+    logger = JarvisLogger()
+    network = AgentNetwork(logger)
+    chat = DummyChatAgent()
+    network.agents["ChatAgent"] = chat
+
+    runtime = ProtocolRuntime(network, logger)
 
     proto = Protocol(
         id="1",
@@ -35,15 +54,18 @@ async def test_static_response():
         steps=[ProtocolStep(agent="a", function="f")],
         response=ProtocolResponse(mode=ResponseMode.STATIC, phrases=["Lights on {room}"]),
     )
-    resp = await jarvis._format_protocol_response(proto, {"step_0_f": {}}, {"room": "kitchen"})
+    resp = await runtime._format_protocol_response(proto, {"step_0_f": {}}, {"room": "kitchen"})
     assert resp == "Lights on kitchen"
 
 
 @pytest.mark.asyncio
 async def test_ai_response():
-    jarvis = JarvisSystem(JarvisConfig())
-    dummy = DummyChatAgent()
-    jarvis.chat_agent = dummy
+    logger = JarvisLogger()
+    network = AgentNetwork(logger)
+    chat = DummyChatAgent()
+    network.agents["ChatAgent"] = chat
+
+    runtime = ProtocolRuntime(network, logger)
 
     proto = Protocol(
         id="2",
@@ -53,7 +75,6 @@ async def test_ai_response():
         response=ProtocolResponse(mode=ResponseMode.AI, prompt="Say hi to {name}"),
     )
 
-    resp = await jarvis._format_protocol_response(proto, {}, {"name": "Tony"})
-    assert "Say hi to Tony" in dummy.ai_client.messages[0]["content"]
+    resp = await runtime._format_protocol_response(proto, {}, {"name": "Tony"})
+    assert "Say hi to Tony" in chat.ai_client.messages[0]["content"]
     assert resp == "AI reply"
-

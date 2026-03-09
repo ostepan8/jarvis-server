@@ -9,6 +9,7 @@ import server
 class DummyJarvis:
     def __init__(self):
         self.last_metadata = None
+        self._orchestrator = None
 
     async def process_request(self, command, tz, metadata, allowed_agents=None):
         self.last_metadata = metadata

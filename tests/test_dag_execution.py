@@ -48,16 +48,12 @@ class MockAIClient(BaseAIClient):
         # Check all messages for prompt content
         full_content = " ".join([msg.get("content", "") for msg in messages]).lower()
 
-        # Check for DAG extraction prompt (contains "Analyze this request" and "dependencies")
-        if "analyze this request" in full_content and "dependencies" in full_content:
-            # Return DAG structure
-            return (type("Msg", (), {"content": json.dumps(self.dag_response)}), None)
-        elif (
-            "intent_matching" in full_content
-            or "natural language understanding" in full_content
+        # Unified NLU prompt — return DAG directly (no separate extract step)
+        if (
+            "natural language understanding" in full_content
+            or "intent_matching" in full_content
         ):
-            # Return None intent to trigger DAG extraction
-            return (type("Msg", (), {"content": json.dumps({"intent": None})}), None)
+            return (type("Msg", (), {"content": json.dumps(self.dag_response)}), None)
         elif "format" in full_content or "response" in full_content:
             return (type("Msg", (), {"content": self.formatting_response}), None)
         else:
@@ -667,23 +663,9 @@ async def test_empty_dag_handling():
     network = AgentNetwork()
     wrap_network_with_tracker(network, tracker)
 
-    # Mock AI client that returns empty DAG
-    class EmptyDAGAIClient(MockAIClient):
-        async def weak_chat(self, messages, tools=None):
-            # Check all messages for prompt content
-            full_content = " ".join(
-                [msg.get("content", "") for msg in messages]
-            ).lower()
-            # Check for DAG extraction prompt
-            if (
-                "analyze this request" in full_content
-                and "dependencies" in full_content
-            ):
-                # Return empty DAG
-                return (type("Msg", (), {"content": json.dumps({"dag": {}})}), None)
-            return await super().weak_chat(messages, tools)
-
-    ai_client = EmptyDAGAIClient({"dag": {}}, "No tasks.")
+    # Mock AI client that returns empty DAG — parent MockAIClient will
+    # return dag_response directly for the unified NLU prompt
+    ai_client = MockAIClient({"dag": {}}, "No tasks.")
     nlu = NLUAgent(ai_client, logger=JarvisLogger())
 
     network.register_agent(nlu)

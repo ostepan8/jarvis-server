@@ -207,9 +207,9 @@ async def test_multi_step_routing():
 
     ai_client = MockAIClient(
         {
-            "intent_matching": {"intent": None},  # Triggers multi-step extraction
-            "extract_capabilities": ["control_lights", "get_today_schedule"],
-            "response_formatting": "Lights are on and you have a meeting at 10:00.",
+            "intent_matching": {
+                "dag": {"control_lights": [], "get_today_schedule": []},
+            },
         }
     )
 

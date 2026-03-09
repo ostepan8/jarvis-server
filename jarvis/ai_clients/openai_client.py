@@ -15,9 +15,8 @@ class OpenAIClient(BaseAIClient):
     def __init__(
         self,
         api_key: str | None = None,
-        strong_model: str = "gpt-3.5-turbo",
-        # strong_model: str = "gpt-4-turbo-preview",
-        weak_model: str = "gpt-3.5-turbo",
+        strong_model: str = "gpt-4o",
+        weak_model: str = "gpt-4o-mini",
     ) -> None:
         self.client = AsyncOpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
         self.strong_model = strong_model

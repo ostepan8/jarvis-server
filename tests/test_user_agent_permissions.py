@@ -8,6 +8,7 @@ import server
 class DummyJarvis:
     def __init__(self):
         self.last_allowed = None
+        self._orchestrator = None
     async def process_request(self, command, tz, metadata, allowed_agents=None):
         self.last_allowed = allowed_agents
         return {"response": "done"}
@@ -22,6 +23,13 @@ async def test_agent_preferences_endpoints(tmp_path):
     )
     db.execute(
         "CREATE TABLE user_agents (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, agent_name TEXT, allowed INTEGER, UNIQUE(user_id, agent_name))"
+    )
+    db.execute(
+        "CREATE TABLE user_profiles (user_id INTEGER PRIMARY KEY, name TEXT, "
+        "preferred_personality TEXT, interests TEXT, conversation_style TEXT, "
+        "humor_preference TEXT, topics_of_interest TEXT, language_preference TEXT, "
+        "interaction_count INTEGER DEFAULT 0, favorite_games TEXT, last_seen TEXT, "
+        "required_resources TEXT)"
     )
     db.commit()
 

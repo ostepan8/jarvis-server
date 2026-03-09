@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+import time
+from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
 import json
-import asyncio
-import uuid
 from ..base import NetworkAgent
 from ..message import Message
 from ...ai_clients import BaseAIClient
@@ -13,21 +12,67 @@ from ...logging import JarvisLogger
 from ...utils import extract_json_from_text
 from ...utils.performance import track_async
 
+if TYPE_CHECKING:
+    from .fast_classifier import FastPathClassifier
+
+
+class ClassificationCache:
+    """Simple dict-based cache with TTL for classification results."""
+
+    def __init__(self, ttl: float = 120.0, max_size: int = 500) -> None:
+        self._cache: Dict[str, tuple[Dict[str, Any], float]] = {}
+        self._ttl = ttl
+        self._max_size = max_size
+
+    def _normalize_key(self, user_input: str) -> str:
+        return user_input.lower().strip()
+
+    def get(self, user_input: str) -> Optional[Dict[str, Any]]:
+        key = self._normalize_key(user_input)
+        if key in self._cache:
+            result, timestamp = self._cache[key]
+            if time.time() - timestamp < self._ttl:
+                return result
+            else:
+                del self._cache[key]
+        return None
+
+    def put(self, user_input: str, classification: Dict[str, Any]) -> None:
+        key = self._normalize_key(user_input)
+        if len(self._cache) >= self._max_size:
+            oldest_key = min(self._cache, key=lambda k: self._cache[k][1])
+            del self._cache[oldest_key]
+        self._cache[key] = (classification, time.time())
+
+    def clear(self) -> None:
+        self._cache.clear()
+
+    @property
+    def size(self) -> int:
+        return len(self._cache)
+
 
 class NLUAgent(NetworkAgent):
     """Natural Language Understanding Agent for processing raw user input
-    and delegating to the correct agent based on intent. Now handles direct
-    routing and response aggregation for multi-step workflows."""
+    and delegating to the correct agent based on intent. Uses a unified
+    DAG-based classification and supports fast-path embedding matching."""
 
     def __init__(
         self,
         ai_client: BaseAIClient,
         logger: Optional[JarvisLogger] = None,
         response_timeout: float = 30.0,
+        fast_classifier: Optional[FastPathClassifier] = None,
+        cache_ttl: float = 120.0,
+        cache_max_size: int = 500,
     ) -> None:
         super().__init__("NLUAgent", logger)
         self.ai_client = ai_client
         self.response_timeout = response_timeout
+        self.fast_classifier = fast_classifier
+        self._classification_cache = ClassificationCache(
+            ttl=cache_ttl, max_size=cache_max_size
+        )
         # Track active requests: request_id -> {user_input, original_requester, results, step}
         self.active_requests: Dict[str, Dict[str, Any]] = {}
 
@@ -209,7 +254,7 @@ class NLUAgent(NetworkAgent):
                     f"original_requester={original_requester}, results_count={len(results)}",
                 )
 
-                final_response = await self._format_final_response(user_input, results)
+                final_response = self._build_final_response(user_input, results)
 
                 response_preview = (
                     final_response[:100]
@@ -372,80 +417,78 @@ class NLUAgent(NetworkAgent):
         user_id = message.content["data"].get("user_id")
         request_id = message.request_id
         original_requester = message.from_agent
-        # Extract allowed_agents from the capability request (passed through network)
         allowed_agents = message.content.get("allowed_agents")
 
         self.logger.log("INFO", "NLU received input", user_input)
 
-        # Add conversation history to context so it's passed to agents
         if conversation_history:
             context["conversation_history"] = conversation_history
 
         known_capabilities = list(self.network.capability_registry.keys())
 
-        # Classify the request - pass conversation history for better context understanding
-        classification = await self.classify(
-            user_input, known_capabilities, context, conversation_history
-        )
+        # ---- Classification pipeline: fast-path → cache → LLM ----
+        classification: Optional[Dict[str, Any]] = None
 
-        # Handle different intents
-        if classification.get("intent") == "perform_capability":
-            capability = classification.get("capability")
-            if capability and capability in self.network.capability_registry:
-                # Simplified: Use same request_id throughout, track current capability
-                self.active_requests[request_id] = {
-                    "user_input": user_input,
-                    "original_requester": original_requester,
-                    "user_id": user_id,
-                    "agent_results": [],
-                    "step": 1,
-                    "original_message_id": message.id,
-                    "current_capability": capability,  # Track current capability
-                }
-
-                # Route directly to the agent using the SAME request_id
-                providers = self.network.capability_registry[capability]
-                if providers:
-                    target_agent = providers[0]
+        # Step 1: Try fast-path embedding classifier
+        if self.fast_classifier:
+            fast_result = await self.fast_classifier.classify(user_input)
+            if fast_result["confidence"] == "high":
+                cap = fast_result["capability"]
+                if cap in known_capabilities or cap == "chat":
+                    classification = {"dag": {cap: []}}
                     self.logger.log(
                         "INFO",
-                        f"NLU routing to {target_agent} for capability '{capability}'",
-                        f"request_id={request_id}",
+                        f"Fast-path classification: {cap}",
+                        f"score={fast_result['score']:.3f}",
                     )
 
-                    # Request the capability from the target agent using SAME request_id
-                    capability_data = {"prompt": user_input, "context": context}
-                    if user_id is not None:
-                        capability_data["user_id"] = user_id
-                    await self.request_capability(
-                        capability=capability,
-                        data=capability_data,
-                        request_id=request_id,  # Use same request_id
-                        allowed_agents=set(allowed_agents) if allowed_agents else None,
-                    )
-                    # Response will be handled in _handle_capability_response
-                else:
-                    self.logger.log(
-                        "WARNING", f"No providers found for capability '{capability}'"
-                    )
-                    await self.send_error(
-                        original_requester,
-                        f"No agent available for capability '{capability}'",
-                        request_id,
-                    )
-            else:
-                self.logger.log(
-                    "WARNING", f"Invalid capability in classification: {capability}"
-                )
-                await self.send_error(
-                    original_requester,
-                    f"Could not understand the request: no valid capability found",
-                    request_id,
-                )
+        # Step 2: Try cache
+        if classification is None:
+            cached = self._classification_cache.get(user_input)
+            if cached is not None:
+                classification = cached
+                self.logger.log("INFO", "Classification cache hit", user_input[:50])
 
-        elif classification.get("intent") == "chat":
-            # Route to ChatAgent - use same request_id
-            capability = "chat"
+        # Step 3: LLM classification (unified — always returns DAG)
+        if classification is None:
+            hint = None
+            if self.fast_classifier:
+                fast_result = await self.fast_classifier.classify(user_input)
+                if fast_result.get("confidence") == "medium":
+                    hint = fast_result.get("hint_capabilities")
+            classification = await self.classify(
+                user_input, known_capabilities, context, conversation_history, hint=hint
+            )
+            # Cache non-chat classifications
+            dag = classification.get("dag", {})
+            if dag and "chat" not in dag:
+                self._classification_cache.put(user_input, classification)
+
+        # ---- Route based on classification ----
+
+        # Protocol intent passthrough
+        if classification.get("intent") == "run_protocol":
+            await self.send_capability_response(
+                to_agent=original_requester,
+                result=classification,
+                request_id=request_id,
+                original_message_id=message.id,
+            )
+            return
+
+        # Everything else is DAG-based
+        dag = classification.get("dag", {})
+        if not dag:
+            await self.send_error(
+                original_requester,
+                "Could not understand the request. Please try rephrasing.",
+                request_id,
+            )
+            return
+
+        # Single-capability DAG → simplified direct routing
+        if len(dag) == 1:
+            capability = list(dag.keys())[0]
             self.active_requests[request_id] = {
                 "user_input": user_input,
                 "original_requester": original_requester,
@@ -455,66 +498,46 @@ class NLUAgent(NetworkAgent):
                 "original_message_id": message.id,
                 "current_capability": capability,
             }
-            capability_data = {"prompt": user_input, "context": context}
+
+            self.logger.log(
+                "INFO",
+                f"NLU routing to capability '{capability}'",
+                f"request_id={request_id}",
+            )
+
+            capability_data: Dict[str, Any] = {"prompt": user_input, "context": context}
             if user_id is not None:
                 capability_data["user_id"] = user_id
             await self.request_capability(
                 capability=capability,
                 data=capability_data,
-                request_id=request_id,  # Use same request_id
+                request_id=request_id,
                 allowed_agents=set(allowed_agents) if allowed_agents else None,
             )
+            return
 
-        elif classification.get("intent") == "run_protocol":
-            # For protocols, return classification for system to handle
-            await self.send_capability_response(
-                to_agent=original_requester,
-                result=classification,
-                request_id=request_id,
-                original_message_id=message.id,
-            )
+        # Multi-capability DAG → parallel execution
+        completed_caps: Set[str] = set()
+        running_caps: Set[str] = set()
+        capability_request_ids: Dict[str, str] = {}
 
-        else:
-            # Unknown intent or complex multi-step - handle via DAG-based routing
-            # Extract capabilities and build DAG with dependencies
-            dag = await self._extract_capabilities(user_input, known_capabilities)
+        self.active_requests[request_id] = {
+            "user_input": user_input,
+            "original_requester": original_requester,
+            "user_id": user_id,
+            "agent_results": [],
+            "dag": dag,
+            "completed_caps": completed_caps,
+            "running_caps": running_caps,
+            "capability_request_ids": capability_request_ids,
+            "original_message_id": message.id,
+            "context": context,
+            "allowed_agents": set(allowed_agents) if allowed_agents else None,
+        }
 
-            if not dag:
-                await self.send_error(
-                    original_requester,
-                    "Could not understand the request. Please try rephrasing.",
-                    request_id,
-                )
-                return
-
-            # Initialize DAG tracking structure
-            # Track which capabilities are pending, running, and completed
-            completed_caps: Set[str] = set()
-            running_caps: Set[str] = set()  # Track capabilities currently executing
-            capability_request_ids: Dict[str, str] = {}  # Map capability -> request_id
-
-            self.active_requests[request_id] = {
-                "user_input": user_input,
-                "original_requester": original_requester,
-                "user_id": user_id,
-                "agent_results": [],
-                "dag": dag,  # Store the full DAG
-                "completed_caps": completed_caps,
-                "running_caps": running_caps,
-                "capability_request_ids": capability_request_ids,
-                "original_message_id": message.id,
-                "context": context,  # Store context for subsequent executions
-                "allowed_agents": set(allowed_agents) if allowed_agents else None,
-            }
-
-            # Start initial batch of capabilities (those with no dependencies)
-            await self._execute_ready_capabilities(
-                request_id,
-                dag,
-                user_input,
-                context,
-                allowed_agents,
-            )
+        await self._execute_ready_capabilities(
+            request_id, dag, user_input, context, allowed_agents,
+        )
 
     @track_async("nlu_reasoning")
     async def classify(
@@ -523,12 +546,18 @@ class NLUAgent(NetworkAgent):
         capabilities: List[str],
         context: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        hint: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Invoke the LLM to classify the user_input into a routing JSON."""
-        prompt = self.build_prompt(
-            user_input, capabilities, context, conversation_history
+        """Unified classification: one LLM call that always returns a DAG.
+
+        Returns either:
+          {"dag": {"capability": [deps], ...}}
+          {"intent": "run_protocol", ...}
+        """
+        prompt = self._build_unified_prompt(
+            user_input, capabilities, context, conversation_history, hint
         )
-        self.logger.log("DEBUG", "NLU prompt built", prompt)
+        self.logger.log("DEBUG", "NLU unified prompt built", prompt)
 
         response = await self.ai_client.weak_chat(
             [
@@ -540,145 +569,56 @@ class NLUAgent(NetworkAgent):
         content = response[0].content
         self.logger.log("INFO", "NLU raw model output", content)
 
-        classification = extract_json_from_text(content)
-        if classification:
-            classification["target_agent"] = ""
+        result = extract_json_from_text(content)
+        if not result:
+            return {"dag": {"chat": []}}
 
-        valid_intents = {
-            "perform_capability",
-            "chat",
-            "run_protocol",
-            "define_protocol",
-            "ask_about_protocol",
-        }
+        return self._normalize_classification(result, capabilities)
 
-        if classification is None:
-            # Fallback: try to find a matching capability
-            classification = {"intent": None, "capability": None}
+    def _normalize_classification(
+        self, result: Dict[str, Any], capabilities: List[str]
+    ) -> Dict[str, Any]:
+        """Validate and normalize LLM classification output into canonical DAG form."""
+        # Protocol intent passthrough
+        if result.get("intent") == "run_protocol":
+            return result
 
-        if classification and classification.get("intent") not in valid_intents:
-            if classification.get("capability") in capabilities:
-                classification["intent"] = "perform_capability"
-            else:
-                classification["intent"] = None  # Will trigger multi-step handling
+        # Handle legacy format (intent/capability without dag)
+        if "dag" not in result:
+            intent = result.get("intent")
+            capability = result.get("capability")
+            if intent == "chat" or (intent is None and capability is None):
+                return {"dag": {"chat": []}}
+            if capability and (capability in capabilities or capability == "chat"):
+                return {"dag": {capability: []}}
+            return {"dag": {"chat": []}}
 
-        # CHAT INTENT: Route to ChatAgent
-        if classification.get("intent") == "chat":
-            classification["target_agent"] = "ChatAgent"
+        # Validate DAG capabilities
+        dag = result["dag"]
+        if not isinstance(dag, dict):
+            return {"dag": {"chat": []}}
+
+        filtered_dag: Dict[str, List[str]] = {}
+        for cap, deps in dag.items():
+            if cap in capabilities or cap == "chat":
+                valid_deps = [
+                    d for d in (deps if isinstance(deps, list) else [])
+                    if (d in capabilities or d == "chat") and d != cap
+                ]
+                filtered_dag[cap] = valid_deps
+
+        if not filtered_dag:
+            return {"dag": {"chat": []}}
+
+        if not self._validate_dag(filtered_dag):
             self.logger.log(
-                "INFO",
-                "Routing to ChatAgent for chat intent",
-                classification,
+                "WARNING",
+                "Invalid DAG (circular deps), falling back to parallel",
+                str(filtered_dag),
             )
+            return {"dag": {cap: [] for cap in filtered_dag.keys()}}
 
-        if classification.get("intent") == "perform_capability":
-            requested_capability = classification.get("capability")
-            if requested_capability and requested_capability not in capabilities:
-                self.logger.log(
-                    "WARNING",
-                    f"LLM requested non-existent capability '{requested_capability}'",
-                    f"Available capabilities: {capabilities}",
-                )
-                classification["intent"] = None  # Will trigger multi-step handling
-
-        return classification
-
-    async def _extract_capabilities(
-        self, user_input: str, available_capabilities: List[str]
-    ) -> Dict[str, List[str]]:
-        """
-        Extract multiple capabilities from a user request and build a DAG.
-
-        Returns a dictionary mapping capability -> list of dependencies.
-        Capabilities with no dependencies can run in parallel.
-        """
-        # Use LLM to identify multiple capabilities needed and their dependencies
-        prompt = f"""Analyze this request and identify ALL capabilities needed and their dependencies.
-
-Request: "{user_input}"
-
-Available capabilities: {', '.join(available_capabilities)}
-
-Return JSON with a DAG structure where each capability lists its dependencies:
-{{"dag": {{
-  "capability1": [],  // No dependencies - can run immediately
-  "capability2": [],  // No dependencies - can run in parallel with capability1
-  "capability3": ["capability1"]  // Depends on capability1 completing first
-}}}}
-
-**CRITICAL RULES:**
-1. **GENERAL KNOWLEDGE QUESTIONS** (facts about the world, history, science, etc.):
-   - Examples: "what's the capital of X", "who wrote Y", "when did X happen", "when did X come out"
-   - ALWAYS use "search" capability for these questions (NOT "chat")
-   - NEVER use "extract_facts", "search_facts", or "get_facts" for general knowledge
-   - NEVER use "chat" for general knowledge questions - use "search" instead
-   - "extract_facts", "search_facts", "get_facts" are ONLY for user-specific information
-
-2. **CONDITIONAL LOGIC**:
-   - If the request asks a question first, then takes action based on the answer
-   - The question capability should have NO dependencies (runs first)
-   - The conditional action should depend on the question capability
-   - Example: "when did X come out. if in 2018 make lights blue"
-     → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
-
-3. **DEPENDENCIES**:
-   - If two capabilities don't depend on each other, they can run in parallel (empty dependencies)
-   - Only list dependencies if one capability truly needs the result of another
-   - For conditional actions (e.g., "if X then Y"), the conditional action depends on the condition check
-
-Examples:
-- "turn lights red and tell me the weather":
-  {{"dag": {{"lights_color": [], "get_weather": []}}}}
-
-- "pause the tv and make the lights red":
-  {{"dag": {{"roku_pause": [], "lights_color": []}}}}
-
-- "check weather and if sunny make lights red":
-  {{"dag": {{"get_weather": [], "lights_color": ["get_weather"]}}}}
-
-- "when did X come out. if in 2018 make lights blue else make it green":
-  {{"dag": {{"search": [], "lights_color": ["search"]}}}}
-  // search answers the question, lights_color depends on search's answer
-
-- "what's the weather and turn on lights":
-  {{"dag": {{"get_weather": [], "lights_on": []}}}}
-  // Independent actions, no dependencies"""
-
-        try:
-            response = await self.ai_client.weak_chat(
-                [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": user_input},
-                ],
-                [],
-            )
-            result = extract_json_from_text(response[0].content)
-            if result and "dag" in result:
-                dag = result["dag"]
-                # Filter to only include valid capabilities and validate dependencies
-                filtered_dag: Dict[str, List[str]] = {}
-                for cap, deps in dag.items():
-                    if cap in available_capabilities:
-                        # Filter dependencies to only valid capabilities
-                        valid_deps = [
-                            d for d in deps if d in available_capabilities and d != cap
-                        ]
-                        filtered_dag[cap] = valid_deps
-                # Validate DAG (no circular dependencies - basic check)
-                if self._validate_dag(filtered_dag):
-                    return filtered_dag
-                else:
-                    self.logger.log(
-                        "WARNING",
-                        "Invalid DAG detected (circular or invalid dependencies), falling back to sequential",
-                        str(filtered_dag),
-                    )
-                    # Fallback to sequential execution
-                    return {cap: [] for cap in filtered_dag.keys()}
-        except Exception as e:
-            self.logger.log("ERROR", "Failed to extract capabilities", str(e))
-
-        return {}
+        return {"dag": filtered_dag}
 
     def _validate_dag(self, dag: Dict[str, List[str]]) -> bool:
         """Validate that the DAG has no circular dependencies."""
@@ -813,7 +753,7 @@ Examples:
                 f"Results count: {len(results)}",
             )
 
-            final_response = await self._format_final_response(user_input, results)
+            final_response = self._build_final_response(user_input, results)
 
             await self.send_capability_response(
                 to_agent=original_requester,
@@ -849,10 +789,36 @@ Examples:
                 if request_id in self.active_requests:
                     del self.active_requests[request_id]
 
-    async def _format_final_response(
+    def _build_final_response(
         self, user_input: str, agent_results: List[Dict[str, Any]]
     ) -> str:
-        """Format a natural language response from agent results."""
+        """Build final response from agent results without an LLM call.
+
+        Agents already return natural language in their 'response' field
+        via the AgentResponse contract. For single results, pass through
+        directly. For multiple results, join them.
+        """
+        if not agent_results:
+            return "I completed your request."
+
+        responses: List[str] = []
+        for entry in agent_results:
+            result_data = entry.get("result", {})
+            if isinstance(result_data, dict):
+                text = result_data.get("response") or result_data.get("message", "")
+                if text:
+                    responses.append(text)
+
+        if not responses:
+            return "I completed your request."
+        if len(responses) == 1:
+            return responses[0]
+        return " ".join(responses)
+
+    async def _format_final_response_llm(
+        self, user_input: str, agent_results: List[Dict[str, Any]]
+    ) -> str:
+        """LLM-based response formatting (kept as fallback, not called by default)."""
         if not agent_results:
             self.logger.log("DEBUG", "No agent results, using default response", "")
             return "I completed your request."
@@ -918,20 +884,21 @@ Examples:
                 )
                 return f"I've completed your request."
 
-    def build_prompt(
+    def _build_unified_prompt(
         self,
         user_input: str,
         capabilities: List[str],
         context: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        hint: Optional[List[str]] = None,
     ) -> str:
+        """Build the unified classification prompt that always returns a DAG."""
         cap_list = ", ".join(capabilities) if capabilities else "none"
 
-        # Format conversation history separately for better readability
         history_str = ""
         if conversation_history and len(conversation_history) > 0:
             history_str = "\n\n**Recent Conversation History:**\n"
-            for i, turn in enumerate(conversation_history[-5:], 1):  # Show last 5 turns
+            for i, turn in enumerate(conversation_history[-5:], 1):
                 history_str += f"{i}. User: {turn.get('user', '')}\n"
                 history_str += f"   Assistant: {turn.get('assistant', '')}\n"
             history_str += (
@@ -940,7 +907,6 @@ Examples:
                 "to understand what they're responding to.\n"
             )
 
-        # Filter out conversation_history from context before displaying
         context_str = ""
         if context:
             filtered_context = {
@@ -949,119 +915,70 @@ Examples:
             if filtered_context:
                 context_str = f"\n\n**Context from previous steps:**\n{json.dumps(filtered_context, indent=2)}"
 
+        hint_str = ""
+        if hint:
+            hint_str = f"\n\n**Hint:** The input is likely related to: {', '.join(hint)}. Confirm or override."
+
         prompt = f"""You are JARVIS's Natural Language Understanding engine.
 
-Your job is to analyze the user input and return **only** a JSON object—no prose, no explanations.
+Analyze the user input and return **only** a JSON object — no prose, no explanations.
 
-**CRITICAL RULES:**
-1. You can ONLY use capabilities from the "Available Capabilities" list below
-2. DO NOT invent capability names
-3. Prefer these intents:
-   - "perform_capability" = Execute ONE single capability
-   - "chat" = General conversation that doesn't require specific capabilities
-   - "run_protocol" = Matches a predefined protocol/command
-   - null = Multiple capabilities needed (will trigger parallel execution)
-DO NOT USE "orchestrate_tasks" - that's deprecated.
+**RESPONSE FORMAT — always return a DAG:**
+{{"dag": {{"capability_name": [list_of_dependency_capabilities]}}}}
 
-**Decision Logic (APPLY IN THIS ORDER):**
+Special cases:
+- Chat/conversation: {{"dag": {{"chat": []}}}}
+- Protocol match: {{"intent": "run_protocol", "protocol": "protocol_name"}}
+- Single capability: {{"dag": {{"capability_name": []}}}}
+- Multiple independent: {{"dag": {{"cap1": [], "cap2": []}}}}
+- Dependent capabilities: {{"dag": {{"cap1": [], "cap2": ["cap1"]}}}}
 
-1. **CONDITIONAL LOGIC CHECK (HIGHEST PRIORITY):**
-   - If the request contains ANY conditional words like "if", "if else", "when",
-     "based on", "depending on", "otherwise", "then", "else"
-   - AND the conditional depends on a result from another action
-     (e.g., "find X and if Y then do Z", "check weather and if sunny make lights red",
-     "search for X and if above Y make lights blue", "find X and if condition then do Y")
-   - → ALWAYS return {{"intent": null, "capability": null}} to trigger DAG execution
-   - Examples: "when did X come out. if in 2018 make lights blue else make it green"
-     → null intent
-   - Examples: "check weather and if sunny make lights red" → null intent
-   - Examples: "search for X and if above 70 make lights blue else make them red" → null intent
-   - Examples: "find X and if condition then do Y" → null intent
-   - **CRITICAL:** Even if the query starts with "search for" or "find", if it contains
-     conditional logic ("if", "else", "then") that depends on the search result, return null intent
+**RULES (IN ORDER OF PRIORITY):**
 
-2. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
-   - **GENERAL KNOWLEDGE** (facts about the world, history, science, etc.):
-     Examples: "what's the capital of X", "who wrote Y", "what is Z",
-     "when did X happen", "when did X come out"
-     → ALWAYS {{"intent": "perform_capability", "capability": "search"}}
-     → NEVER use search_facts or get_facts for general knowledge questions
-     → NEVER use "chat" for general knowledge - use "search" capability instead
-   - **USER-SPECIFIC** (information the user previously told you):
-     Examples: "what's my favorite color", "what restaurant did I mention",
-     "what did I say about X"
-     → {{"intent": "perform_capability", "capability": "search_facts"}} or
-       {{"intent": "perform_capability", "capability": "get_facts"}}
+1. You can ONLY use capabilities from the Available Capabilities list below. DO NOT invent names.
 
-3. **MULTIPLE ACTIONS:**
-   - Does the user want MULTIPLE distinct actions
-     (e.g., "pause tv AND make lights red", "turn on lights AND get weather")?
-   - → {{"intent": null, "capability": null}}
+2. **CONDITIONAL LOGIC (HIGHEST PRIORITY):**
+   If the request contains conditional words ("if", "then", "else", "when", "based on",
+   "depending on", "otherwise") AND the condition depends on a result from another action:
+   → Return a DAG with the question capability first, conditional action depending on it.
+   **CRITICAL:** Even if it starts with "search for" or "find", if it contains conditional
+   logic that depends on the search result, return a multi-capability DAG.
 
-4. **SINGLE ACTION:**
-   - Does the user want ONE simple action that matches ONE capability?
-   - → "perform_capability"
+3. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
+   - General knowledge (facts, history, science, "what is", "who is", "when did"):
+     → ALWAYS use "search" capability (NEVER "chat", "search_facts", or "get_facts")
+   - User-specific ("my favorite", "what I mentioned", "what did I say"):
+     → Use "search_facts" or "get_facts"
 
-5. **PROTOCOL MATCH:**
-   - Does it match a known protocol pattern?
-   - → "run_protocol"
+4. **MULTIPLE ACTIONS:**
+   Multiple distinct actions connected by "and", "also", or targeting different systems:
+   → Return DAG with all capabilities. Independent ones get empty deps, dependent ones list deps.
 
-6. **DEFAULT:**
-   - General conversation or chit-chat? → "chat"
-   - Not sure? Default to "chat" for questions, "perform_capability" for commands
+5. **SINGLE ACTION:**
+   One clear capability match → {{"dag": {{"capability_name": []}}}}
 
-**Key Indicators of Multiple Capabilities (return null intent):**
-- Words like "and", "also", "then" connecting different actions
-- Conditional words like "if", "when", "based on", "depending on", "otherwise", "if else"
-- Multiple verbs targeting different systems (e.g., "pause" + "make", "turn on" + "get", "find" + "make")
-- Different target objects (e.g., "tv" and "lights", "calendar" and "weather", "date" and "lights")
-- Actions that depend on results from other actions
-  (e.g., "check X and do Y with the result", "find X and if condition then do Y")
-- Phrases like "if X then Y", "if X else Y", "when X do Y"
+6. **PROTOCOL MATCH:**
+   Matches a known protocol → {{"intent": "run_protocol", "protocol": "name"}}
 
-**IMPORTANT:** If the request contains ANY conditional logic (if/then/else/when) that requires
-checking a result before taking another action, return null intent to trigger DAG execution.
+7. **CHAT (DEFAULT):**
+   General conversation, greetings, chit-chat → {{"dag": {{"chat": []}}}}
 
-**User Input**
-\"\"\"{user_input}\"\"\"
-{history_str}{context_str}
+**User Input:** \"\"\"{user_input}\"\"\"{history_str}{context_str}{hint_str}
 
-**Available Capabilities:**
-{cap_list}
+**Available Capabilities:** {cap_list}
 
-**CRITICAL EXAMPLES:**
-- "when did dbfz come out. if in 2018 make lights blue else make it green"
-  → {{"intent": null, "capability": null}} (conditional logic + general knowledge)
-- "when did X come out. if in 2018 make lights blue" → {{"intent": null, "capability": null}} (conditional logic)
-- "search for most hotdogs eaten in competition and if above 70 make the lights blue else made them red"
-  → {{"intent": null, "capability": null}} (conditional logic - search result determines light color)
-- "search for X and if above Y make lights blue else make them red"
-  → {{"intent": null, "capability": null}} (conditional logic - search result determines action)
-- "Turn on the lights" → {{"intent": "perform_capability", "capability": "lights_on"}}
-- "Pause the tv and make the lights red" → {{"intent": null, "capability": null}} (multiple actions)
-- "Check weather and if sunny make lights red" → {{"intent": null, "capability": null}} (conditional logic)
-- "Get calendar and if busy turn on lights" → {{"intent": null, "capability": null}} (conditional logic)
-- "Find date and if before 2010 make lights red" → {{"intent": null, "capability": null}} (conditional logic)
-- "Schedule a meeting" → {{"intent": "perform_capability", "capability": "schedule_appointment"}}
-- "What's the weather?" → {{"intent": "perform_capability", "capability": "get_weather"}}
-- "Turn on lights and get weather" → {{"intent": null, "capability": null}} (multiple actions)
-- "How are you?" → {{"intent": "chat", "capability": null}}
-- "What's the capital of Illinois?" → {{"intent": "perform_capability", "capability": "search"}}
-  (general knowledge - use search, NEVER search_facts or chat)
-- "Who wrote Romeo and Juliet?" → {{"intent": "perform_capability", "capability": "search"}}
-  (general knowledge - use search, NEVER search_facts or chat)
-- "When did X happen?" → {{"intent": "perform_capability", "capability": "search"}}
-  (general knowledge - use search, NEVER search_facts or chat)
-- "When did X come out?" → {{"intent": "perform_capability", "capability": "search"}}
-  (general knowledge - use search, NEVER search_facts or chat)
-- "What's my favorite color?" → {{"intent": "perform_capability", "capability": "search_facts"}}
-  (user-specific)
-- "What restaurant did I mention I like?"
-  → {{"intent": "perform_capability", "capability": "search_facts"}} (user-specific)
+**EXAMPLES:**
+- "Turn on the lights" → {{"dag": {{"lights_on": []}}}}
+- "What's the weather?" → {{"dag": {{"get_weather": []}}}}
+- "How are you?" → {{"dag": {{"chat": []}}}}
+- "What's the capital of Illinois?" → {{"dag": {{"search": []}}}}
+- "What's my favorite color?" → {{"dag": {{"search_facts": []}}}}
+- "Schedule a meeting" → {{"dag": {{"schedule_appointment": []}}}}
+- "Pause tv and make lights red" → {{"dag": {{"roku_pause": [], "lights_color": []}}}}
+- "Turn on lights and get weather" → {{"dag": {{"lights_on": [], "get_weather": []}}}}
+- "Check weather and if sunny make lights red" → {{"dag": {{"get_weather": [], "lights_color": ["get_weather"]}}}}
+- "When did X come out. if in 2018 make lights blue" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
+- "Search for X and if above Y make lights blue else red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 
-**Return ONLY this JSON:**
-{{
-  "intent": "perform_capability OR chat OR run_protocol OR null",
-  "capability": "exact_capability_name_from_list OR null",
-}}"""
+Return ONLY the JSON."""
         return prompt

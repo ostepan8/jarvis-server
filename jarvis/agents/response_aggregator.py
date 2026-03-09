@@ -142,7 +142,11 @@ class ResponseAggregator:
         """Stop the aggregator."""
         self._running = False
         if self._cleanup_task:
-            await self._cleanup_task
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
         self.logger.log("INFO", "ResponseAggregator stopped")
 
     def register_request(

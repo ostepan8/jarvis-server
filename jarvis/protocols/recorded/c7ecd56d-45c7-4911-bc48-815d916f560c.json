@@ -1,0 +1,19 @@
+{
+  "id": "c7ecd56d-45c7-4911-bc48-815d916f560c",
+  "name": "demo",
+  "description": "desc",
+  "arguments": {},
+  "trigger_phrases": [],
+  "steps": [
+    {
+      "agent": "agent2",
+      "function": "func2",
+      "parameters": {
+        "b": 2
+      },
+      "parameter_mappings": {}
+    }
+  ],
+  "argument_definitions": [],
+  "responses": null
+}

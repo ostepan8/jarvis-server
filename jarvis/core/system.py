@@ -45,6 +45,7 @@ class JarvisSystem:
             self.logger,
             record_methods=record_network_methods,
             recorder=method_recorder,
+            worker_count=self.config.worker_count,
         )
         self.perf_enabled = self.config.perf_tracking
         self._tracker: PerfTracker | None = None
@@ -84,6 +85,19 @@ class JarvisSystem:
         self.night_controller = refs.get("night_controller")
         self.night_agents = refs.get("night_agents", [])
 
+        # Initialize fast-path classifier if available
+        fast_classifier = refs.get("fast_classifier")
+        if fast_classifier:
+            try:
+                await fast_classifier.initialize()
+                self.logger.log("INFO", "Fast-path classifier ready", "")
+            except Exception as exc:
+                self.logger.log(
+                    "WARNING",
+                    "Fast-path classifier init failed (will use LLM fallback)",
+                    str(exc),
+                )
+
         self._setup_protocol_system(load_protocol_directory)
         await self._start_network()
 
@@ -113,7 +127,10 @@ class JarvisSystem:
     def _create_ai_client(self) -> BaseAIClient:
         """Instantiate the configured AI client."""
         return AIClientFactory.create(
-            self.config.ai_provider, api_key=self.config.api_key
+            self.config.ai_provider,
+            api_key=self.config.api_key,
+            strong_model=self.config.strong_model,
+            weak_model=self.config.weak_model,
         )
 
     async def _connect_mongo_loggers(self) -> None:

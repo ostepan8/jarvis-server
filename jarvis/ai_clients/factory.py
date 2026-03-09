@@ -12,10 +12,20 @@ class AIClientFactory:
     """Factory to create AI clients based on provider string."""
 
     @staticmethod
-    def create(provider: str, api_key: Optional[str] = None) -> BaseAIClient:
+    def create(
+        provider: str,
+        api_key: Optional[str] = None,
+        strong_model: Optional[str] = None,
+        weak_model: Optional[str] = None,
+    ) -> BaseAIClient:
         provider = provider.lower()
         if provider == "openai":
-            return OpenAIClient(api_key=api_key)
+            kwargs: dict = {"api_key": api_key}
+            if strong_model:
+                kwargs["strong_model"] = strong_model
+            if weak_model:
+                kwargs["weak_model"] = weak_model
+            return OpenAIClient(**kwargs)
         if provider == "anthropic":
             return AnthropicClient(api_key=api_key)
         if provider in {"dummy", "mock"}:

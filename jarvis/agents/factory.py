@@ -48,7 +48,8 @@ class AgentFactory:
         """Create all agents/services and register them with the network."""
         refs: Dict[str, Any] = {}
         refs.update(self._build_memory(network, ai_client))
-        refs.update(self._build_nlu(network, ai_client))
+        vector_memory = refs.get("vector_memory")
+        refs.update(self._build_nlu(network, ai_client, vector_memory))
         refs.update(self._build_calendar(network, ai_client))
         refs.update(self._build_chat(network, ai_client))
         refs.update(self._build_search(network))
@@ -89,11 +90,26 @@ class AgentFactory:
         }
 
     def _build_nlu(
-        self, network: AgentNetwork, ai_client: BaseAIClient
+        self,
+        network: AgentNetwork,
+        ai_client: BaseAIClient,
+        vector_memory: Optional[VectorMemoryService] = None,
     ) -> Dict[str, Any]:
-        nlu_agent = NLUAgent(ai_client, self.logger)
+        fast_classifier = None
+        if self.config.use_fast_classifier and vector_memory:
+            from ..agents.nlu_agent.fast_classifier import FastPathClassifier
+
+            fast_classifier = FastPathClassifier(vector_memory, self.logger)
+
+        nlu_agent = NLUAgent(
+            ai_client,
+            self.logger,
+            fast_classifier=fast_classifier,
+            cache_ttl=self.config.classification_cache_ttl,
+            cache_max_size=self.config.classification_cache_max_size,
+        )
         network.register_agent(nlu_agent)
-        return {"nlu_agent": nlu_agent}
+        return {"nlu_agent": nlu_agent, "fast_classifier": fast_classifier}
 
     def _build_calendar(
         self, network: AgentNetwork, ai_client: BaseAIClient

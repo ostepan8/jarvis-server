@@ -52,6 +52,5 @@ async def run_protocol(
     )
     return {
         "protocol": proto.name,
-        "response": results.response,
-        "protocol_executed": results.protocol_executed,
+        "results": results,
     }

@@ -12,7 +12,8 @@ def test_register_unique_protocol(tmp_path):
     registry = ProtocolRegistry(db_path=str(tmp_path / "db.sqlite"))
     proto = make_protocol("1", "Lights Off", ["turn off lights"])
     result = registry.register(proto)
-    assert result == {"success": True, "id": "1"}
+    assert result["success"] is True
+    assert result["id"] == "1"
     assert registry.get("1").name == "Lights Off"
     registry.close()
 

@@ -10,6 +10,16 @@ from colorama import Fore, Style, init as colorama_init
 # NEW: use the builder
 from jarvis.core import JarvisBuilder
 from jarvis import JarvisLogger
+<<<<<<< Updated upstream
+=======
+from jarvis.cli.config_dashboard import run_config_dashboard, show_agents_detail
+from jarvis.cli.commands_dashboard import (
+    show_commands_overview,
+    show_command_detail,
+    show_commands_all,
+)
+from jarvis.cli.modes import show_modes_dashboard, enter_mode_by_slug
+>>>>>>> Stashed changes
 
 from jarvis.io import (
     InputHandler,
@@ -121,6 +131,50 @@ async def demo(
             if user_command.strip().lower() in {"exit", "quit"}:
                 break
 
+<<<<<<< Updated upstream
+=======
+            # Slash commands
+            if cmd == "/config":
+                await run_config_dashboard(jarvis)
+                continue
+            if cmd == "/agents":
+                await show_agents_detail(jarvis)
+                continue
+            if cmd.startswith("/commands"):
+                arg = cmd[len("/commands"):].strip()
+                if arg == "all":
+                    await show_commands_all(jarvis)
+                elif arg:
+                    await show_command_detail(jarvis, arg)
+                else:
+                    await show_commands_overview(jarvis)
+                continue
+            if cmd == "/modes":
+                await show_modes_dashboard(jarvis)
+                continue
+            if cmd == "/help":
+                print("\nAvailable commands:")
+                print("  /commands       - Browse all trigger phrases (shortest first)")
+                print("  /commands all   - Show every trigger phrase for every command")
+                print("  /commands <name> - Show details for a specific command")
+                print("  /config         - Interactive config dashboard")
+                print("  /agents         - View active agents")
+                print("  /modes          - SSH into a device (direct control)")
+                print("  /help           - Show this help")
+                print("  exit            - Quit Jarvis\n")
+                continue
+
+            # Natural language mode triggers
+            _ssh_triggers = [
+                "ssh into my tv", "ssh roku", "ssh into roku",
+                "ssh into my roku", "ssh into the tv", "ssh tv",
+                "connect to my tv", "connect to roku",
+            ]
+            if cmd in _ssh_triggers:
+                await enter_mode_by_slug(jarvis, "roku")
+                continue
+
+>>>>>>> Stashed changes
             logger.log("DEBUG", "Processing user request", {"command": user_command})
             result = await jarvis.process_request(
                 user_command,

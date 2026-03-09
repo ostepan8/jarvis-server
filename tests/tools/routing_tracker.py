@@ -24,7 +24,7 @@ class RoutingEvent:
     request_id: str = ""
 
     def __str__(self) -> str:
-        target = to_agent or "ALL"
+        target = self.to_agent or "ALL"
         if self.message_type == "capability_request":
             return f"{self.from_agent} → {target} [{self.capability}]"
         elif self.message_type == "capability_response":
@@ -74,6 +74,10 @@ class RoutingTracker:
 
         if message.request_id:
             self.events_by_request[message.request_id].append(event)
+            # Also index sub-requests (format: "parent_id:capability") under parent
+            if ":" in message.request_id:
+                parent_id = message.request_id.split(":", 1)[0]
+                self.events_by_request[parent_id].append(event)
 
         if event.message_type == "capability_request" and event.capability:
             self.capability_requests[event.capability].append(event)
@@ -180,13 +184,14 @@ def wrap_network_with_tracker(network, tracker: RoutingTracker):
     """
     Wrap an AgentNetwork to automatically track all messages.
 
-    This monkey-patches the network's message queue to track messages.
+    This monkey-patches the network's send_message method to track all
+    messages regardless of priority queue.
     """
-    original_put = network.message_queue.put
+    original_send = network.send_message
 
-    async def tracked_put(message: Message) -> None:
+    async def tracked_send(message: Message, priority=None) -> None:
         tracker.track_message(message)
-        return await original_put(message)
+        return await original_send(message, priority)
 
-    network.message_queue.put = tracked_put
+    network.send_message = tracked_send
     return network

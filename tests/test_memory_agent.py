@@ -1,5 +1,6 @@
 import asyncio
 import pytest
+from unittest.mock import AsyncMock
 
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.memory_agent import MemoryAgent
@@ -8,6 +9,8 @@ from jarvis.agents.base import NetworkAgent
 from jarvis.core import JarvisSystem
 from jarvis.core import JarvisConfig
 from jarvis.ai_clients.base import BaseAIClient
+from jarvis.core.orchestrator import RequestOrchestrator
+from jarvis.core.response_logger import ResponseLogger
 
 
 class DummyMemoryService:
@@ -62,10 +65,8 @@ class DummyAgent(NetworkAgent):
 async def test_memory_agent_routing():
     network = AgentNetwork()
     service = DummyMemoryService()
-    # MemoryAgent now requires FactMemoryService, but we can pass None for testing
     memory_agent = MemoryAgent(service, None)
     user = DummyAgent()
-    # Attach memory service to user for direct search_memory calls
     user.memory = service
 
     network.register_agent(memory_agent)
@@ -73,18 +74,21 @@ async def test_memory_agent_routing():
 
     await network.start()
 
-    mem_id = await user.store_memory("hello", {"foo": "bar"})
+    # store_memory uses network routing (request_capability + wait_for_response)
+    mem_id = await asyncio.wait_for(
+        user.store_memory("hello", {"foo": "bar"}), timeout=5.0
+    )
     assert mem_id == "mem1"
-    # Check that memory was added (user_id will be None in this test)
     assert len(service.added) == 1
     assert service.added[0][0] == "hello"
     assert service.added[0][1] == {"foo": "bar"}
 
+    # search_memory uses the local memory service directly
     results = await user.search_memory("hello", top_k=1)
     assert len(service.queries) == 1
     assert service.queries[0][:2] == ("hello", 1)
 
-    # Test query_memory by id and metadata - use service directly since it's not a network capability
+    # Test query_memory by id and metadata - use service directly
     query_by_id = await service.query_memory(memory_id=mem_id)
     assert query_by_id and query_by_id[0]["text"] == "hello"
     assert service.query_calls[-1][:3] == (mem_id, None, None)
@@ -113,22 +117,36 @@ class DummyVectorMemoryService(DummyMemoryService):
 
 @pytest.mark.asyncio
 async def test_process_request_unknown_intent_memory():
-    output = '{"intent": "remember", "capability": "store_memory", "args": {"memory_data": "hello"}}'
+    import json
+
+    output = json.dumps({"dag": {"store_memory": []}})
     ai_client = DummyAIClient(output)
-    jarvis = JarvisSystem(JarvisConfig())
+    jarvis = JarvisSystem(JarvisConfig(response_timeout=3.0))
     service = DummyVectorMemoryService()
-    jarvis.vector_memory = service
-    jarvis.memory_agent = MemoryAgent(service, None, jarvis.logger)
-    jarvis.nlu_agent = NLUAgent(ai_client, jarvis.logger)
-    jarvis.network = AgentNetwork(jarvis.logger)
-    jarvis.network.register_agent(jarvis.memory_agent)
-    jarvis.network.register_agent(jarvis.nlu_agent)
+    memory_agent = MemoryAgent(service, None, jarvis.logger)
+    nlu_agent = NLUAgent(ai_client, jarvis.logger)
+    jarvis.network.register_agent(memory_agent)
+    jarvis.network.register_agent(nlu_agent)
     await jarvis.network.start()
 
-    await jarvis.process_request("remember this", "UTC", allowed_agents=None)
+    # Set up minimal orchestrator
+    response_logger = AsyncMock(spec=ResponseLogger)
+    response_logger.log_successful_interaction = AsyncMock()
+    response_logger.log_failed_interaction = AsyncMock()
+    jarvis._orchestrator = RequestOrchestrator(
+        network=jarvis.network,
+        protocol_runtime=None,
+        response_logger=response_logger,
+        logger=jarvis.logger,
+        response_timeout=jarvis.config.response_timeout,
+    )
+
+    result = await asyncio.wait_for(
+        jarvis.process_request("remember this", "UTC", allowed_agents=None),
+        timeout=5.0,
+    )
 
     await jarvis.network.stop()
-    # Note: This test may not actually add memory if NLU routing doesn't match
-    # The old test expectation might not match current behavior
-    # Just verify the system processed the request without errors
-    assert True  # Test passes if no exceptions occurred
+    # Test passes if no exceptions occurred
+    assert result is not None
+    assert "response" in result

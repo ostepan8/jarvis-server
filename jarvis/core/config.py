@@ -73,6 +73,20 @@ class JarvisConfig:
     google_search_engine_id: Optional[str] = field(
         default_factory=lambda: os.getenv("GOOGLE_SEARCH_ENGINE_ID")
     )
+    # Model configuration
+    strong_model: str = "gpt-4o"
+    weak_model: str = "gpt-4o-mini"
+
+    # Network worker count
+    worker_count: int = 3
+
+    # Classification cache
+    classification_cache_ttl: float = 120.0
+    classification_cache_max_size: int = 500
+
+    # Fast-path embedding classifier
+    use_fast_classifier: bool = True
+
     flags: FeatureFlags = field(default_factory=FeatureFlags)
     # perf_tracking: bool = os.getenv(
     #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")

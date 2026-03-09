@@ -24,7 +24,7 @@ from tests.tools.routing_tracker import RoutingTracker, wrap_network_with_tracke
 USE_REAL_LLM = os.getenv("USE_REAL_LLM", "0") == "1"
 
 
-async def test_routing_flow(user_input: str, use_real_llm: bool = False):
+async def _test_routing_flow(user_input: str, use_real_llm: bool = False):
     """
     Test the routing flow for a given user input.
 
@@ -160,7 +160,7 @@ async def interactive_test():
                 continue
 
             # Run test
-            result, tracker = await test_routing_flow(
+            result, tracker = await _test_routing_flow(
                 user_input, use_real_llm=USE_REAL_LLM
             )
 
@@ -186,7 +186,7 @@ async def main():
 
     if args.input:
         # Single test
-        result, tracker = await test_routing_flow(args.input, use_real_llm)
+        result, tracker = await _test_routing_flow(args.input, use_real_llm)
     else:
         # Interactive mode
         await interactive_test()

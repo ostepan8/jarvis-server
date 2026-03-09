@@ -196,6 +196,12 @@ class AgentNetwork:
                     "Fast-path direct message",
                     f"{message.from_agent} -> {message.to_agent}: {message.message_type}",
                 )
+                # For response/error messages, also fulfill any pending future
+                # (the queue processor normally does this, but fast-path skips it)
+                if message.message_type == "capability_response":
+                    self._fulfill_response_future(message)
+                elif message.message_type == "error":
+                    self._fulfill_error_future(message)
                 return
             except Exception as e:
                 self.logger.log(
@@ -310,7 +316,11 @@ class AgentNetwork:
             await asyncio.gather(*self._processor_tasks, return_exceptions=True)
             self._processor_tasks.clear()
         if self._cleanup_task:
-            await self._cleanup_task
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
         await self.response_aggregator.stop()
         self.logger.log("INFO", "Network stopped")
 
@@ -418,36 +428,42 @@ class AgentNetwork:
                 )
 
     async def _get_next_message_with_timeout(self) -> Optional[Message]:
-        """Get next message with timeout, checking priority queues."""
-        # Wait for any queue with timeout
-        try:
-            # Use asyncio.wait to check all queues
-            done, pending = await asyncio.wait(
-                [
-                    asyncio.create_task(self._high_priority_queue.get()),
-                    asyncio.create_task(self._normal_priority_queue.get()),
-                    asyncio.create_task(self._low_priority_queue.get()),
-                ],
-                timeout=0.1,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+        """Get next message, checking priority queues in order.
 
-            # Cancel pending tasks
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        Uses non-blocking get_nowait() to avoid the asyncio.Queue.get()
+        cancellation race condition where cancelled tasks can consume items.
+        """
+        # Check queues in priority order (non-blocking)
+        for queue in (
+            self._high_priority_queue,
+            self._normal_priority_queue,
+            self._low_priority_queue,
+        ):
+            try:
+                return queue.get_nowait()
+            except asyncio.QueueEmpty:
+                continue
 
-            # Get result from first completed
-            if done:
-                task = done.pop()
-                return await task
-        except asyncio.TimeoutError:
-            pass
-
+        # Nothing available, yield briefly to allow producers to enqueue
+        await asyncio.sleep(0.02)
         return None
+
+    def _fulfill_response_future(self, message: Message) -> None:
+        """Fulfill a pending response future without delivering to agent."""
+        fut_data = self._response_futures.get(message.request_id)
+        if fut_data:
+            fut, _ = fut_data
+            if not fut.done():
+                fut.set_result(message.content)
+
+    def _fulfill_error_future(self, message: Message) -> None:
+        """Fulfill a pending error future without delivering to agent."""
+        fut_data = self._response_futures.get(message.request_id)
+        if fut_data:
+            fut, _ = fut_data
+            if not fut.done():
+                error = message.content.get("error") if isinstance(message.content, dict) else str(message.content)
+                fut.set_result({"error": error})
 
     async def _handle_capability_response(self, message: Message) -> None:
         """Handle capability response message - fulfill future and optionally deliver to agent."""
