@@ -99,10 +99,43 @@ class CapabilityNotFoundError(AgentError):
 
 class ConfigurationError(AgentError):
     """Raised when configuration is missing or invalid.
-    
+
     This includes missing environment variables, invalid configuration
     values, or misconfigured services.
     """
+    pass
+
+
+class CodingTaskError(AgentError):
+    """Raised when a coding task executed by the CodingAgent fails."""
+    pass
+
+
+class SafetyViolationError(AgentError):
+    """Raised when a coding task violates safety rules.
+
+    This includes attempts to modify denied files, dangerous prompt
+    patterns, or exceeding the maximum number of changed files.
+    """
+    pass
+
+
+class WorktreeError(AgentError):
+    """Raised when a git worktree operation fails.
+
+    This includes failures during worktree creation, cleanup, or
+    when the service detects it is not operating inside a worktree.
+    """
+    pass
+
+
+class TodoError(AgentError):
+    """Raised when a todo/task operation fails."""
+    pass
+
+
+class TodoNotFoundError(AgentError):
+    """Raised when a requested todo item cannot be found."""
     pass
 
 

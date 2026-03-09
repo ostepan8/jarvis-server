@@ -16,6 +16,8 @@ class FeatureFlags:
     enable_canvas: bool = True
     enable_night_mode: bool = True
     enable_roku: bool = True
+    enable_coding: bool = False
+    enable_todo: bool = True
 
 
 @dataclass
@@ -78,6 +80,12 @@ class JarvisConfig:
     # Model configuration
     strong_model: str = "gpt-4o"
     weak_model: str = "gpt-4o-mini"
+
+    # CodingAgent configuration
+    claude_binary: str = field(
+        default_factory=lambda: os.getenv("CLAUDE_BINARY", "claude")
+    )
+    coding_task_timeout: float = 300.0
 
     # Network worker count
     worker_count: int = 3
