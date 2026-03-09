@@ -6,6 +6,7 @@ manage recruitment budgets, and execute as mission leads.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any, Dict, List
@@ -190,12 +191,12 @@ class CollaborationMixin:
         """Execute as lead agent with LLM tool-calling loop.
 
         This method:
-        1. Builds a system prompt with mission context + available capabilities
-        2. Combines agent's own tools with the recruit_agent tool
-        3. Runs an LLM tool-calling loop
-        4. For recruit_agent calls: delegates via self.recruit()
-        5. For own capability calls: delegates via self.run_capability()
-        6. Returns the final synthesized response
+        1. Checks budget upfront (returns partial if already expired)
+        2. Builds a system prompt with mission context + available capabilities
+        3. Combines agent's own tools with the recruit_agent tool
+        4. Runs an LLM tool-calling loop with deadline checks each iteration
+        5. Executes tool calls concurrently via asyncio.gather
+        6. Returns the final synthesized response (or partial on expiry)
 
         Args:
             message: The user's input message
@@ -204,6 +205,18 @@ class CollaborationMixin:
         Returns:
             AgentResponse dict with the synthesized result
         """
+        # Bail early if budget already expired
+        if brief.budget.is_expired:
+            return AgentResponse.success_response(
+                response="The request deadline has passed before processing could begin.",
+                actions=[],
+                metadata={
+                    "lead_agent": self.name,
+                    "mission_complexity": "complex",
+                    "budget_expired": True,
+                },
+            ).to_dict()
+
         # Build system prompt
         system_prompt = self._build_lead_system_prompt(brief)
 
@@ -232,6 +245,10 @@ class CollaborationMixin:
         response_message = None
 
         while iterations < max_iterations:
+            # Check deadline each iteration
+            if brief.budget.is_expired:
+                break
+
             response_message, tool_calls = await self.ai_client.strong_chat(
                 messages, tools
             )
@@ -257,10 +274,10 @@ class CollaborationMixin:
             }
             messages.append(assistant_msg)
 
-            for call in tool_calls:
+            # Execute tool calls concurrently
+            async def _exec_tool(call):
                 fn_name = call.function.name
                 args = json.loads(call.function.arguments)
-
                 if fn_name == "recruit_agent":
                     result = await self._handle_recruit_tool_call(args, brief)
                 else:
@@ -268,7 +285,13 @@ class CollaborationMixin:
                         result = await self.run_capability(fn_name, **args)
                     except Exception as exc:
                         result = {"error": str(exc)}
+                return call, fn_name, args, result
 
+            tool_results = await asyncio.gather(
+                *[_exec_tool(c) for c in tool_calls]
+            )
+
+            for call, fn_name, args, result in tool_results:
                 actions.append(
                     {"function": fn_name, "arguments": args, "result": result}
                 )
@@ -286,10 +309,24 @@ class CollaborationMixin:
 
         response_text = response_message.content if response_message else ""
 
+        # If we broke out due to deadline with no final LLM response, provide partial
+        if not response_text and brief.budget.is_expired and actions:
+            response_text = (
+                "I gathered some information but ran out of time to complete "
+                "the full request."
+            )
+
+        metadata: Dict[str, Any] = {
+            "lead_agent": self.name,
+            "mission_complexity": "complex",
+        }
+        if brief.budget.is_expired:
+            metadata["budget_expired"] = True
+
         return AgentResponse.success_response(
             response=response_text,
             actions=actions,
-            metadata={"lead_agent": self.name, "mission_complexity": "complex"},
+            metadata=metadata,
         ).to_dict()
 
     async def _handle_recruit_tool_call(

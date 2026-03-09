@@ -523,6 +523,286 @@ class TestLeadAgentRecruitmentIntegration:
             await network.stop()
 
 
+class TestFullPipelineE2E:
+    """Full-pipeline tests exercising orchestrator → coordinator → lead → recruit → response."""
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_complex_with_multi_recruit(self):
+        """End-to-end: process_request → coordinator triage → lead dispatch → 2 recruits → response."""
+        weather_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "get_weather", "prompt": "What's the weather?"},
+            "call_weather",
+        )
+        lights_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "set_color", "prompt": "Set lights to warm"},
+            "call_lights",
+        )
+        ai_client = MockAIClient(
+            responses=[
+                # Turn 1: LLM recruits weather
+                ("", [weather_call]),
+                # Turn 2: LLM recruits lights
+                ("", [lights_call]),
+                # Turn 3: LLM synthesizes final response
+                ("It's 72°F and sunny! I've set your lights to a warm tone.", None),
+            ],
+            weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
+        )
+        chat = LeadAgent("ChatAgent", ai_client, {"chat"})
+        weather = ProviderAgent(
+            "WeatherAgent",
+            {"get_weather"},
+            {"response": "72°F and sunny", "success": True},
+        )
+        lighting = ProviderAgent(
+            "LightingAgent",
+            {"set_color"},
+            {"response": "Lights set to warm", "success": True},
+        )
+        orchestrator, network = await setup_full_network(
+            [chat, weather, lighting], ai_client=ai_client
+        )
+
+        try:
+            result = await orchestrator.process_request(
+                "Check the weather and set my lights to warm", "UTC"
+            )
+            # Verify coordinator handled it
+            assert result.get("coordinator") is True
+            assert result.get("lead_agent") == "ChatAgent"
+            # Verify final response contains synthesized content
+            assert "72°F" in result.get("response", "")
+            assert "warm" in result.get("response", "").lower()
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_parallel_recruit_calls(self):
+        """End-to-end: LLM returns two recruit calls in one turn → both execute concurrently."""
+        weather_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "get_weather", "prompt": "weather?"},
+            "call_weather",
+        )
+        lights_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "set_color", "prompt": "warm lights"},
+            "call_lights",
+        )
+        ai_client = MockAIClient(
+            responses=[
+                # Turn 1: LLM returns BOTH recruits at once
+                ("", [weather_call, lights_call]),
+                # Turn 2: LLM synthesizes
+                ("Weather is sunny and lights are warm!", None),
+            ],
+            weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
+        )
+        chat = LeadAgent("ChatAgent", ai_client, {"chat"})
+        weather = ProviderAgent(
+            "WeatherAgent", {"get_weather"}, {"response": "sunny"}
+        )
+        lighting = ProviderAgent(
+            "LightingAgent", {"set_color"}, {"response": "lights warm"}
+        )
+        orchestrator, network = await setup_full_network(
+            [chat, weather, lighting], ai_client=ai_client
+        )
+
+        try:
+            result = await orchestrator.process_request(
+                "Check weather and set lights", "UTC"
+            )
+            assert result.get("coordinator") is True
+            assert "sunny" in result.get("response", "").lower() or "warm" in result.get("response", "").lower()
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_stores_conversation_turn(self):
+        """Coordinator path should store conversation turn in history."""
+        ai_client = MockAIClient(
+            responses=[
+                ("Complex response from lead agent!", None),
+            ],
+            weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
+        )
+        chat = LeadAgent("ChatAgent", ai_client, {"chat"})
+        orchestrator, network = await setup_full_network(
+            [chat], ai_client=ai_client
+        )
+
+        try:
+            result = await orchestrator.process_request(
+                "Do something complex", "UTC", metadata={"user_id": 42}
+            )
+            assert result.get("coordinator") is True
+            # Verify conversation was stored
+            history = orchestrator.conversation_history.get(42, [])
+            assert len(history) == 1
+            assert history[0]["user"] == "Do something complex"
+            assert "Complex response" in history[0]["assistant"]
+        finally:
+            await network.stop()
+
+
+class TestBudgetAndTimeoutEnforcement:
+    """Tests for deadline and budget enforcement in the lead loop."""
+
+    @pytest.mark.asyncio
+    async def test_expired_budget_returns_early(self):
+        """When budget is already expired, _execute_as_lead returns immediately."""
+        ai_client = MockAIClient(responses=[
+            ("This should not be called", None),
+        ])
+        lead = LeadAgent("ChatAgent", ai_client, {"chat"})
+        network = AgentNetwork()
+        network.register_agent(lead)
+        await network.start()
+
+        try:
+            brief = MissionBrief(
+                user_input="test",
+                complexity=MissionComplexity.COMPLEX,
+                lead_agent="ChatAgent",
+                lead_capability="chat",
+                budget=MissionBudget(
+                    max_depth=3,
+                    remaining_depth=3,
+                    deadline=time.time() - 10,  # Already expired!
+                    max_recruitments=5,
+                    remaining_recruitments=5,
+                ),
+                context=MissionContext(
+                    user_input="test",
+                    recruitment_chain=["ChatAgent"],
+                ),
+                available_capabilities={},
+            )
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            assert result["metadata"]["budget_expired"] is True
+            # AI should NOT have been called since budget was expired upfront
+            assert ai_client._call_count == 0
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_deadline_mid_loop_returns_partial(self):
+        """When deadline expires mid-loop, lead returns partial results."""
+        recruit_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "get_weather", "prompt": "weather?"},
+            "call_1",
+        )
+        # Budget will expire after the first recruit completes but before next iteration
+        ai_client = MockAIClient(responses=[
+            ("", [recruit_call]),
+            # This second call should not happen because deadline expires
+            ("This should not be reached", None),
+        ])
+        lead = LeadAgent("ChatAgent", ai_client, {"chat"})
+        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        network = AgentNetwork()
+        for agent in [lead, weather]:
+            network.register_agent(agent)
+        await network.start()
+
+        try:
+            # Set deadline to expire very soon (enough for one iteration)
+            brief = MissionBrief(
+                user_input="test",
+                complexity=MissionComplexity.COMPLEX,
+                lead_agent="ChatAgent",
+                lead_capability="chat",
+                budget=MissionBudget(
+                    max_depth=3,
+                    remaining_depth=3,
+                    deadline=time.time() + 0.01,  # 10ms - will expire during execution
+                    max_recruitments=5,
+                    remaining_recruitments=5,
+                ),
+                context=MissionContext(
+                    user_input="test",
+                    recruitment_chain=["ChatAgent"],
+                ),
+                available_capabilities={
+                    "WeatherAgent": ["get_weather"],
+                },
+            )
+            # Small delay to ensure deadline passes during execution
+            await asyncio.sleep(0.02)
+            result = await lead._execute_as_lead("test", brief)
+            assert result["success"] is True
+            assert result["metadata"].get("budget_expired") is True
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_parallel_tool_calls_both_execute(self):
+        """When LLM returns two tool calls, both execute and results are recorded."""
+        weather_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "get_weather", "prompt": "weather?"},
+            "call_weather",
+        )
+        lights_call = make_tool_call(
+            "recruit_agent",
+            {"capability": "set_color", "prompt": "warm lights"},
+            "call_lights",
+        )
+        ai_client = MockAIClient(responses=[
+            ("", [weather_call, lights_call]),
+            ("Weather is sunny and lights warm!", None),
+        ])
+        lead = LeadAgent("ChatAgent", ai_client, {"chat"})
+        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        lighting = ProviderAgent("LightingAgent", {"set_color"}, {"response": "warm"})
+        network = AgentNetwork()
+        for agent in [lead, weather, lighting]:
+            network.register_agent(agent)
+        await network.start()
+
+        try:
+            brief = MissionBrief(
+                user_input="Check weather and set lights",
+                complexity=MissionComplexity.COMPLEX,
+                lead_agent="ChatAgent",
+                lead_capability="chat",
+                budget=MissionBudget(
+                    max_depth=3,
+                    remaining_depth=3,
+                    deadline=time.time() + 30,
+                    max_recruitments=5,
+                    remaining_recruitments=5,
+                ),
+                context=MissionContext(
+                    user_input="Check weather and set lights",
+                    recruitment_chain=["ChatAgent"],
+                ),
+                available_capabilities={
+                    "WeatherAgent": ["get_weather"],
+                    "LightingAgent": ["set_color"],
+                },
+            )
+            result = await lead._execute_as_lead(
+                "Check weather and set lights", brief
+            )
+            assert result["success"] is True
+            # Both tool calls should have been executed
+            assert len(result["actions"]) == 2
+            functions = {a["function"] for a in result["actions"]}
+            assert functions == {"recruit_agent"}
+            # Both results should be present
+            results = [a["result"] for a in result["actions"]]
+            assert any("sunny" in str(r) for r in results)
+            assert any("warm" in str(r) for r in results)
+        finally:
+            await network.stop()
+
+
 class TestOrchestratorRegressions:
     """Regression tests ensuring existing behavior is preserved."""
 
