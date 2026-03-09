@@ -410,6 +410,29 @@ class TestCoordinateRequest:
             await network.stop()
 
     @pytest.mark.asyncio
+    async def test_mismatched_agent_capability_returns_none(self):
+        """If coordinator picks agent that doesn't provide lead_capability, fall through."""
+        ai_client = MockAIClient(
+            '{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "get_weather"}'
+        )
+        chat = SimpleAgent("ChatAgent", {"chat"})  # ChatAgent doesn't have get_weather
+        orchestrator, network = await setup_orchestrator(
+            [chat], ai_client=ai_client
+        )
+
+        try:
+            result = await orchestrator._coordinate_request(
+                "do something complex",
+                RequestMetadata(user_id=1),
+                None,
+                RequestTimer().start(),
+                None,
+            )
+            assert result is None
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
     async def test_fallback_on_llm_exception(self):
         """If the AI client raises, coordinator should return None gracefully."""
 

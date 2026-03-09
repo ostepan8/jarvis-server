@@ -104,12 +104,16 @@ class CollaborationMixin:
 
         # Make the request via the network
         request_id = str(uuid.uuid4())
-        result = await self._request_and_wait_for_agent(
-            capability=capability,
-            data=data,
-            request_id=request_id,
-            timeout=effective_timeout,
-        )
+        try:
+            result = await self._request_and_wait_for_agent(
+                capability=capability,
+                data=data,
+                request_id=request_id,
+                timeout=effective_timeout,
+            )
+        finally:
+            # Clean up active_tasks entry created by request_capability
+            self.active_tasks.pop(request_id, None)
 
         # Record result in context
         context.add_result(provider_agent, capability, result)

@@ -120,7 +120,7 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
 
             # Check for mission brief → act as lead agent
             mission_brief_data = data.get("mission_brief")
-            if mission_brief_data:
+            if isinstance(mission_brief_data, dict):
                 brief = MissionBrief.from_dict(mission_brief_data)
                 try:
                     result = await self._execute_as_lead(prompt, brief)

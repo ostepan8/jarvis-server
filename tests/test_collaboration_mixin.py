@@ -706,6 +706,71 @@ class TestBudgetLockConcurrency:
             await network.stop()
 
 
+class TestRecruitCleansUpActiveTasks:
+    """Tests that recruit() cleans up active_tasks after completion."""
+
+    @pytest.mark.asyncio
+    async def test_active_tasks_cleaned_after_successful_recruit(self):
+        """active_tasks entry from recruit should be removed after success."""
+        lead = LeadTestAgent("LeadAgent")
+        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        network = await setup_network_with_agents(lead, weather)
+
+        try:
+            brief = make_brief()
+            # Before recruit, no active tasks
+            initial_count = len(lead.active_tasks)
+
+            await lead.recruit("get_weather", {"prompt": "weather?"}, brief)
+
+            # After recruit, the entry should have been cleaned up
+            assert len(lead.active_tasks) == initial_count
+        finally:
+            await network.stop()
+
+    @pytest.mark.asyncio
+    async def test_active_tasks_cleaned_after_failed_recruit(self):
+        """active_tasks entry should be cleaned up even if recruit times out."""
+        lead = LeadTestAgent("LeadAgent")
+        # No provider registered — the request will time out
+
+        class SilentAgent(NetworkAgent):
+            """Agent that receives but never responds."""
+
+            @property
+            def capabilities(self):
+                return {"get_weather"}
+
+            async def _handle_capability_request(self, message):
+                pass  # Never responds
+
+            async def _handle_capability_response(self, message):
+                pass
+
+        silent = SilentAgent("WeatherAgent")
+        network = await setup_network_with_agents(lead, silent)
+
+        try:
+            brief = make_brief(
+                budget=MissionBudget(
+                    remaining_depth=3,
+                    remaining_recruitments=5,
+                    deadline=time.time() + 0.3,
+                )
+            )
+            initial_count = len(lead.active_tasks)
+
+            with pytest.raises(Exception):
+                await lead.recruit(
+                    "get_weather", {"prompt": "weather?"}, brief, timeout=0.2
+                )
+
+            # Even on failure, active_tasks should be cleaned up
+            assert len(lead.active_tasks) == initial_count
+        finally:
+            await network.stop()
+
+
 class TestLLMCallTimeout:
     """Tests for LLM API call timeout in lead execution."""
 

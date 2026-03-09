@@ -623,6 +623,16 @@ class RequestOrchestrator:
                 )
                 return None
 
+            # Validate lead agent provides the lead capability
+            agent_caps = catalog.get(lead_agent, [])
+            if lead_capability not in agent_caps:
+                self.logger.log(
+                    "WARNING",
+                    f"Agent '{lead_agent}' does not provide '{lead_capability}', falling back to NLU",
+                    f"available: {agent_caps}",
+                )
+                return None
+
             # Build mission brief
             conversation_history = self.conversation_history.get(
                 metadata.user_id, []

@@ -76,7 +76,7 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
 
         # Check for mission brief → act as lead agent
         mission_brief_data = data.get("mission_brief")
-        if mission_brief_data:
+        if isinstance(mission_brief_data, dict):
             brief = MissionBrief.from_dict(mission_brief_data)
             result = await self._execute_as_lead(prompt, brief)
         else:
@@ -170,7 +170,23 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
 
                 for call in tool_calls:
                     fn = call.function.name
-                    args = json.loads(call.function.arguments)
+                    try:
+                        args = json.loads(call.function.arguments)
+                    except (json.JSONDecodeError, TypeError):
+                        args = {}
+                        result = {
+                            "error": f"Invalid arguments for {fn}: "
+                            f"{call.function.arguments!r}"
+                        }
+                        actions.append({"function": fn, "arguments": args, "result": result})
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call.id,
+                                "content": json.dumps(result),
+                            }
+                        )
+                        continue
                     try:
                         result = await self.run_capability(fn, **args)
                     except Exception as exc:
