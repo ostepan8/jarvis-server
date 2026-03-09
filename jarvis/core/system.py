@@ -73,6 +73,7 @@ class JarvisSystem:
     async def initialize(self, load_protocol_directory: bool = False) -> None:
         """Initialize all agents and start the network."""
         ai_client = self._create_ai_client()
+        self._ai_client = ai_client
         await self._connect_mongo_loggers()
 
         factory = AgentFactory(self.config, self.logger)
@@ -110,6 +111,8 @@ class JarvisSystem:
             logger=self.logger,
             response_timeout=self.config.response_timeout,
             max_history_length=10,
+            ai_client=self._ai_client,
+            enable_coordinator=self.config.flags.enable_coordinator,
         )
 
         loaded = (

@@ -4,16 +4,22 @@ import json
 from typing import Any, Dict, List, Optional, Set
 
 from ..base import NetworkAgent
+from ..collaboration import CollaborationMixin
 from ..message import Message
 from ...ai_clients.base import BaseAIClient
+from ...core.mission import MissionBrief
 from ...logging import JarvisLogger
 from ...core.profile import AgentProfile
 from .tools import tools as chat_tools
 from ..response import AgentResponse, ErrorInfo
 
 
-class ChatAgent(NetworkAgent):
-    """Lightweight conversational agent that remembers user facts."""
+class ChatAgent(NetworkAgent, CollaborationMixin):
+    """Lightweight conversational agent that remembers user facts.
+
+    When acting as a lead agent (mission_brief in request data),
+    uses CollaborationMixin._execute_as_lead() for multi-agent coordination.
+    """
 
     def __init__(
         self, ai_client: BaseAIClient, logger: Optional[JarvisLogger] = None
@@ -68,7 +74,14 @@ class ChatAgent(NetworkAgent):
             )
             return
 
-        result = await self._process_chat(prompt, conversation_history)
+        # Check for mission brief → act as lead agent
+        mission_brief_data = data.get("mission_brief")
+        if mission_brief_data:
+            brief = MissionBrief.from_dict(mission_brief_data)
+            result = await self._execute_as_lead(prompt, brief)
+        else:
+            result = await self._process_chat(prompt, conversation_history)
+
         await self.send_capability_response(
             message.from_agent, result, message.request_id, message.id
         )
@@ -76,6 +89,27 @@ class ChatAgent(NetworkAgent):
     async def _handle_capability_response(self, message: Message) -> None:
         # ChatAgent does not initiate capability requests currently
         pass
+
+    # ------------------------------------------------------------------
+    # Lead agent support
+    # ------------------------------------------------------------------
+    def _build_lead_system_prompt(self, brief: MissionBrief) -> str:
+        """Override to include ChatAgent's conversational personality."""
+        capability_info = self.format_recruitment_context(brief)
+
+        return (
+            "You are a friendly, conversational assistant acting as the lead "
+            "agent for a complex user request.\n\n"
+            f"Original request: {brief.user_input}\n\n"
+            f"{capability_info}\n\n"
+            "Your job is to:\n"
+            "1. Break down the user's request into steps\n"
+            "2. Use recruit_agent to delegate to specialized agents when needed\n"
+            "3. Synthesize all results into a natural, conversational response\n\n"
+            "Be efficient - only recruit when you need specialized capabilities. "
+            "Answer general knowledge questions directly from your own knowledge. "
+            "Provide a complete, friendly response that addresses everything the user asked."
+        )
 
     # ------------------------------------------------------------------
     # Chat processing

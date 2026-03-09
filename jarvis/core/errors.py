@@ -99,9 +99,28 @@ class CapabilityNotFoundError(AgentError):
 
 class ConfigurationError(AgentError):
     """Raised when configuration is missing or invalid.
-    
+
     This includes missing environment variables, invalid configuration
     values, or misconfigured services.
+    """
+    pass
+
+
+class BudgetExhaustedError(AgentError):
+    """Raised when the recruitment budget is exhausted.
+
+    This occurs when a lead agent attempts to recruit another agent
+    but has exceeded its allowed depth or recruitment count.
+    """
+    pass
+
+
+class CircularRecruitmentError(AgentError):
+    """Raised when a circular recruitment chain is detected.
+
+    This occurs when a lead agent attempts to recruit an agent
+    that is already in the current recruitment chain, which would
+    cause an infinite loop.
     """
     pass
 
