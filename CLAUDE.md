@@ -8,7 +8,7 @@
 
 1. **Immediately enter a worktree** at session start before any code changes — use `EnterWorktree` and auto-generate the name from the task (e.g., user says "add Spotify agent" → worktree name `feature-spotify-agent`). Never ask the user to name it.
 2. **One worktree = one concern.** If the user asks for 3 things, that's 3 worktrees via parallel `Task` agents with `isolation: "worktree"`.
-3. **Never commit to `main`.** Never work outside a worktree. Never reuse another session's worktree.
+3. **Never commit directly to `main`.** All work happens in worktrees. Merge to `main` only via the merge procedure below. Never reuse another session's worktree.
 4. **Auto-name worktrees** using the format `{type}-{kebab-description}` derived from the task:
    - `feature-spotify-agent`
    - `fix-nlu-empty-input-timeout`
@@ -44,11 +44,53 @@ Multiple Claude Code instances are running at the same time. Design every change
 - `jarvis/core/config.py`
 - `jarvis/agents/nlu_agent/__init__.py`
 
-### After Work Completes
+### After Work Completes — Mandatory Merge & Cleanup
 
-1. Report: branch name, files changed, tests added/run, test results
-2. Let the user decide merge order
-3. If merge conflicts exist, explain which files conflict and suggest resolution
+**Every worktree MUST be merged and removed before reporting done. No orphaned worktrees.**
+
+A task is NOT done until the worktree is gone and the code is on `main`. Follow this exact sequence:
+
+1. **Run targeted tests** in the worktree:
+   ```bash
+   pytest tests/test_affected.py -v
+   ```
+2. **Commit** all changes with a proper commit message (see Naming Conventions).
+3. **Switch to main** and merge the worktree branch:
+   ```bash
+   # From the main repo root (not the worktree dir)
+   GIT_DIR=/path/to/repo/.git GIT_WORK_TREE=/path/to/repo git merge <worktree-branch> --no-edit
+   ```
+4. **Resolve conflicts** if any — keep changes from both sides, never silently drop code. After resolving, stage and complete the merge commit.
+5. **Run the full test suite** on main:
+   ```bash
+   pytest -x --timeout=30 -q
+   ```
+   If tests fail, fix them on main and commit the fix before proceeding.
+6. **Remove the worktree and its branch**:
+   ```bash
+   git worktree remove --force .claude/worktrees/<name>
+   git branch -D worktree-<name>
+   ```
+7. **Push to origin**:
+   ```bash
+   git push origin main
+   ```
+8. **Report** to the user: branch merged, files changed, test count & result, conflicts resolved (if any).
+
+### Merge Rules
+
+- **Merge immediately** — do not leave worktrees sitting around "for later." When the code works and tests pass, merge it.
+- **One worktree at a time** — if multiple worktrees are ready, merge them sequentially (smallest/safest first) to catch conflicts early.
+- **Never force-push main** — if the remote has diverged, pull first, then push.
+- **Conflict resolution principle** — when merging touches the same file from different worktrees, keep ALL additions from both sides. Only remove code if it was the explicit purpose of one of the branches.
+- **Test after every merge** — run `pytest -x --timeout=30 -q` after each merge, not just the last one. Fix failures before merging the next branch.
+
+### Subagent Worktrees (Task tool with `isolation: "worktree"`)
+
+When launching parallel subagents with `isolation: "worktree"`:
+1. Each subagent works in its own worktree — this is automatic.
+2. **The parent agent is responsible for merging.** When subagents complete, the parent must merge each worktree branch into main following the sequence above.
+3. Merge in dependency order — if agent B's changes depend on agent A's, merge A first.
 
 ## Testing Requirements
 
