@@ -16,14 +16,12 @@ from ..agents.chat_agent import ChatAgent
 from ..agents.search_agent import SearchAgent
 from ..agents.canvas import CanvasAgent
 from ..agents.roku_agent import RokuAgent
-from ..agents.coding_agent import CodingAgent
 from ..agents.todo_agent import TodoAgent
 from ..services.vector_memory import VectorMemoryService
 from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
 from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
-from ..services.claude_code_service import ClaudeCodeService
 from ..services.todo_service import TodoService
 from ..utils import get_location_from_ip
 from ..night_agents import (
@@ -290,6 +288,8 @@ class AgentFactory:
     ) -> Dict[str, Any]:
         """Build and register CodingAgent with ClaudeCodeService."""
         from pathlib import Path
+        from ..agents.coding_agent import CodingAgent
+        from ..services.claude_code_service import ClaudeCodeService
 
         try:
             repo_root = str(Path(__file__).parent.parent.parent)

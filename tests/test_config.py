@@ -28,7 +28,7 @@ class TestFeatureFlags:
     def test_default_values(self):
         flags = FeatureFlags()
         assert flags.enable_weather is True
-        assert flags.enable_lights is True
+        assert flags.enable_lights is False
         assert flags.enable_canvas is True
         assert flags.enable_night_mode is True
         assert flags.enable_roku is True
@@ -36,7 +36,7 @@ class TestFeatureFlags:
     def test_override_single_flag(self):
         flags = FeatureFlags(enable_weather=False)
         assert flags.enable_weather is False
-        assert flags.enable_lights is True
+        assert flags.enable_lights is False
 
     def test_all_flags_off(self):
         flags = FeatureFlags(
@@ -386,7 +386,7 @@ class TestApplyProfile:
         assert cfg.flags.enable_weather is False
         assert cfg.flags.enable_roku is False
         # Unchanged flags stay the same
-        assert cfg.flags.enable_lights is True
+        assert cfg.flags.enable_lights is False
 
     def test_apply_connections(self):
         with patch.dict(os.environ, {}, clear=True):
