@@ -16,11 +16,15 @@ from ..agents.chat_agent import ChatAgent
 from ..agents.search_agent import SearchAgent
 from ..agents.canvas import CanvasAgent
 from ..agents.roku_agent import RokuAgent
+from ..agents.coding_agent import CodingAgent
+from ..agents.todo_agent import TodoAgent
 from ..services.vector_memory import VectorMemoryService
 from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
 from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
+from ..services.claude_code_service import ClaudeCodeService
+from ..services.todo_service import TodoService
 from ..utils import get_location_from_ip
 from ..night_agents import (
     NightAgent,
@@ -67,6 +71,11 @@ class AgentFactory:
         if self.config.flags.enable_roku:
             refs.update(self._build_roku(network, ai_client))
 
+        if self.config.flags.enable_coding:
+            refs.update(self._build_coding(network, ai_client))
+
+        if self.config.flags.enable_todo:
+            refs.update(self._build_todo(network, ai_client))
 
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
@@ -274,6 +283,48 @@ class AgentFactory:
             return {"roku_agent": roku_agent}
         except Exception as exc:
             self.logger.log("WARNING", "RokuAgent init failed", str(exc))
+            return {}
+
+    def _build_coding(
+        self, network: AgentNetwork, ai_client: BaseAIClient
+    ) -> Dict[str, Any]:
+        """Build and register CodingAgent with ClaudeCodeService."""
+        from pathlib import Path
+
+        try:
+            repo_root = str(Path(__file__).parent.parent.parent)
+            service = ClaudeCodeService(
+                repo_root=repo_root,
+                logger=self.logger,
+                claude_binary=self.config.claude_binary,
+                default_timeout=self.config.coding_task_timeout,
+            )
+            coding_agent = CodingAgent(
+                claude_code_service=service,
+                ai_client=ai_client,
+                logger=self.logger,
+            )
+            network.register_agent(coding_agent)
+            return {"coding_agent": coding_agent, "claude_code_service": service}
+        except Exception as exc:
+            self.logger.log("WARNING", "CodingAgent init failed", str(exc))
+            return {}
+
+    def _build_todo(
+        self, network: AgentNetwork, ai_client: BaseAIClient
+    ) -> Dict[str, Any]:
+        """Build and register TodoAgent with SQLite-backed TodoService."""
+        try:
+            todo_service = TodoService(logger=self.logger)
+            todo_agent = TodoAgent(
+                ai_client=ai_client,
+                todo_service=todo_service,
+                logger=self.logger,
+            )
+            network.register_agent(todo_agent)
+            return {"todo_service": todo_service, "todo_agent": todo_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "TodoAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(

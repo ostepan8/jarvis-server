@@ -979,6 +979,17 @@ Special cases:
 - "Check weather and if sunny make lights red" → {{"dag": {{"get_weather": [], "lights_color": ["get_weather"]}}}}
 - "When did X come out. if in 2018 make lights blue" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "Search for X and if above Y make lights blue else red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
+- "Add a Spotify agent" → {{"dag": {{"implement_feature": []}}}}
+- "Fix the NLU timeout bug" → {{"dag": {{"fix_bug": []}}}}
+- "Write tests for the memory agent" → {{"dag": {{"write_tests": []}}}}
+- "How does the protocol system work?" → {{"dag": {{"explain_code": []}}}}
+- "Refactor the agent factory" → {{"dag": {{"refactor_code": []}}}}
+- "Add a task to fix the login page" → {{"dag": {{"create_task": []}}}}
+- "Show my tasks" → {{"dag": {{"list_tasks": []}}}}
+- "Mark task abc123 as done" → {{"dag": {{"complete_task": []}}}}
+- "What's on my todo list" → {{"dag": {{"list_tasks": []}}}}
+- "Delete task abc123" → {{"dag": {{"delete_task": []}}}}
+- "Update task abc123 priority to high" → {{"dag": {{"update_task": []}}}}
 
 Return ONLY the JSON."""
         return prompt
