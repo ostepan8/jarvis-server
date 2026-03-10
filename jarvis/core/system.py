@@ -16,6 +16,7 @@ from ..protocols.loggers import ProtocolUsageLogger, InteractionLogger
 from ..protocols.runtime import ProtocolRuntime
 from ..utils.performance import PerfTracker, get_tracker
 from ..agents.factory import AgentFactory
+from .feedback import FeedbackCollector
 from .orchestrator import RequestOrchestrator
 from .response_logger import ResponseLogger
 
@@ -130,6 +131,16 @@ class JarvisSystem:
 
         await self._start_network()
 
+        # Initialize feedback collector
+        feedback_collector = None
+        if self.config.flags.enable_feedback:
+            feedback_collector = FeedbackCollector(
+                feedback_dir=self.config.feedback_dir,
+            )
+            chat_agent = self.network.agents.get("ChatAgent")
+            if chat_agent and hasattr(chat_agent, "feedback_collector"):
+                chat_agent.feedback_collector = feedback_collector
+
         # Initialize orchestrator and response logger
         self._response_logger = ResponseLogger(self.interaction_logger)
         self._orchestrator = RequestOrchestrator(
@@ -141,6 +152,7 @@ class JarvisSystem:
             max_history_length=10,
             ai_client=self._ai_client,
             enable_coordinator=self.config.flags.enable_coordinator,
+            feedback_collector=feedback_collector,
         )
 
         loaded = (

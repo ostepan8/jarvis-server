@@ -18,6 +18,8 @@ from .profile import AgentProfile
 from .mission import MissionBrief, MissionBudget, MissionComplexity, MissionContext
 from ..utils.performance import PerfTracker, get_tracker
 
+from .feedback import FeedbackCollector
+
 if TYPE_CHECKING:
     from ..agents.agent_network import AgentNetwork
     from ..ai_clients.base import BaseAIClient
@@ -60,6 +62,7 @@ class RequestOrchestrator:
         max_history_length: int = 10,
         ai_client: Optional["BaseAIClient"] = None,
         enable_coordinator: bool = True,
+        feedback_collector: Optional[FeedbackCollector] = None,
     ):
         """Initialize request orchestrator.
 
@@ -72,6 +75,7 @@ class RequestOrchestrator:
             max_history_length: Maximum conversation history to maintain
             ai_client: AI client for coordinator triage (None disables coordinator)
             enable_coordinator: Feature flag to enable/disable coordinator
+            feedback_collector: Collector for negative feedback corrections
         """
         self.network = network
         self.protocol_runtime = protocol_runtime
@@ -81,6 +85,7 @@ class RequestOrchestrator:
         self.max_history_length = max_history_length
         self.ai_client = ai_client
         self.enable_coordinator = enable_coordinator
+        self.feedback_collector = feedback_collector
 
         # Conversation history: user_id -> list of turns
         self.conversation_history: Dict[int, List[Dict[str, str]]] = {}
@@ -133,7 +138,13 @@ class RequestOrchestrator:
                 )
                 if result:
                     return result
-            
+
+            # Intercept negative feedback before routing
+            if self.feedback_collector and self.feedback_collector.is_negative_feedback(user_input):
+                feedback_result = self._handle_feedback(user_input, req_metadata)
+                if feedback_result:
+                    return feedback_result
+
             # Try protocol match (fast path)
             protocol_result = await self._try_protocol_match(
                 user_input,
@@ -243,6 +254,41 @@ class RequestOrchestrator:
             if hasattr(chat_agent, "current_user_id"):
                 chat_agent.current_user_id = metadata.user_id
     
+    def _handle_feedback(
+        self,
+        user_input: str,
+        metadata: RequestMetadata,
+    ) -> Optional[Dict[str, Any]]:
+        """Intercept negative feedback and log a correction record.
+
+        Grabs the last conversation turn for the user, logs it as a
+        correction, and returns an acknowledgment.
+        """
+        history = self.conversation_history.get(metadata.user_id, [])
+        if not history:
+            return None
+
+        last_turn = history[-1]
+        original_input = last_turn.get("user", "")
+        bad_response = last_turn.get("assistant", "")
+
+        correction_id = self.feedback_collector.log_correction(
+            user_id=metadata.user_id,
+            original_input=original_input,
+            bad_response=bad_response,
+            feedback_text=user_input,
+        )
+
+        self.logger.log(
+            "INFO",
+            "Negative feedback recorded",
+            f"correction_id={correction_id}, user={metadata.user_id}",
+        )
+
+        return {
+            "response": "Noted. That response has been flagged — I won't make that mistake again.",
+        }
+
     async def _handle_night_mode(
         self,
         user_input: str,

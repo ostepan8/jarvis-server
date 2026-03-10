@@ -26,6 +26,7 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
     ) -> None:
         super().__init__("ChatAgent", logger, memory=None, profile=AgentProfile())
         self.ai_client = ai_client
+        self.feedback_collector = None  # set externally by system/builder
         self.tools = chat_tools
         self.intent_map = {
             "chat": self._process_chat,
@@ -129,12 +130,33 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
     # ------------------------------------------------------------------
     # Chat processing
     # ------------------------------------------------------------------
+    def _build_correction_block(self, user_id: Optional[int] = None) -> str:
+        """Build a correction-log addendum for the system prompt."""
+        if not self.feedback_collector:
+            return ""
+        corrections = self.feedback_collector.get_corrections(limit=10, user_id=user_id)
+        if not corrections:
+            return ""
+        lines = [
+            "\n\nCORRECTION LOG — These previous responses were marked as wrong. Do not repeat them:"
+        ]
+        for c in corrections:
+            lines.append(
+                f'- User asked: "{c.get("original_input", "")}" '
+                f'-> You said: "{c.get("bad_response", "")}" -> WRONG'
+            )
+        return "\n".join(lines)
+
     async def _process_chat(
         self, user_input: str, conversation_history: List[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         try:
+            # Inject correction history into system prompt
+            user_id = getattr(self, "current_user_id", None)
+            effective_prompt = self.system_prompt + self._build_correction_block(user_id)
+
             messages: List[Dict[str, Any]] = [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": effective_prompt},
             ]
 
             # Add conversation history (last 5 turns for context)
