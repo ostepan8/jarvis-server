@@ -253,14 +253,15 @@ class JarvisSystem:
     async def _start_network(self) -> None:
         await self.network.start()
 
-    async def enter_night_mode(self) -> None:
+    async def enter_night_mode(self, progress_callback=None) -> None:
         """Enable night mode and launch background tasks."""
         self.night_mode = True
+        self._night_progress_callback = progress_callback
         if self._orchestrator:
             self._orchestrator.night_mode = True
         for agent in self.night_agents:
             agent.activate_capabilities()
-            asyncio.create_task(agent.start_background_tasks())
+            asyncio.create_task(agent.start_background_tasks(progress_callback=progress_callback))
 
     async def exit_night_mode(self) -> None:
         """Disable night mode and stop background tasks."""
