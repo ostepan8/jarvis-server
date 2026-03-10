@@ -160,7 +160,7 @@ class TestConfigProfileAISettings:
         assert profile.active_preset == "fast"
 
     def test_from_dict_without_ai_settings_backwards_compat(self):
-        data = {"label": "Old", "feature_flags": {"enable_weather": True}, "connections": {}}
+        data = {"label": "Old", "feature_flags": {"enable_lights": True}, "connections": {}}
         profile = ConfigProfile.from_dict(data)
         assert profile.ai_settings == {}
         assert profile.model_presets == {}

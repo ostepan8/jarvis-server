@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 # Static knowledge of agent -> service -> API dependencies
 STATIC_DEPENDENCIES: Dict[str, List[str]] = {
     "CalendarAgent": ["CalendarService"],
-    "WeatherAgent": ["WeatherAPI"],
     "MemoryAgent": ["ChromaDB", "VectorMemoryService"],
     "SearchAgent": ["GoogleSearchAPI"],
     "LightingAgent": ["HueBridge"],
