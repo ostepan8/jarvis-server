@@ -116,9 +116,15 @@ async def demo(
 ) -> None:
     colorama_init(autoreset=True)
 
+    # Narrow Optional types so the rest of the function is safe
+    if input_handler is None:
+        input_handler = ConsoleInput()
+    if output_handler is None:
+        output_handler = ConsoleOutput()
+
     # NEW: build with the builder
     jarvis = await build_jarvis()
-    tz_name = get_localzone_name()
+    tz_name = get_localzone_name() or "UTC"
 
     # Get default user_id from environment or default to 1
     default_user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
@@ -239,7 +245,7 @@ async def run_voice() -> None:
     """Run the demo using wake word detection, speech recognition, and TTS."""
     # NEW: build with the builder
     jarvis = await build_jarvis()
-    tz_name = get_localzone_name()
+    tz_name = get_localzone_name() or "UTC"
 
     # Get default user_id from environment or default to 1
     default_user_id = int(os.getenv("DEFAULT_USER_ID", "1"))
