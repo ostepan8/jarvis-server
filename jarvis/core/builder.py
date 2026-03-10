@@ -209,9 +209,21 @@ class JarvisBuilder:
         # Start network
         await jarvis._start_network()
         
-        # Initialize orchestrator and response logger
+        # Initialize feedback collector
+        from .feedback import FeedbackCollector
         from .response_logger import ResponseLogger
         from .orchestrator import RequestOrchestrator
+
+        feedback_collector = None
+        if jarvis.config.flags.enable_feedback:
+            feedback_collector = FeedbackCollector(
+                feedback_dir=jarvis.config.feedback_dir,
+            )
+            chat_agent = jarvis.network.agents.get("ChatAgent")
+            if chat_agent and hasattr(chat_agent, "feedback_collector"):
+                chat_agent.feedback_collector = feedback_collector
+
+        # Initialize orchestrator and response logger
         jarvis._response_logger = ResponseLogger(jarvis.interaction_logger)
         jarvis._orchestrator = RequestOrchestrator(
             network=jarvis.network,
@@ -222,6 +234,7 @@ class JarvisBuilder:
             max_history_length=10,
             ai_client=ai_client,
             enable_coordinator=jarvis.config.flags.enable_coordinator,
+            feedback_collector=feedback_collector,
         )
 
         protocol_count = (

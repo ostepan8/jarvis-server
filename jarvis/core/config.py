@@ -19,6 +19,7 @@ class FeatureFlags:
     enable_coordinator: bool = True
     enable_health: bool = True
     enable_self_improvement: bool = False
+    enable_feedback: bool = True
 
 
 @dataclass
@@ -40,6 +41,7 @@ class JarvisConfig:
     memory_short_term_ttl_days: int = 7
     memory_auto_promote: bool = True
     memory_auto_consolidate: bool = False
+    feedback_dir: Optional[str] = None  # Feedback corrections directory (~/.jarvis/feedback)
 
     # Retry configuration for external service calls
     max_retries: int = 3
