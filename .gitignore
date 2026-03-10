@@ -54,3 +54,16 @@ models/*
 # Temporary documentation
 COMMIT_MESSAGE.md
 PRE_PUSH_CHECKLIST.md
+
+# Runtime artifacts
+jarvis/protocols/recorded/
+jarvis/agents/health_agent/reports/
+.claude/worktrees/
+
+# personal-scheduler build artifacts
+personal-scheduler/**/*.o
+personal-scheduler/**/*.d
+personal-scheduler/scheduler_server
+personal-scheduler/events.db
+personal-scheduler/.env
+personal-scheduler/calendar_integration/token.*
