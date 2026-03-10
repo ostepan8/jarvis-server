@@ -118,7 +118,7 @@ class TestClientErrorHandling:
         client = _fresh_client()
         error = urllib.error.HTTPError(
             "http://localhost:8000/self-improvement/status",
-            500, "Internal Server Error", {}, None,
+            500, "Internal Server Error", None, None,
         )
 
         with patch("_client.urllib.request.urlopen", side_effect=error):

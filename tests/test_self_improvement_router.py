@@ -10,7 +10,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401
 
 import httpx
 import pytest
@@ -76,8 +76,6 @@ def app(mock_service):
     app = FastAPI()
     app.include_router(router, prefix="/self-improvement")
     app.state.jarvis_system = None
-
-    app._mock_service = mock_service
     return app
 
 
@@ -443,16 +441,14 @@ class TestContext:
         assert data["size"] > 0
 
     @pytest.mark.asyncio
-    async def test_path_traversal_blocked(self, app):
+    async def test_path_traversal_blocked(self):
         """Test traversal protection directly — httpx normalises '..' in URLs,
         so we call the endpoint function with a raw traversal path."""
+        from fastapi import HTTPException
         from server.routers.self_improvement import get_context
 
-        mock_request = MagicMock()
-        mock_request.app = app
-        with pytest.raises(Exception) as exc_info:
-            await get_context("../../etc/passwd", mock_request)
-        # Should be a 403 HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await get_context("../../etc/passwd")
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio

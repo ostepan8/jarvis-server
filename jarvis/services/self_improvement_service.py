@@ -158,6 +158,14 @@ class SelfImprovementService:
     # Public API
     # ------------------------------------------------------------------
 
+    async def discover(self) -> list[Discovery]:
+        """Run full system analysis and return discoveries."""
+        return await self._discover()
+
+    def get_analyzer(self) -> SystemAnalyzer:
+        """Return the underlying SystemAnalyzer instance."""
+        return self._analyzer
+
     async def run_improvement_cycle(self) -> NightReport:
         """Main entry point — run one full improvement cycle."""
         started_at = datetime.now(timezone.utc).isoformat()

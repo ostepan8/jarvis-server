@@ -60,7 +60,6 @@ async def _run_test_background(
     service: SelfImprovementService,
     test_files: Optional[List[str]],
     working_directory: Optional[str],
-    timeout: int,
 ) -> None:
     """Execute pytest in the background and stash results in _state."""
     _state["test_runs"][run_id]["status"] = "running"
@@ -92,7 +91,6 @@ async def _run_test_background(
 async def _run_cycle_background(
     service: SelfImprovementService,
     max_tasks: Optional[int],
-    dry_run: bool,
 ) -> None:
     """Execute a full improvement cycle in the background."""
     _state["running"] = True
@@ -178,7 +176,7 @@ async def start_cycle(body: CycleRequest, request: Request):
     service = _get_service(request)
     _state["cycle_error"] = None
     asyncio.create_task(
-        _run_cycle_background(service, body.max_tasks, body.dry_run)
+        _run_cycle_background(service, body.max_tasks)
     )
     return {"status": "started", "message": "Improvement cycle launched"}
 
@@ -212,7 +210,7 @@ async def start_test_run(body: TestRunRequest, request: Request):
     _state["test_runs"][run_id] = {"status": "pending", "run_id": run_id}
     asyncio.create_task(
         _run_test_background(
-            run_id, service, body.test_files, body.working_directory, body.timeout
+            run_id, service, body.test_files, body.working_directory
         )
     )
     return {"run_id": run_id, "status": "pending"}
@@ -254,7 +252,7 @@ async def list_reports(request: Request, limit: int = Query(20)):
 
 
 @router.get("/context/{file_path:path}")
-async def get_context(file_path: str, request: Request):
+async def get_context(file_path: str):
     """Read a project file. Path traversal is, naturally, forbidden."""
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
