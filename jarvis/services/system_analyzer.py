@@ -40,6 +40,31 @@ class Discovery:
     source_detail: str = ""
     todo_id: Optional[str] = None
 
+    def to_dict(self) -> dict:
+        """Serialize all fields to a plain dict (enum stored as string value)."""
+        return {
+            "discovery_type": self.discovery_type.value,
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "relevant_files": list(self.relevant_files),
+            "source_detail": self.source_detail,
+            "todo_id": self.todo_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Discovery":
+        """Deserialize from a plain dict, converting the type string back to enum."""
+        return cls(
+            discovery_type=DiscoveryType(data["discovery_type"]),
+            title=data["title"],
+            description=data["description"],
+            priority=data["priority"],
+            relevant_files=data.get("relevant_files", []),
+            source_detail=data.get("source_detail", ""),
+            todo_id=data.get("todo_id"),
+        )
+
 
 class SystemAnalyzer:
     """Scans the Jarvis project for issues and improvement opportunities."""
