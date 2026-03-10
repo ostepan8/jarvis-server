@@ -25,12 +25,15 @@ from jarvis.io import (
     ConsoleInput,
     ConsoleOutput,
 )
+from jarvis.io.night_display import NightModePrinter
 from jarvis.io.input.wakeword import PicovoiceWakeWordListener
 from jarvis.io.input import VoiceInputSystem
 from jarvis.io.output.tts import ElevenLabsTTSEngine
 
 # Load environment variables from .env file (once)
 load_dotenv()
+
+IDLE_TIMEOUT_SECONDS = int(os.getenv("JARVIS_IDLE_TIMEOUT", "300"))
 
 
 async def build_jarvis():
@@ -123,15 +126,51 @@ async def demo(
     # Get logger from jarvis system
     logger = jarvis.logger
 
+    input_task = None
+    night_printer = None
+
     try:
         while True:
-            user_command = await input_handler.get_input("Jarvis> ")
+            if input_task is None:
+                input_task = asyncio.create_task(input_handler.get_input("Jarvis> "))
+
+            done, pending = await asyncio.wait({input_task}, timeout=IDLE_TIMEOUT_SECONDS)
+
+            if not done:
+                # Idle timeout — slip into night mode if not already there
+                if not jarvis.night_mode:
+                    night_printer = NightModePrinter()
+                    night_printer.print_entering()
+                    await jarvis.enter_night_mode(progress_callback=night_printer.on_event)
+                continue  # Loop back; same input_task stays alive
+
+            # User typed something
+            user_command = input_task.result()
+            input_task = None
+
+            # Wake from night mode if active
+            if jarvis.night_mode and night_printer:
+                night_printer.print_waking()
+                await jarvis.exit_night_mode()
+                night_printer = None
+
             if user_command.strip().lower() in {"exit", "quit"}:
                 break
 
             cmd = user_command.strip().lower()
 
             # Slash commands
+            if cmd == "/night":
+                if jarvis.night_mode:
+                    if night_printer:
+                        night_printer.print_waking()
+                    await jarvis.exit_night_mode()
+                    night_printer = None
+                else:
+                    night_printer = NightModePrinter()
+                    night_printer.print_entering()
+                    await jarvis.enter_night_mode(progress_callback=night_printer.on_event)
+                continue
             if cmd == "/config":
                 await run_config_dashboard(jarvis)
                 continue
@@ -162,6 +201,7 @@ async def demo(
                 print("  /models         - AI model & preset management")
                 print("  /agents         - View active agents")
                 print("  /modes          - SSH into a device (direct control)")
+                print("  /night          - Toggle night mode (auto-improvement)")
                 print("  /help           - Show this help")
                 print("  exit            - Quit Jarvis\n")
                 continue
