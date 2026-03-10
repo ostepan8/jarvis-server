@@ -1,9 +1,18 @@
 from __future__ import annotations
+
 import asyncio
 import os
 import time
-from typing import Optional
-from jarvis.agents.health_agent.models import ProbeResult, ComponentStatus
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from jarvis.agents.health_agent.models import ProbeResult, ComponentStatus
+
+
+def _models():
+    """Lazy import to break circular dependency."""
+    from jarvis.agents.health_agent.models import ProbeResult, ComponentStatus
+    return ProbeResult, ComponentStatus
 
 
 class HealthService:
@@ -16,6 +25,7 @@ class HealthService:
         self, name: str, url: str, timeout: Optional[float] = None
     ) -> ProbeResult:
         """Probe an HTTP service. Returns ProbeResult, never raises."""
+        ProbeResult, ComponentStatus = _models()
         t = timeout or self._timeout
         try:
             import httpx
@@ -70,6 +80,7 @@ class HealthService:
 
     async def probe_weather_api(self) -> ProbeResult:
         """Probe the Weather API."""
+        ProbeResult, ComponentStatus = _models()
         api_key = os.getenv("WEATHER_API_KEY", "")
         if not api_key:
             return ProbeResult(
@@ -84,6 +95,7 @@ class HealthService:
 
     async def probe_sqlite(self, db_path: str = "") -> ProbeResult:
         """Check if SQLite database file exists and is accessible."""
+        ProbeResult, ComponentStatus = _models()
         path = db_path or os.path.join(os.path.expanduser("~"), ".jarvis", "jarvis.db")
         try:
             if os.path.exists(path):
@@ -112,6 +124,7 @@ class HealthService:
 
     def get_cpu_usage(self) -> ProbeResult:
         """Get CPU usage. Soft dependency on psutil."""
+        ProbeResult, ComponentStatus = _models()
         try:
             import psutil
             cpu = psutil.cpu_percent(interval=0.1)
@@ -145,6 +158,7 @@ class HealthService:
 
     def get_memory_usage(self) -> ProbeResult:
         """Get memory usage."""
+        ProbeResult, ComponentStatus = _models()
         try:
             import psutil
             mem = psutil.virtual_memory()
@@ -179,6 +193,7 @@ class HealthService:
 
     def get_disk_usage(self) -> ProbeResult:
         """Get disk usage."""
+        ProbeResult, ComponentStatus = _models()
         try:
             import psutil
             disk = psutil.disk_usage("/")
@@ -213,6 +228,7 @@ class HealthService:
 
     async def get_event_loop_lag(self) -> ProbeResult:
         """Measure event loop lag."""
+        ProbeResult, ComponentStatus = _models()
         try:
             start = time.monotonic()
             await asyncio.sleep(0)
