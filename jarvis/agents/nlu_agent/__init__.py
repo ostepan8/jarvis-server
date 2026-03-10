@@ -753,7 +753,13 @@ class NLUAgent(NetworkAgent):
                 f"Results count: {len(results)}",
             )
 
-            final_response = self._build_final_response(user_input, results)
+            # Multi-cap DAGs benefit from LLM synthesis for coherent prose
+            try:
+                final_response = await self._format_final_response_llm(
+                    user_input, results
+                )
+            except Exception:
+                final_response = self._build_final_response(user_input, results)
 
             await self.send_capability_response(
                 to_agent=original_requester,
@@ -813,7 +819,7 @@ class NLUAgent(NetworkAgent):
             return "I completed your request."
         if len(responses) == 1:
             return responses[0]
-        return " ".join(responses)
+        return "\n\n".join(responses)
 
     async def _format_final_response_llm(
         self, user_input: str, agent_results: List[Dict[str, Any]]

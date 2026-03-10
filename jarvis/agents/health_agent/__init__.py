@@ -337,9 +337,45 @@ class HealthAgent(NetworkAgent):
         snapshot = await self._build_snapshot()
         self._last_snapshot = snapshot
 
+        all_results = (
+            snapshot.agent_statuses
+            + snapshot.service_statuses
+            + snapshot.resource_statuses
+        )
+        healthy = sum(
+            1 for r in all_results if r.status == ComponentStatus.HEALTHY
+        )
+        total = len(all_results)
+        issues = [
+            r for r in all_results if r.status != ComponentStatus.HEALTHY
+        ]
+
+        if snapshot.overall_status == ComponentStatus.HEALTHY:
+            response = f"All systems operational — {total} components, all healthy."
+        else:
+            issue_summaries = [
+                f"{r.component} ({r.message})" for r in issues
+            ]
+            if snapshot.overall_status == ComponentStatus.DEGRADED:
+                response = (
+                    f"Mostly operational, {healthy} of {total} components healthy. "
+                    f"Showing some strain: {', '.join(issue_summaries)}."
+                )
+            else:
+                response = (
+                    f"Not at full strength — {healthy} of {total} components healthy. "
+                    f"Issues with: {', '.join(issue_summaries[:5])}."
+                )
+
+        if snapshot.active_incidents:
+            count = len(snapshot.active_incidents)
+            response += (
+                f" {count} active incident{'s' if count != 1 else ''} on record."
+            )
+
         return AgentResponse(
             success=True,
-            response=f"System is {snapshot.overall_status.value}. {snapshot.summary}",
+            response=response,
             data=snapshot.to_dict(),
             metadata={"agent": "health"},
         )
@@ -358,9 +394,23 @@ class HealthAgent(NetworkAgent):
         statuses = [r.to_dict() for r in agent_results]
         healthy = sum(1 for r in agent_results if r.status == ComponentStatus.HEALTHY)
 
+        if healthy == len(agent_results):
+            response = f"All {healthy} agents responding normally."
+        else:
+            unhealthy = [
+                r for r in agent_results
+                if r.status != ComponentStatus.HEALTHY
+            ]
+            names = [r.component for r in unhealthy]
+            verb = "is" if len(names) == 1 else "are"
+            response = (
+                f"{healthy} of {len(agent_results)} agents healthy. "
+                f"{', '.join(names)} {verb} not responding as expected."
+            )
+
         return AgentResponse(
             success=True,
-            response=f"{healthy}/{len(agent_results)} agents healthy.",
+            response=response,
             data={"agents": statuses},
             metadata={"agent": "health"},
         )
@@ -374,9 +424,24 @@ class HealthAgent(NetworkAgent):
         statuses = [r.to_dict() for r in results]
         healthy = sum(1 for r in results if r.status == ComponentStatus.HEALTHY)
 
+        if healthy == len(results):
+            names = [r.component for r in results]
+            response = (
+                f"All services online — {', '.join(names)} responding normally."
+            )
+        else:
+            unhealthy = [
+                r for r in results if r.status != ComponentStatus.HEALTHY
+            ]
+            summaries = [f"{r.component} ({r.message})" for r in unhealthy]
+            response = (
+                f"{healthy} of {len(results)} services healthy. "
+                f"Issues: {', '.join(summaries)}."
+            )
+
         return AgentResponse(
             success=True,
-            response=f"{healthy}/{len(results)} services healthy.",
+            response=response,
             data={"services": statuses},
             metadata={"agent": "health"},
         )
@@ -393,9 +458,46 @@ class HealthAgent(NetworkAgent):
         statuses = [r.to_dict() for r in results]
         overall = self._compute_overall_status(results)
 
+        # Build conversational summary from probe details
+        parts = []
+        for r in results:
+            details = r.details or {}
+            if r.component == "CPU":
+                pct = details.get("percent")
+                if pct is not None:
+                    parts.append(f"CPU at {pct:.0f}%")
+            elif r.component == "Memory":
+                pct = details.get("percent")
+                if pct is not None:
+                    parts.append(f"memory at {pct:.0f}%")
+            elif r.component == "Disk":
+                pct = details.get("percent")
+                if pct is not None:
+                    used = details.get("used_gb")
+                    total = details.get("total_gb")
+                    part = f"disk at {pct:.0f}%"
+                    if used is not None and total is not None:
+                        part += f" ({used}/{total} GB)"
+                    parts.append(part)
+            elif r.component == "EventLoop":
+                if r.latency_ms is not None:
+                    parts.append(f"event loop lag {r.latency_ms:.1f}ms")
+
+        if overall == ComponentStatus.HEALTHY:
+            opener = "Resources looking good"
+        elif overall == ComponentStatus.DEGRADED:
+            opener = "Resources under some pressure"
+        else:
+            opener = "Resource concerns detected"
+
+        if parts:
+            response = f"{opener} — {', '.join(parts)}."
+        else:
+            response = f"{opener}."
+
         return AgentResponse(
             success=True,
-            response=f"System resources: {overall.value}.",
+            response=response,
             data={"resources": statuses},
             metadata={"agent": "health"},
         )
@@ -425,7 +527,7 @@ class HealthAgent(NetworkAgent):
 
         return AgentResponse(
             success=True,
-            response=f"Dependency map generated with {len(nodes)} nodes.",
+            response=f"Dependency map generated — {len(nodes)} components mapped.",
             data={"nodes": [n.to_dict() for n in nodes], "report_path": path},
             metadata={"agent": "health"},
         )
@@ -440,9 +542,25 @@ class HealthAgent(NetworkAgent):
         else:
             incidents = self._incidents[-20:]  # Last 20
 
+        if not incidents:
+            response = "No incidents on record. Quiet day."
+        elif len(incidents) == 1:
+            inc = incidents[0]
+            status = "active" if inc.is_active else "resolved"
+            response = (
+                f"One incident: {inc.title} "
+                f"({inc.severity.value}, {status})."
+            )
+        else:
+            active = sum(1 for i in incidents if i.is_active)
+            response = (
+                f"{len(incidents)} incidents on record, "
+                f"{active} currently active."
+            )
+
         return AgentResponse(
             success=True,
-            response=f"{len(incidents)} incident(s) found.",
+            response=response,
             data={"incidents": [i.to_dict() for i in incidents]},
             metadata={"agent": "health"},
         )
