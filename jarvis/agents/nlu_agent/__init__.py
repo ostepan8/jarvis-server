@@ -949,6 +949,9 @@ Special cases:
      → ALWAYS use "search" capability (NEVER "chat", "search_facts", or "get_facts")
    - User-specific ("my favorite", "what I mentioned", "what did I say"):
      → Use "search_facts" or "get_facts"
+   - Memory vault management ("browse memories", "memory stats", "consolidate",
+     "promote memory"): → Use "browse_memories", "memory_stats",
+     "consolidate_memories", or "promote_memory"
 
 4. **MULTIPLE ACTIONS:**
    Multiple distinct actions connected by "and", "also", or targeting different systems:
@@ -995,6 +998,10 @@ Special cases:
 - "Show health report" → {{"dag": {{"health_report": []}}}}
 - "Show dependency map" → {{"dag": {{"dependency_map": []}}}}
 - "List incidents" → {{"dag": {{"incident_list": []}}}}
+- "Browse my memories" → {{"dag": {{"browse_memories": []}}}}
+- "Show memory stats" → {{"dag": {{"memory_stats": []}}}}
+- "Consolidate my preferences" → {{"dag": {{"consolidate_memories": []}}}}
+- "Promote that memory to long-term" → {{"dag": {{"promote_memory": []}}}}
 
 Return ONLY the JSON."""
         return prompt

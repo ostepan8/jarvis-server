@@ -35,7 +35,11 @@ class JarvisConfig:
         default_factory=lambda: os.getenv("RECORD_NETWORK_METHODS", "false").lower()
         == "true"
     )
-    memory_dir: Optional[str] = None
+    memory_dir: Optional[str] = None  # ChromaDB persist directory
+    memory_vault_dir: Optional[str] = None  # Markdown vault directory (~/.jarvis/memory)
+    memory_short_term_ttl_days: int = 7
+    memory_auto_promote: bool = True
+    memory_auto_consolidate: bool = False
 
     # Retry configuration for external service calls
     max_retries: int = 3

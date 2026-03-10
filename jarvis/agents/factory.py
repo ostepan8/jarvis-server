@@ -24,6 +24,7 @@ from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
 from ..services.todo_service import TodoService
 from ..services.health_service import HealthService
+from ..services.markdown_memory import MarkdownMemoryService
 from ..night_agents import (
     NightAgent,
     NightModeControllerAgent,
@@ -102,11 +103,13 @@ class AgentFactory:
         refs: Dict[str, Any] = {}
 
         # --- Kick off slow I/O in background threads ---
-        chromadb_future = asyncio.to_thread(
-            VectorMemoryService,
-            persist_directory=self.config.memory_dir,
-            api_key=self.config.api_key,
-        )
+        chromadb_future = None
+        if self.config.api_key:
+            chromadb_future = asyncio.to_thread(
+                VectorMemoryService,
+                persist_directory=self.config.memory_dir,
+                api_key=self.config.api_key,
+            )
 
         # --- Build all instant agents while I/O runs ---
         refs.update(self._build_calendar(network, ai_client))
@@ -137,23 +140,36 @@ class AgentFactory:
             refs["night_agents"] = night_agents
 
         # --- Await ChromaDB init, then build memory + NLU ---
-        try:
-            vector_memory = await chromadb_future
-        except Exception as exc:
-            self.logger.log("WARNING", "VectorMemoryService init failed", str(exc))
-            vector_memory = None
+        vector_memory = None
+        if chromadb_future is not None:
+            try:
+                vector_memory = await chromadb_future
+            except Exception as exc:
+                self.logger.log("WARNING", "VectorMemoryService init failed", str(exc))
 
-        if vector_memory is not None:
-            fact_service = FactMemoryService()
-            memory_agent = MemoryAgent(
-                vector_memory, fact_service, self.logger, ai_client
-            )
-            network.register_agent(memory_agent)
-            refs.update({
-                "vector_memory": vector_memory,
-                "fact_service": fact_service,
-                "memory_agent": memory_agent,
-            })
+        # Markdown vault is always available
+        markdown_memory = MarkdownMemoryService(
+            vault_dir=self.config.memory_vault_dir,
+            short_term_ttl_days=self.config.memory_short_term_ttl_days,
+            auto_promote=self.config.memory_auto_promote,
+            ai_client=ai_client,
+        )
+
+        fact_service = FactMemoryService()
+        memory_agent = MemoryAgent(
+            memory_service=vector_memory,
+            fact_service=fact_service,
+            logger=self.logger,
+            ai_client=ai_client,
+            markdown_memory=markdown_memory,
+        )
+        network.register_agent(memory_agent)
+        refs.update({
+            "vector_memory": vector_memory,
+            "markdown_memory": markdown_memory,
+            "fact_service": fact_service,
+            "memory_agent": memory_agent,
+        })
 
         refs.update(self._build_nlu(network, ai_client, vector_memory))
 
@@ -163,14 +179,39 @@ class AgentFactory:
     def _build_memory(
         self, network: AgentNetwork, ai_client: BaseAIClient
     ) -> Dict[str, Any]:
-        vector_memory = VectorMemoryService(
-            persist_directory=self.config.memory_dir, api_key=self.config.api_key
+        # Markdown vault is always available (no external deps)
+        markdown_memory = MarkdownMemoryService(
+            vault_dir=self.config.memory_vault_dir,
+            short_term_ttl_days=self.config.memory_short_term_ttl_days,
+            auto_promote=self.config.memory_auto_promote,
+            ai_client=ai_client,
         )
+
+        # Vector memory requires an API key for embeddings
+        vector_memory = None
+        if self.config.api_key:
+            try:
+                vector_memory = VectorMemoryService(
+                    persist_directory=self.config.memory_dir,
+                    api_key=self.config.api_key,
+                )
+            except Exception as exc:
+                self.logger.log(
+                    "WARNING", "VectorMemoryService init failed", str(exc)
+                )
+
         fact_service = FactMemoryService()
-        memory_agent = MemoryAgent(vector_memory, fact_service, self.logger, ai_client)
+        memory_agent = MemoryAgent(
+            memory_service=vector_memory,
+            fact_service=fact_service,
+            logger=self.logger,
+            ai_client=ai_client,
+            markdown_memory=markdown_memory,
+        )
         network.register_agent(memory_agent)
         return {
             "vector_memory": vector_memory,
+            "markdown_memory": markdown_memory,
             "fact_service": fact_service,
             "memory_agent": memory_agent,
         }

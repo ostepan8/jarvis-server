@@ -415,8 +415,11 @@ class TestAgentFactoryBuildAllAsync:
         ):
             factory = AgentFactory(config, logger)
             refs = await factory.build_all_async(network, ai_client)
-            # Memory agent should not be present but NLU should still be built
-            assert "memory_agent" not in refs
+            # Memory agent is always present (backed by markdown vault)
+            # but vector_memory should be None when ChromaDB fails
+            assert "memory_agent" in refs
+            assert refs.get("vector_memory") is None
+            assert refs.get("markdown_memory") is not None
             assert "nlu_agent" in refs
 
     @pytest.mark.asyncio
