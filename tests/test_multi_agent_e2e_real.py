@@ -36,12 +36,12 @@ pytestmark = pytest.mark.skipif(
 # Helpers
 # ---------------------------------------------------------------------------
 
-class MockWeatherAgent(NetworkAgent):
-    """Mock weather agent that returns realistic weather data."""
+class MockSearchAgent(NetworkAgent):
+    """Mock search agent that returns realistic search data."""
 
     @property
     def capabilities(self) -> Set[str]:
-        return {"get_weather", "get_forecast"}
+        return {"search", "news_search"}
 
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
@@ -108,11 +108,11 @@ class TestRealLLMLeadExecution:
 
     @pytest.mark.asyncio
     async def test_chat_agent_recruits_weather(self):
-        """ChatAgent should recruit WeatherAgent for weather queries in complex request."""
+        """ChatAgent should recruit SearchAgent for search queries in complex request."""
         ai_client = make_real_ai_client()
         chat = ChatAgent(ai_client)
-        weather = MockWeatherAgent("WeatherAgent")
-        network = await setup_real_network(chat, weather)
+        search_agent = MockSearchAgent("SearchAgent")
+        network = await setup_real_network(chat, search_agent)
 
         try:
             brief = MissionBrief(
@@ -132,7 +132,7 @@ class TestRealLLMLeadExecution:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather", "get_forecast"],
+                    "SearchAgent": ["search", "news_search"],
                 },
             )
 
@@ -144,13 +144,13 @@ class TestRealLLMLeadExecution:
             assert result["response"]  # Should have a non-empty response
             assert result["metadata"]["lead_agent"] == "ChatAgent"
 
-            # Verify the agent recruited WeatherAgent
+            # Verify the agent recruited SearchAgent
             recruit_actions = [
                 a for a in result.get("actions", [])
                 if a.get("function") == "recruit_agent"
             ]
             assert len(recruit_actions) >= 1
-            assert recruit_actions[0]["arguments"]["capability"] == "get_weather"
+            assert recruit_actions[0]["arguments"]["capability"] == "search"
         finally:
             await network.stop()
 
@@ -159,8 +159,8 @@ class TestRealLLMLeadExecution:
         """Simple questions should not trigger recruitment."""
         ai_client = make_real_ai_client()
         chat = ChatAgent(ai_client)
-        weather = MockWeatherAgent("WeatherAgent")
-        network = await setup_real_network(chat, weather)
+        search_agent = MockSearchAgent("SearchAgent")
+        network = await setup_real_network(chat, search_agent)
 
         try:
             brief = MissionBrief(
@@ -180,7 +180,7 @@ class TestRealLLMLeadExecution:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
 

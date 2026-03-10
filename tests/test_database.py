@@ -94,10 +94,10 @@ class TestUserAgentPermissions:
         assert perms == {}
 
     def test_set_and_get_permissions(self, db):
-        mapping = {"CalendarAgent": True, "WeatherAgent": False}
+        mapping = {"CalendarAgent": True, "SearchAgent": False}
         set_user_agent_permissions(db, 1, mapping)
         perms = get_user_agent_permissions(db, 1)
-        assert perms == {"CalendarAgent": True, "WeatherAgent": False}
+        assert perms == {"CalendarAgent": True, "SearchAgent": False}
 
     def test_update_existing_permission(self, db):
         set_user_agent_permissions(db, 1, {"CalendarAgent": True})
@@ -193,13 +193,13 @@ class TestUserConfig:
             {
                 "openai_api_key": "sk-test",
                 "hue_bridge_ip": "192.168.1.1",
-                "weather_api_key": "wk-test",
+                "hue_username": "hue-test",
             },
         )
         config = get_user_config(db, 1)
         assert config["openai_api_key"] == "sk-test"
         assert config["hue_bridge_ip"] == "192.168.1.1"
-        assert config["weather_api_key"] == "wk-test"
+        assert config["hue_username"] == "hue-test"
 
     def test_update_existing_config(self, db):
         set_user_config(db, 1, {"hue_bridge_ip": "10.0.0.1"})

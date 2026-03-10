@@ -686,7 +686,7 @@ class TestLightingAgentErrors:
             "previous_results": [
                 {
                     "capability": "weather",
-                    "from_agent": "WeatherAgent",
+                    "from_agent": "SearchAgent",
                     "result": {"response": "It's sunny"},
                 }
             ]

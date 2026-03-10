@@ -75,7 +75,6 @@ def create_app() -> FastAPI:
             api_key=os.getenv("OPENAI_API_KEY"),
             calendar_api_url=os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
             response_timeout=float(os.getenv("JARVIS_RESPONSE_TIMEOUT", 15.0)),
-            weather_api_key=os.getenv("WEATHER_API_KEY"),
             hue_bridge_ip=os.getenv("PHILLIPS_HUE_BRIDGE_IP"),
             hue_username=os.getenv("PHILLIPS_HUE_USERNAME"),
             lighting_backend=lighting_backend,

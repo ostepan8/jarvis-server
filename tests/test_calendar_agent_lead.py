@@ -116,7 +116,7 @@ def make_brief(
         ),
         available_capabilities=available_capabilities or {
             "CalendarAgent": ["create_event", "list_events"],
-            "WeatherAgent": ["get_weather"],
+            "SearchAgent": ["search"],
         },
     )
 
@@ -155,7 +155,7 @@ class TestCalendarAgentLeadPrompt:
         cal = CollaborativeCalendarAgent(ai_client, make_mock_calendar_service())
         brief = make_brief()
         prompt = cal._build_lead_system_prompt(brief)
-        assert "WeatherAgent" in prompt
+        assert "SearchAgent" in prompt
 
 
 class TestCalendarAgentCollaborationMixin:
@@ -182,7 +182,7 @@ class TestCalendarAgentCollaborationMixin:
         brief = make_brief()
         recruitable = cal.get_recruitable_capabilities(brief)
         assert "CalendarAgent" not in recruitable
-        assert "WeatherAgent" in recruitable
+        assert "SearchAgent" in recruitable
 
 
 class TestCalendarAgentMissionBriefDetection:
@@ -208,10 +208,10 @@ class TestCalendarAgentMissionBriefDetection:
 
     @pytest.mark.asyncio
     async def test_lead_execution_with_recruitment(self):
-        """CalendarAgent as lead should be able to recruit WeatherAgent."""
+        """CalendarAgent as lead should be able to recruit SearchAgent."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "What's the weather?"},
+            {"capability": "search", "prompt": "What's the weather?"},
             "call_recruit",
         )
         ai_client = MockAIClient([
@@ -220,7 +220,7 @@ class TestCalendarAgentMissionBriefDetection:
         ])
         cal = CollaborativeCalendarAgent(ai_client, make_mock_calendar_service())
         weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "72°F and sunny"}
+            "SearchAgent", {"search"}, {"response": "72°F and sunny"}
         )
         network = await setup_network(cal, weather)
 

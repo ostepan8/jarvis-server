@@ -52,7 +52,7 @@ class CollaborationMixin:
         """Recruit another agent to perform a capability.
 
         Args:
-            capability: The capability to request (e.g. "get_weather")
+            capability: The capability to request (e.g. "search")
             data: Data to send with the capability request
             brief: The current mission brief (contains budget + context)
             timeout: Optional timeout override (defaults to budget.time_remaining)

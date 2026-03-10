@@ -18,7 +18,7 @@ class DummyJarvis:
 async def test_user_config_crud(tmp_path):
     db = sqlite3.connect(tmp_path / "auth.db", check_same_thread=False)
     db.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password_hash TEXT)")
-    db.execute("CREATE TABLE user_configs (user_id INTEGER PRIMARY KEY, openai_api_key TEXT, anthropic_api_key TEXT, calendar_api_url TEXT, weather_api_key TEXT, hue_bridge_ip TEXT, hue_username TEXT)")
+    db.execute("CREATE TABLE user_configs (user_id INTEGER PRIMARY KEY, openai_api_key TEXT, anthropic_api_key TEXT, calendar_api_url TEXT, hue_bridge_ip TEXT, hue_username TEXT)")
     db.commit()
 
     server.app.router.on_startup.clear()

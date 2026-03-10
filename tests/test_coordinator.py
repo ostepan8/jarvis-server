@@ -118,15 +118,15 @@ class TestBuildCapabilityCatalog:
     @pytest.mark.asyncio
     async def test_builds_catalog_from_registry(self):
         chat = SimpleAgent("ChatAgent", {"chat"})
-        weather = SimpleAgent("WeatherAgent", {"get_weather", "get_forecast"})
-        orchestrator, network = await setup_orchestrator([chat, weather])
+        search = SimpleAgent("SearchAgent", {"search", "news_search"})
+        orchestrator, network = await setup_orchestrator([chat, search])
 
         try:
             catalog = orchestrator._build_capability_catalog()
             assert "ChatAgent" in catalog
             assert "chat" in catalog["ChatAgent"]
-            assert "WeatherAgent" in catalog
-            assert "get_weather" in catalog["WeatherAgent"]
+            assert "SearchAgent" in catalog
+            assert "search" in catalog["SearchAgent"]
         finally:
             await network.stop()
 
@@ -147,15 +147,15 @@ class TestBuildCapabilityCatalog:
     @pytest.mark.asyncio
     async def test_respects_allowed_agents(self):
         chat = SimpleAgent("ChatAgent", {"chat"})
-        weather = SimpleAgent("WeatherAgent", {"get_weather"})
-        orchestrator, network = await setup_orchestrator([chat, weather])
+        search = SimpleAgent("SearchAgent", {"search"})
+        orchestrator, network = await setup_orchestrator([chat, search])
 
         try:
             catalog = orchestrator._build_capability_catalog(
                 allowed_agents={"ChatAgent"}
             )
             assert "ChatAgent" in catalog
-            assert "WeatherAgent" not in catalog
+            assert "SearchAgent" not in catalog
         finally:
             await network.stop()
 
@@ -166,17 +166,17 @@ class TestClassifyComplexity:
     @pytest.mark.asyncio
     async def test_simple_classification(self):
         ai_client = MockAIClient(
-            '{"complexity": "simple", "lead_agent": "WeatherAgent", "lead_capability": "get_weather"}'
+            '{"complexity": "simple", "lead_agent": "SearchAgent", "lead_capability": "search"}'
         )
-        weather = SimpleAgent("WeatherAgent", {"get_weather"})
-        orchestrator, network = await setup_orchestrator([weather], ai_client=ai_client)
+        search = SimpleAgent("SearchAgent", {"search"})
+        orchestrator, network = await setup_orchestrator([search], ai_client=ai_client)
 
         try:
             result = await orchestrator._classify_complexity(
-                "What's the weather?", {"WeatherAgent": ["get_weather"]}
+                "What's the weather?", {"SearchAgent": ["search"]}
             )
             assert result["complexity"] == "simple"
-            assert result["lead_agent"] == "WeatherAgent"
+            assert result["lead_agent"] == "SearchAgent"
         finally:
             await network.stop()
 
@@ -413,9 +413,9 @@ class TestCoordinateRequest:
     async def test_mismatched_agent_capability_returns_none(self):
         """If coordinator picks agent that doesn't provide lead_capability, fall through."""
         ai_client = MockAIClient(
-            '{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "get_weather"}'
+            '{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "search"}'
         )
-        chat = SimpleAgent("ChatAgent", {"chat"})  # ChatAgent doesn't have get_weather
+        chat = SimpleAgent("ChatAgent", {"chat"})  # ChatAgent doesn't have search
         orchestrator, network = await setup_orchestrator(
             [chat], ai_client=ai_client
         )

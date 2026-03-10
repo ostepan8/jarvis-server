@@ -121,7 +121,7 @@ class TestOpenAIClientChat:
     async def test_chat_with_tools(self, client):
         """Test chat includes tools and tool_choice when tools provided."""
         mock_tool_call = MagicMock()
-        mock_tool_call.function.name = "get_weather"
+        mock_tool_call.function.name = "search"
         mock_response = self._make_mock_response(tool_calls=[mock_tool_call])
         client.client = MagicMock()
         client.client.chat = MagicMock()
@@ -129,7 +129,7 @@ class TestOpenAIClientChat:
         client.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         messages = [{"role": "user", "content": "What is the weather?"}]
-        tools = [{"type": "function", "function": {"name": "get_weather"}}]
+        tools = [{"type": "function", "function": {"name": "search"}}]
         message, tool_calls = await client.strong_chat(messages, tools=tools)
 
         call_kwargs = client.client.chat.completions.create.call_args[1]

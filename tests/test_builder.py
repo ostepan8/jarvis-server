@@ -22,7 +22,7 @@ class TestBuilderOptions:
         assert opts.with_calendar is True
         assert opts.with_chat is True
         assert opts.with_search is True
-        assert opts.with_weather is True
+
         assert opts.with_protocols is True
         assert opts.with_lights is True
         assert opts.with_roku is True
@@ -47,7 +47,7 @@ class TestBuilderOptions:
             with_calendar=False,
             with_chat=False,
             with_search=False,
-            with_weather=False,
+
             with_protocols=False,
             with_lights=False,
             with_roku=False,
@@ -130,10 +130,6 @@ class TestJarvisBuilderFluentAPI:
         b = self._builder().search(False)
         assert b._opts.with_search is False
 
-    def test_weather_toggle(self):
-        b = self._builder().weather(False)
-        assert b._opts.with_weather is False
-
     def test_lights_toggle(self):
         b = self._builder().lights(False)
         assert b._opts.with_lights is False
@@ -158,7 +154,6 @@ class TestJarvisBuilderFluentAPI:
             .calendar(False)
             .chat(False)
             .search(False)
-            .weather(False)
             .protocols(False)
             .lights(False)
             .roku(False)
@@ -172,7 +167,7 @@ class TestJarvisBuilderFluentAPI:
         assert b._opts.with_calendar is False
         assert b._opts.with_chat is False
         assert b._opts.with_search is False
-        assert b._opts.with_weather is False
+
         assert b._opts.with_protocols is False
         assert b._opts.with_lights is False
         assert b._opts.with_roku is False
@@ -194,7 +189,7 @@ class TestJarvisBuilderFluentAPI:
         assert b.calendar(True) is b
         assert b.chat(True) is b
         assert b.search(True) is b
-        assert b.weather(True) is b
+
         assert b.protocols(True) is b
         assert b.lights(True) is b
         assert b.roku(True) is b

@@ -175,11 +175,11 @@ class TestGetUserAllowedAgents:
         mock_jarvis = MagicMock()
         mock_jarvis.list_agents.return_value = {
             "CalendarAgent": {},
-            "WeatherAgent": {},
+            "SearchAgent": {},
         }
         current_user = {"id": 1, "email": "dep@test.com"}
         result = await get_user_allowed_agents(current_user, db, mock_jarvis)
-        assert result == {"CalendarAgent", "WeatherAgent"}
+        assert result == {"CalendarAgent", "SearchAgent"}
         db.close()
 
     @pytest.mark.asyncio
@@ -202,7 +202,7 @@ class TestGetUserAllowedAgents:
         )
         db.commit()
         set_user_agent_permissions(
-            db, 1, {"CalendarAgent": True, "WeatherAgent": False}
+            db, 1, {"CalendarAgent": True, "SearchAgent": False}
         )
         mock_jarvis = MagicMock()
         current_user = {"id": 1, "email": "dep@test.com"}

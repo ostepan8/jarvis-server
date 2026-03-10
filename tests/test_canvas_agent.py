@@ -491,7 +491,7 @@ class TestCanvasCapabilityRequest:
             "previous_results": [
                 {
                     "capability": "weather",
-                    "from_agent": "WeatherAgent",
+                    "from_agent": "SearchAgent",
                     "result": {"response": "It is raining"},
                 }
             ]
@@ -542,7 +542,7 @@ class TestCanvasCapabilityResponse:
         }
 
         msg = Message(
-            from_agent="WeatherAgent",
+            from_agent="SearchAgent",
             to_agent="CanvasAgent",
             message_type="capability_response",
             content={"weather": "sunny"},
@@ -551,7 +551,7 @@ class TestCanvasCapabilityResponse:
         await agent._handle_capability_response(msg)
 
         assert len(agent.active_tasks["req-1"]["responses"]) == 1
-        assert agent.active_tasks["req-1"]["responses"][0]["from_agent"] == "WeatherAgent"
+        assert agent.active_tasks["req-1"]["responses"][0]["from_agent"] == "SearchAgent"
 
     @pytest.mark.asyncio
     async def test_handle_unknown_response(self):
@@ -560,7 +560,7 @@ class TestCanvasCapabilityResponse:
         agent = CanvasAgent(ai_client=DummyAIClient(), canvas_service=service)
 
         msg = Message(
-            from_agent="WeatherAgent",
+            from_agent="SearchAgent",
             to_agent="CanvasAgent",
             message_type="capability_response",
             content={"weather": "sunny"},

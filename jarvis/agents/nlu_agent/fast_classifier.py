@@ -18,29 +18,6 @@ from ...logging import JarvisLogger
 
 # Training phrases for each capability — used to populate the embedding index.
 CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
-    # ----- Weather -----
-    "get_weather": [
-        "what's the weather",
-        "how's the weather",
-        "what's the temperature",
-        "is it cold outside",
-        "is it raining",
-        "what's it like outside",
-        "weather in Chicago",
-        "current weather",
-        "how hot is it",
-        "is it going to rain",
-        "weather right now",
-        "what's the temperature outside",
-    ],
-    "get_weather_forecast": [
-        "weather forecast",
-        "what's the forecast",
-        "will it rain tomorrow",
-        "weather this week",
-        "forecast for the weekend",
-        "what's the weather going to be",
-    ],
     # ----- Lights -----
     "lights_on": [
         "turn on the lights",
@@ -163,6 +140,16 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "who wrote",
         "when was",
         "what year did",
+        "what's the weather",
+        "how's the weather",
+        "what's the temperature",
+        "is it cold outside",
+        "is it raining",
+        "weather in",
+        "current weather",
+        "weather forecast",
+        "what's the forecast",
+        "will it rain tomorrow",
     ],
     # ----- Memory -----
     "add_to_memory": [

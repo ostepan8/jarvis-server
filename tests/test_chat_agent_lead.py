@@ -104,7 +104,7 @@ def make_brief(
             recruitment_chain=["ChatAgent"],
         ),
         available_capabilities=available_capabilities or {
-            "WeatherAgent": ["get_weather"],
+            "SearchAgent": ["search"],
             "LightingAgent": ["set_color"],
         },
     )
@@ -163,7 +163,7 @@ class TestChatAgentLeadDetection:
         """With mission_brief in data, ChatAgent should use _execute_as_lead."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "What's the weather?"},
+            {"capability": "search", "prompt": "What's the weather?"},
             "call_recruit",
         )
         ai_client = MockAIClient([
@@ -172,7 +172,7 @@ class TestChatAgentLeadDetection:
         ])
         chat = ChatAgent(ai_client)
         weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "72°F and sunny"}
+            "SearchAgent", {"search"}, {"response": "72°F and sunny"}
         )
         network = await setup_network(chat, weather)
 
@@ -226,8 +226,8 @@ class TestChatAgentLeadPrompt:
         chat = ChatAgent(ai_client)
         brief = make_brief()
         prompt = chat._build_lead_system_prompt(brief)
-        assert "WeatherAgent" in prompt
-        assert "get_weather" in prompt
+        assert "SearchAgent" in prompt
+        assert "search" in prompt
 
 
 class TestChatAgentCollaborationMixin:

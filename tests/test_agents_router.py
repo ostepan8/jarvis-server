@@ -32,9 +32,9 @@ def _setup_app(tmp_path, agents_dict: dict | None = None):
                 "description": "Manages calendar events",
                 "required_resources": [],
             },
-            "WeatherAgent": {
-                "name": "WeatherAgent",
-                "capabilities": ["get_weather"],
+            "SearchAgent": {
+                "name": "SearchAgent",
+                "capabilities": ["search"],
                 "description": "Weather forecasts",
                 "required_resources": [],
             },
@@ -81,7 +81,7 @@ class TestListAgents:
             assert resp.status_code == 200
             data = resp.json()
             assert "CalendarAgent" in data
-            assert "WeatherAgent" in data
+            assert "SearchAgent" in data
         db.close()
 
     @pytest.mark.asyncio

@@ -39,7 +39,7 @@ def _setup_app(tmp_path):
     mock_jarvis = MagicMock()
     mock_jarvis.list_agents.return_value = {
         "CalendarAgent": {},
-        "WeatherAgent": {},
+        "SearchAgent": {},
     }
     mock_jarvis._orchestrator = None  # Avoid AgentProfile update path
 
@@ -84,7 +84,7 @@ class TestUserAgentsEndpoints:
                 assert resp.status_code == 200
                 data = resp.json()
                 assert "CalendarAgent" in data["allowed"]
-                assert "WeatherAgent" in data["allowed"]
+                assert "SearchAgent" in data["allowed"]
                 assert data["disallowed"] == []
         finally:
             cleanup()
@@ -98,7 +98,7 @@ class TestUserAgentsEndpoints:
                 # Set permissions
                 resp = await client.post(
                     "/users/me/agents",
-                    json={"allowed": ["CalendarAgent"], "disallowed": ["WeatherAgent"]},
+                    json={"allowed": ["CalendarAgent"], "disallowed": ["SearchAgent"]},
                     headers={"Authorization": f"Bearer {token}"},
                 )
                 assert resp.status_code == 200
@@ -111,7 +111,7 @@ class TestUserAgentsEndpoints:
                 )
                 data = resp.json()
                 assert "CalendarAgent" in data["allowed"]
-                assert "WeatherAgent" in data["disallowed"]
+                assert "SearchAgent" in data["disallowed"]
         finally:
             cleanup()
 

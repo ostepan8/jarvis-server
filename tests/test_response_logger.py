@@ -206,9 +206,9 @@ class TestResponseLogger:
         await rl.log_failed_interaction(
             user_input="test",
             error_message="error",
-            intent="weather",
-            capability="get_weather",
-            protocol_executed="check_weather",
+            intent="search",
+            capability="search",
+            protocol_executed="check_search",
             latency_ms=150.0,
             user_id=3,
             device="laptop",
@@ -217,7 +217,7 @@ class TestResponseLogger:
         )
         await asyncio.sleep(0.05)
         call_kwargs = mock_il.log_interaction.call_args[1]
-        assert call_kwargs["capability"] == "get_weather"
+        assert call_kwargs["capability"] == "search"
         assert call_kwargs["device"] == "laptop"
         assert call_kwargs["source"] == "cli"
 

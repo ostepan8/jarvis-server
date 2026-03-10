@@ -969,14 +969,14 @@ Special cases:
 
 **EXAMPLES:**
 - "Turn on the lights" → {{"dag": {{"lights_on": []}}}}
-- "What's the weather?" → {{"dag": {{"get_weather": []}}}}
+- "What's the weather?" → {{"dag": {{"search": []}}}}
 - "How are you?" → {{"dag": {{"chat": []}}}}
 - "What's the capital of Illinois?" → {{"dag": {{"search": []}}}}
 - "What's my favorite color?" → {{"dag": {{"search_facts": []}}}}
 - "Schedule a meeting" → {{"dag": {{"schedule_appointment": []}}}}
 - "Pause tv and make lights red" → {{"dag": {{"roku_pause": [], "lights_color": []}}}}
-- "Turn on lights and get weather" → {{"dag": {{"lights_on": [], "get_weather": []}}}}
-- "Check weather and if sunny make lights red" → {{"dag": {{"get_weather": [], "lights_color": ["get_weather"]}}}}
+- "Turn on lights and search for something" → {{"dag": {{"lights_on": [], "search": []}}}}
+- "Search for weather and if sunny make lights red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "When did X come out. if in 2018 make lights blue" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "Search for X and if above Y make lights blue else red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "Add a Spotify agent" → {{"dag": {{"implement_feature": []}}}}

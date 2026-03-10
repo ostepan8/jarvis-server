@@ -28,7 +28,6 @@ console = Console()
 # Human-readable labels for feature flags
 _FLAG_LABELS = {
     "enable_lights": "Lights",
-    "enable_weather": "Weather",
     "enable_canvas": "Canvas",
     "enable_night_mode": "Night Mode",
     "enable_roku": "Roku",

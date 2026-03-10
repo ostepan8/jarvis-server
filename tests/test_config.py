@@ -27,26 +27,23 @@ class TestFeatureFlags:
 
     def test_default_values(self):
         flags = FeatureFlags()
-        assert flags.enable_weather is True
         assert flags.enable_lights is False
         assert flags.enable_canvas is True
         assert flags.enable_night_mode is True
         assert flags.enable_roku is True
 
     def test_override_single_flag(self):
-        flags = FeatureFlags(enable_weather=False)
-        assert flags.enable_weather is False
+        flags = FeatureFlags(enable_roku=False)
+        assert flags.enable_roku is False
         assert flags.enable_lights is False
 
     def test_all_flags_off(self):
         flags = FeatureFlags(
-            enable_weather=False,
             enable_lights=False,
             enable_canvas=False,
             enable_night_mode=False,
             enable_roku=False,
         )
-        assert flags.enable_weather is False
         assert flags.enable_lights is False
         assert flags.enable_canvas is False
         assert flags.enable_night_mode is False
@@ -77,7 +74,6 @@ class TestJarvisConfig:
         assert cfg.intent_timeout == 5.0
         assert cfg.perf_tracking is True
         assert cfg.memory_dir is None
-        assert cfg.weather_api_key is None
         assert cfg.max_retries == 3
         assert cfg.retry_base_delay == 1.0
         assert cfg.retry_max_delay == 60.0
@@ -105,12 +101,12 @@ class TestJarvisConfig:
         with patch.dict(os.environ, {}, clear=True):
             cfg = JarvisConfig()
         assert isinstance(cfg.flags, FeatureFlags)
-        assert cfg.flags.enable_weather is True
+        assert cfg.flags.enable_canvas is True
 
     def test_flags_custom(self):
-        flags = FeatureFlags(enable_weather=False, enable_roku=False)
+        flags = FeatureFlags(enable_lights=True, enable_roku=False)
         cfg = JarvisConfig(flags=flags)
-        assert cfg.flags.enable_weather is False
+        assert cfg.flags.enable_lights is True
         assert cfg.flags.enable_roku is False
 
     def test_record_network_methods_default_false(self):
@@ -171,7 +167,6 @@ class TestUserConfig:
         assert uc.openai_api_key is None
         assert uc.anthropic_api_key is None
         assert uc.calendar_api_url is None
-        assert uc.weather_api_key is None
         assert uc.hue_bridge_ip is None
         assert uc.hue_username is None
         assert uc.roku_ip_address is None
@@ -199,10 +194,10 @@ class TestConfigProfile:
     def test_construction_with_data(self):
         p = ConfigProfile(
             label="Office",
-            feature_flags={"enable_weather": False},
+            feature_flags={"enable_lights": True},
             connections={"hue_bridge_ip": "10.0.0.1"},
         )
-        assert p.feature_flags["enable_weather"] is False
+        assert p.feature_flags["enable_lights"] is True
         assert p.connections["hue_bridge_ip"] == "10.0.0.1"
 
     def test_to_dict(self):
@@ -249,7 +244,7 @@ class TestConfigProfile:
     def test_roundtrip_to_dict_from_dict(self):
         original = ConfigProfile(
             label="Round",
-            feature_flags={"enable_weather": True, "enable_lights": False},
+            feature_flags={"enable_lights": False, "enable_roku": True},
             connections={"hue_bridge_ip": "192.168.1.1", "roku_ip_address": "10.0.0.1"},
         )
         restored = ConfigProfile.from_dict(original.to_dict())
@@ -263,10 +258,10 @@ class TestConfigProfile:
                 hue_bridge_ip="1.2.3.4",
                 roku_ip_address="5.6.7.8",
             )
-            cfg.flags.enable_weather = False
+            cfg.flags.enable_roku = False
         p = ConfigProfile.from_config("snapshot", cfg)
         assert p.label == "snapshot"
-        assert p.feature_flags["enable_weather"] is False
+        assert p.feature_flags["enable_roku"] is False
         assert p.connections["hue_bridge_ip"] == "1.2.3.4"
         assert p.connections["roku_ip_address"] == "5.6.7.8"
 
@@ -300,7 +295,7 @@ class TestConfigPersistence:
         profiles = {
             "home": ConfigProfile(
                 label="Home",
-                feature_flags={"enable_weather": True},
+                feature_flags={"enable_lights": True},
                 connections={"hue_bridge_ip": "192.168.1.1"},
             ),
         }
@@ -311,7 +306,7 @@ class TestConfigPersistence:
         assert active == "home"
         assert "home" in loaded
         assert loaded["home"].label == "Home"
-        assert loaded["home"].feature_flags["enable_weather"] is True
+        assert loaded["home"].feature_flags["enable_lights"] is True
 
     def test_load_config_no_file(self, tmp_path, monkeypatch):
         config_file = tmp_path / "nonexistent" / "config.json"
@@ -374,14 +369,14 @@ class TestApplyProfile:
     def test_apply_feature_flags(self):
         with patch.dict(os.environ, {}, clear=True):
             cfg = JarvisConfig()
-        assert cfg.flags.enable_weather is True
+        assert cfg.flags.enable_canvas is True
 
         profile = ConfigProfile(
             label="test",
-            feature_flags={"enable_weather": False, "enable_roku": False},
+            feature_flags={"enable_canvas": False, "enable_roku": False},
         )
         apply_profile(cfg, profile)
-        assert cfg.flags.enable_weather is False
+        assert cfg.flags.enable_canvas is False
         assert cfg.flags.enable_roku is False
         # Unchanged flags stay the same
         assert cfg.flags.enable_lights is False
@@ -432,7 +427,7 @@ class TestApplyProfile:
     def test_apply_empty_profile_no_change(self):
         with patch.dict(os.environ, {}, clear=True):
             cfg = JarvisConfig()
-        original_weather = cfg.flags.enable_weather
+        original_canvas = cfg.flags.enable_canvas
         profile = ConfigProfile(label="empty")
         apply_profile(cfg, profile)
-        assert cfg.flags.enable_weather == original_weather
+        assert cfg.flags.enable_canvas == original_canvas

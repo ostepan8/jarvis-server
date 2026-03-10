@@ -138,7 +138,7 @@ def make_brief(
     """Create a test MissionBrief."""
     if available_capabilities is None:
         available_capabilities = {
-            "WeatherAgent": ["get_weather", "get_forecast"],
+            "SearchAgent": ["search", "news_search"],
             "LightingAgent": ["set_color", "set_brightness"],
         }
     if budget is None:
@@ -187,18 +187,18 @@ class TestRecruitableCapabilities:
         brief = make_brief(
             available_capabilities={
                 "LeadAgent": ["greet"],
-                "WeatherAgent": ["get_weather"],
+                "SearchAgent": ["search"],
             }
         )
         recruitable = agent.get_recruitable_capabilities(brief)
         assert "LeadAgent" not in recruitable
-        assert "WeatherAgent" in recruitable
+        assert "SearchAgent" in recruitable
 
     def test_returns_all_other_agents(self):
         agent = LeadTestAgent("LeadAgent")
         brief = make_brief()
         recruitable = agent.get_recruitable_capabilities(brief)
-        assert "WeatherAgent" in recruitable
+        assert "SearchAgent" in recruitable
         assert "LightingAgent" in recruitable
 
     def test_empty_when_no_other_agents(self):
@@ -215,8 +215,8 @@ class TestFormatRecruitmentContext:
         agent = LeadTestAgent("LeadAgent")
         brief = make_brief()
         text = agent.format_recruitment_context(brief)
-        assert "WeatherAgent" in text
-        assert "get_weather" in text
+        assert "SearchAgent" in text
+        assert "search" in text
         assert "LightingAgent" in text
 
     def test_format_with_no_agents(self):
@@ -244,8 +244,8 @@ class TestBuildRecruitToolDefinition:
         brief = make_brief()
         tool = agent._build_recruit_tool_definition(brief)
         cap_enum = tool["function"]["parameters"]["properties"]["capability"]["enum"]
-        assert "get_weather" in cap_enum
-        assert "get_forecast" in cap_enum
+        assert "search" in cap_enum
+        assert "news_search" in cap_enum
         assert "set_color" in cap_enum
 
     def test_excludes_own_capabilities(self):
@@ -253,13 +253,13 @@ class TestBuildRecruitToolDefinition:
         brief = make_brief(
             available_capabilities={
                 "LeadAgent": ["greet"],
-                "WeatherAgent": ["get_weather"],
+                "SearchAgent": ["search"],
             }
         )
         tool = agent._build_recruit_tool_definition(brief)
         cap_enum = tool["function"]["parameters"]["properties"]["capability"]["enum"]
         assert "greet" not in cap_enum
-        assert "get_weather" in cap_enum
+        assert "search" in cap_enum
 
 
 class TestFindCapabilityProvider:
@@ -268,8 +268,8 @@ class TestFindCapabilityProvider:
     def test_finds_correct_provider(self):
         agent = LeadTestAgent("LeadAgent")
         brief = make_brief()
-        provider = agent._find_capability_provider("get_weather", brief)
-        assert provider == "WeatherAgent"
+        provider = agent._find_capability_provider("search", brief)
+        assert provider == "SearchAgent"
 
     def test_returns_none_for_unknown_capability(self):
         agent = LeadTestAgent("LeadAgent")
@@ -281,12 +281,12 @@ class TestFindCapabilityProvider:
         agent = LeadTestAgent("LeadAgent")
         brief = make_brief(
             available_capabilities={
-                "LeadAgent": ["get_weather"],
-                "WeatherAgent": ["get_weather"],
+                "LeadAgent": ["search"],
+                "SearchAgent": ["search"],
             }
         )
-        provider = agent._find_capability_provider("get_weather", brief)
-        assert provider == "WeatherAgent"
+        provider = agent._find_capability_provider("search", brief)
+        assert provider == "SearchAgent"
 
 
 class TestRecruit:
@@ -296,17 +296,17 @@ class TestRecruit:
     async def test_successful_recruitment(self):
         """Recruit should return result from provider agent."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent(
-            "WeatherAgent",
-            {"get_weather"},
+        search = ProviderAgent(
+            "SearchAgent",
+            {"search"},
             {"response": "72°F and sunny", "success": True},
         )
-        network = await setup_network_with_agents(lead, weather)
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief()
             result = await lead.recruit(
-                capability="get_weather",
+                capability="search",
                 data={"prompt": "What's the weather?"},
                 brief=brief,
             )
@@ -331,7 +331,7 @@ class TestRecruit:
             )
             with pytest.raises(BudgetExhaustedError):
                 await lead.recruit(
-                    capability="get_weather",
+                    capability="search",
                     data={"prompt": "test"},
                     brief=brief,
                 )
@@ -354,7 +354,7 @@ class TestRecruit:
             )
             with pytest.raises(BudgetExhaustedError):
                 await lead.recruit(
-                    capability="get_weather",
+                    capability="search",
                     data={"prompt": "test"},
                     brief=brief,
                 )
@@ -365,19 +365,19 @@ class TestRecruit:
     async def test_cycle_detection(self):
         """Recruit should raise CircularRecruitmentError for cycles."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent("WeatherAgent", {"get_weather"})
-        network = await setup_network_with_agents(lead, weather)
+        search = ProviderAgent("SearchAgent", {"search"})
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief(
                 context=MissionContext(
                     user_input="test",
-                    recruitment_chain=["LeadAgent", "WeatherAgent"],
+                    recruitment_chain=["LeadAgent", "SearchAgent"],
                 )
             )
             with pytest.raises(CircularRecruitmentError):
                 await lead.recruit(
-                    capability="get_weather",
+                    capability="search",
                     data={"prompt": "test"},
                     brief=brief,
                 )
@@ -405,21 +405,21 @@ class TestRecruit:
     async def test_multiple_recruitments_accumulate_context(self):
         """Multiple recruits should accumulate results in context."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "sunny"}
+        search = ProviderAgent(
+            "SearchAgent", {"search"}, {"response": "sunny"}
         )
         lighting = ProviderAgent(
             "LightingAgent", {"set_color"}, {"response": "lights set"}
         )
-        network = await setup_network_with_agents(lead, weather, lighting)
+        network = await setup_network_with_agents(lead, search, lighting)
 
         try:
             brief = make_brief()
-            await lead.recruit("get_weather", {"prompt": "weather?"}, brief)
+            await lead.recruit("search", {"prompt": "weather?"}, brief)
             await lead.recruit("set_color", {"prompt": "warm"}, brief)
 
             assert len(brief.context.recruitment_results) == 2
-            assert brief.context.recruitment_results[0]["agent"] == "WeatherAgent"
+            assert brief.context.recruitment_results[0]["agent"] == "SearchAgent"
             assert brief.context.recruitment_results[1]["agent"] == "LightingAgent"
             # Recruitments decremented
             assert brief.budget.remaining_recruitments == 3
@@ -430,8 +430,8 @@ class TestRecruit:
     async def test_recruitment_decrements_budget(self):
         """Each recruit call should decrement remaining_recruitments."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "ok"})
-        network = await setup_network_with_agents(lead, weather)
+        search = ProviderAgent("SearchAgent", {"search"}, {"response": "ok"})
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief(
@@ -442,7 +442,7 @@ class TestRecruit:
                 )
             )
             assert brief.budget.remaining_recruitments == 2
-            await lead.recruit("get_weather", {"prompt": "test"}, brief)
+            await lead.recruit("search", {"prompt": "test"}, brief)
             assert brief.budget.remaining_recruitments == 1
         finally:
             await network.stop()
@@ -494,7 +494,7 @@ class TestExecuteAsLead:
         """Lead should recruit another agent via recruit_agent tool."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "What's the weather?"},
+            {"capability": "search", "prompt": "What's the weather?"},
             "call_recruit",
         )
         ai_client = ToolCallAIClient([
@@ -502,10 +502,10 @@ class TestExecuteAsLead:
             ("The weather is 72°F and sunny!", None),
         ])
         lead = LeadTestAgent("LeadAgent", ai_client=ai_client)
-        weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "72°F and sunny"}
+        search = ProviderAgent(
+            "SearchAgent", {"search"}, {"response": "72°F and sunny"}
         )
-        network = await setup_network_with_agents(lead, weather)
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief()
@@ -522,7 +522,7 @@ class TestExecuteAsLead:
         """When budget is exhausted during lead execution, it should return an error in the tool result."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
+            {"capability": "search", "prompt": "weather?"},
             "call_recruit",
         )
         ai_client = ToolCallAIClient([
@@ -530,8 +530,8 @@ class TestExecuteAsLead:
             ("Sorry, I couldn't get the weather due to budget limits.", None),
         ])
         lead = LeadTestAgent("LeadAgent", ai_client=ai_client)
-        weather = ProviderAgent("WeatherAgent", {"get_weather"})
-        network = await setup_network_with_agents(lead, weather)
+        search = ProviderAgent("SearchAgent", {"search"})
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief(
@@ -585,8 +585,8 @@ class TestBuildLeadSystemPrompt:
         agent = LeadTestAgent("LeadAgent")
         brief = make_brief()
         prompt = agent._build_lead_system_prompt(brief)
-        assert "WeatherAgent" in prompt
-        assert "get_weather" in prompt
+        assert "SearchAgent" in prompt
+        assert "search" in prompt
 
 
 class TestMalformedToolArguments:
@@ -649,7 +649,7 @@ class TestMalformedToolArguments:
         call.id = "call_1"
         call.function = MagicMock()
         call.function.name = "recruit_agent"
-        call.function.arguments = '{"capability": "get_weather", "prompt": '  # Truncated
+        call.function.arguments = '{"capability": "search", "prompt": '  # Truncated
 
         ai_client = ToolCallAIClient([
             ("", [call]),
@@ -674,9 +674,9 @@ class TestBudgetLockConcurrency:
     async def test_parallel_recruits_respect_budget_limit(self):
         """Two parallel recruits with budget=1 should only allow one."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        search = ProviderAgent("SearchAgent", {"search"}, {"response": "sunny"})
         lighting = ProviderAgent("LightingAgent", {"set_color"}, {"response": "warm"})
-        network = await setup_network_with_agents(lead, weather, lighting)
+        network = await setup_network_with_agents(lead, search, lighting)
 
         try:
             brief = make_brief(
@@ -688,7 +688,7 @@ class TestBudgetLockConcurrency:
             )
 
             async def recruit_weather():
-                return await lead.recruit("get_weather", {"prompt": "w"}, brief)
+                return await lead.recruit("search", {"prompt": "w"}, brief)
 
             async def recruit_lights():
                 return await lead.recruit("set_color", {"prompt": "l"}, brief)
@@ -713,15 +713,15 @@ class TestRecruitCleansUpActiveTasks:
     async def test_active_tasks_cleaned_after_successful_recruit(self):
         """active_tasks entry from recruit should be removed after success."""
         lead = LeadTestAgent("LeadAgent")
-        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
-        network = await setup_network_with_agents(lead, weather)
+        search = ProviderAgent("SearchAgent", {"search"}, {"response": "sunny"})
+        network = await setup_network_with_agents(lead, search)
 
         try:
             brief = make_brief()
             # Before recruit, no active tasks
             initial_count = len(lead.active_tasks)
 
-            await lead.recruit("get_weather", {"prompt": "weather?"}, brief)
+            await lead.recruit("search", {"prompt": "weather?"}, brief)
 
             # After recruit, the entry should have been cleaned up
             assert len(lead.active_tasks) == initial_count
@@ -739,7 +739,7 @@ class TestRecruitCleansUpActiveTasks:
 
             @property
             def capabilities(self):
-                return {"get_weather"}
+                return {"search"}
 
             async def _handle_capability_request(self, message):
                 pass  # Never responds
@@ -747,7 +747,7 @@ class TestRecruitCleansUpActiveTasks:
             async def _handle_capability_response(self, message):
                 pass
 
-        silent = SilentAgent("WeatherAgent")
+        silent = SilentAgent("SearchAgent")
         network = await setup_network_with_agents(lead, silent)
 
         try:
@@ -762,7 +762,7 @@ class TestRecruitCleansUpActiveTasks:
 
             with pytest.raises(Exception):
                 await lead.recruit(
-                    "get_weather", {"prompt": "weather?"}, brief, timeout=0.2
+                    "search", {"prompt": "weather?"}, brief, timeout=0.2
                 )
 
             # Even on failure, active_tasks should be cleaned up

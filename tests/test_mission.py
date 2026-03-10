@@ -148,26 +148,26 @@ class TestMissionContext:
 
     def test_add_result(self):
         ctx = MissionContext()
-        ctx.add_result("WeatherAgent", "get_weather", {"temp": 72})
+        ctx.add_result("SearchAgent", "search", {"temp": 72})
         assert len(ctx.recruitment_results) == 1
-        assert ctx.recruitment_results[0]["agent"] == "WeatherAgent"
-        assert ctx.recruitment_results[0]["capability"] == "get_weather"
+        assert ctx.recruitment_results[0]["agent"] == "SearchAgent"
+        assert ctx.recruitment_results[0]["capability"] == "search"
         assert ctx.recruitment_results[0]["result"] == {"temp": 72}
 
     def test_add_multiple_results(self):
         ctx = MissionContext()
-        ctx.add_result("WeatherAgent", "get_weather", {"temp": 72})
+        ctx.add_result("SearchAgent", "search", {"temp": 72})
         ctx.add_result("LightingAgent", "set_color", {"success": True})
         assert len(ctx.recruitment_results) == 2
 
     def test_has_visited_true(self):
-        ctx = MissionContext(recruitment_chain=["ChatAgent", "WeatherAgent"])
+        ctx = MissionContext(recruitment_chain=["ChatAgent", "SearchAgent"])
         assert ctx.has_visited("ChatAgent") is True
-        assert ctx.has_visited("WeatherAgent") is True
+        assert ctx.has_visited("SearchAgent") is True
 
     def test_has_visited_false(self):
         ctx = MissionContext(recruitment_chain=["ChatAgent"])
-        assert ctx.has_visited("WeatherAgent") is False
+        assert ctx.has_visited("SearchAgent") is False
 
     def test_has_visited_empty_chain(self):
         ctx = MissionContext()
@@ -179,10 +179,10 @@ class TestMissionContext:
 
     def test_format_context_for_llm_with_results(self):
         ctx = MissionContext()
-        ctx.add_result("WeatherAgent", "get_weather", {"response": "72°F and sunny"})
+        ctx.add_result("SearchAgent", "search", {"response": "72°F and sunny"})
         formatted = ctx.format_context_for_llm()
-        assert "WeatherAgent" in formatted
-        assert "get_weather" in formatted
+        assert "SearchAgent" in formatted
+        assert "search" in formatted
         assert "72°F and sunny" in formatted
 
     def test_format_context_for_llm_with_history(self):
@@ -241,7 +241,7 @@ class TestMissionBrief:
                 recruitment_chain=["ChatAgent"],
             ),
             "available_capabilities": {
-                "WeatherAgent": ["get_weather", "get_forecast"],
+                "SearchAgent": ["search", "news_search"],
                 "LightingAgent": ["set_color", "set_brightness"],
             },
             "metadata": {"source": "test"},
@@ -264,7 +264,7 @@ class TestMissionBrief:
         assert d["lead_capability"] == "chat"
         assert d["budget"]["max_depth"] == 3
         assert d["context"]["recruitment_chain"] == ["ChatAgent"]
-        assert "WeatherAgent" in d["available_capabilities"]
+        assert "SearchAgent" in d["available_capabilities"]
 
     def test_from_dict(self):
         brief = self._make_brief()
@@ -294,12 +294,12 @@ class TestMissionBrief:
 
     def test_from_dict_with_recruitment_results(self):
         ctx = MissionContext()
-        ctx.add_result("WeatherAgent", "get_weather", {"temp": 72})
+        ctx.add_result("SearchAgent", "search", {"temp": 72})
         brief = self._make_brief(context=ctx)
         d = brief.to_dict()
         restored = MissionBrief.from_dict(d)
         assert len(restored.context.recruitment_results) == 1
-        assert restored.context.recruitment_results[0]["agent"] == "WeatherAgent"
+        assert restored.context.recruitment_results[0]["agent"] == "SearchAgent"
 
 
 class TestErrorClasses:
@@ -327,7 +327,7 @@ class TestErrorClasses:
     def test_circular_recruitment_error_with_details(self):
         err = CircularRecruitmentError(
             "Circular recruitment",
-            details={"chain": ["ChatAgent", "WeatherAgent", "ChatAgent"]},
+            details={"chain": ["ChatAgent", "SearchAgent", "ChatAgent"]},
         )
         response = err.to_response()
         assert response.error_type == "CircularRecruitmentError"

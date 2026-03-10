@@ -40,7 +40,7 @@ async def build_jarvis():
     # Example toggles:
     # builder = (JarvisBuilder.from_env()
     #               .lights(True)
-    #               .weather(True)
+    #               .search(True)
     #               .protocol_directory(True)
     #               .night_agents(True))
     builder = JarvisBuilder.from_env()

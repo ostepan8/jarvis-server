@@ -6,7 +6,6 @@ from .base import NetworkAgent
 from .agent_network import AgentNetwork
 from .protocol_agent import ProtocolAgent
 
-from .weather_agent import WeatherAgent
 from .memory_agent import MemoryAgent
 from .chat_agent import ChatAgent
 
@@ -18,7 +17,6 @@ __all__ = [
     "NetworkAgent",
     "AgentNetwork",
     "ProtocolAgent",
-    "WeatherAgent",
     "MemoryAgent",
     "ChatAgent",
     "CanvasAgent",

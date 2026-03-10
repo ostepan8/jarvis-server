@@ -113,20 +113,20 @@ async def test_parallel_execution_independent_capabilities():
     dag = {
         "dag": {
             "lights_color": [],  # No dependencies
-            "get_weather": [],  # No dependencies - should run in parallel
+            "search": [],  # No dependencies - should run in parallel
         }
     }
 
-    ai_client = MockAIClient(dag, "Lights changed and weather retrieved.")
+    ai_client = MockAIClient(dag, "Lights changed and search completed.")
     nlu = NLUAgent(ai_client, logger=JarvisLogger())
 
     # Create agents with delays to detect parallel execution
     lights_agent = MockAgent("LightingAgent", "lights_color", delay=0.2)
-    weather_agent = MockAgent("WeatherAgent", "get_weather", delay=0.2)
+    search_agent = MockAgent("SearchAgent", "search", delay=0.2)
 
     network.register_agent(nlu)
     network.register_agent(lights_agent)
-    network.register_agent(weather_agent)
+    network.register_agent(search_agent)
     await network.start()
 
     # Small delay to ensure network is fully initialized
@@ -139,7 +139,7 @@ async def test_parallel_execution_independent_capabilities():
         await network.request_capability(
             from_agent="TestSystem",
             capability="intent_matching",
-            data={"input": "Turn lights red and tell me the weather"},
+            data={"input": "Turn lights red and search for something"},
             request_id=request_id,
         )
 
@@ -152,8 +152,8 @@ async def test_parallel_execution_independent_capabilities():
             len(lights_agent.execution_order) == 1
         ), "Lights agent should have executed once"
         assert (
-            len(weather_agent.execution_order) == 1
-        ), "Weather agent should have executed once"
+            len(search_agent.execution_order) == 1
+        ), "Search agent should have executed once"
 
         # Check execution times - if parallel, total time should be ~0.2s (not 0.4s)
         execution_time = end_time - start_time
@@ -163,8 +163,8 @@ async def test_parallel_execution_independent_capabilities():
 
         # Verify execution happened in parallel (timestamps should be close)
         lights_time = lights_agent.execution_order[0]["timestamp"]
-        weather_time = weather_agent.execution_order[0]["timestamp"]
-        time_diff = abs(lights_time - weather_time)
+        search_time = search_agent.execution_order[0]["timestamp"]
+        time_diff = abs(lights_time - search_time)
         assert (
             time_diff < 0.05
         ), f"Capabilities should start nearly simultaneously (diff: {time_diff}s)"
@@ -176,7 +176,7 @@ async def test_parallel_execution_independent_capabilities():
         print(f"\nParallel execution test:")
         print(f"Execution time: {execution_time:.3f}s")
         print(f"LightingAgent executions: {len(lights_agent.execution_order)}")
-        print(f"WeatherAgent executions: {len(weather_agent.execution_order)}")
+        print(f"SearchAgent executions: {len(search_agent.execution_order)}")
 
     finally:
         await network.stop()
