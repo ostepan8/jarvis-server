@@ -14,7 +14,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional
 
-from ..core.errors import CodingTaskError, SafetyViolationError, WorktreeError
+from ..core.errors import SafetyViolationError, WorktreeError
 from ..logging import JarvisLogger
 
 
@@ -92,7 +92,9 @@ class ClaudeCodeRunner:
 
         if self.logger:
             self.logger.log(
-                f"Creating worktree at {worktree_path} on branch {branch_name}"
+                "INFO",
+                "Creating worktree",
+                f"{worktree_path} on branch {branch_name}",
             )
 
         result = await self._run_subprocess(
@@ -128,7 +130,7 @@ class ClaudeCodeRunner:
         prompt = self._build_prompt(task_description, relevant_files)
 
         if self.logger:
-            self.logger.log(f"Executing Claude Code task in {worktree_path}")
+            self.logger.log("INFO", "Executing Claude Code task", worktree_path)
 
         result = await self._run_subprocess(
             [
@@ -197,7 +199,7 @@ class ClaudeCodeRunner:
             cmd.extend(test_files)
 
         if self.logger:
-            self.logger.log(f"Running tests in {worktree_path}: {' '.join(cmd)}")
+            self.logger.log("INFO", "Running tests", f"{worktree_path}: {' '.join(cmd)}")
 
         return await self._run_subprocess(
             cmd, cwd=worktree_path, timeout=self.MAX_EXECUTION_TIMEOUT
@@ -210,7 +212,7 @@ class ClaudeCodeRunner:
         and ``False`` is returned.
         """
         if self.logger:
-            self.logger.log(f"Merging branch {branch_name} into main")
+            self.logger.log("INFO", "Merging branch", f"{branch_name} into main")
 
         result = await self._run_subprocess(
             ["git", "merge", branch_name, "--no-edit"],
@@ -221,7 +223,9 @@ class ClaudeCodeRunner:
         if result.exit_code != 0:
             if self.logger:
                 self.logger.log(
-                    f"Merge conflict detected, aborting merge: {result.stderr}"
+                    "WARNING",
+                    "Merge conflict detected, aborting",
+                    result.stderr,
                 )
             await self._run_subprocess(
                 ["git", "merge", "--abort"],
@@ -246,7 +250,7 @@ class ClaudeCodeRunner:
         )
         if remove_result.exit_code != 0 and self.logger:
             self.logger.log(
-                f"Warning: worktree removal failed: {remove_result.stderr}"
+                "WARNING", "Worktree removal failed", remove_result.stderr
             )
 
         branch_result = await self._run_subprocess(
@@ -256,7 +260,7 @@ class ClaudeCodeRunner:
         )
         if branch_result.exit_code != 0 and self.logger:
             self.logger.log(
-                f"Warning: branch deletion failed: {branch_result.stderr}"
+                "WARNING", "Branch deletion failed", branch_result.stderr
             )
 
     # ------------------------------------------------------------------
