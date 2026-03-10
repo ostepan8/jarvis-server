@@ -47,3 +47,31 @@ class UserConfig(BaseModel):
 
 class UserConfigUpdate(UserConfig):
     pass
+
+
+# ------------------------------------------------------------------
+# Self-improvement models
+# ------------------------------------------------------------------
+
+
+class DiscoveryRequest(BaseModel):
+    types: Optional[List[str]] = None
+    lookback_hours: int = 24
+
+
+class TestRunRequest(BaseModel):
+    test_files: Optional[List[str]] = None
+    working_directory: Optional[str] = None
+    timeout: int = 120
+
+
+class TaskSubmitRequest(BaseModel):
+    title: str
+    description: str
+    priority: str = "medium"
+    relevant_files: List[str] = []
+
+
+class CycleRequest(BaseModel):
+    max_tasks: Optional[int] = None
+    dry_run: bool = False
