@@ -125,8 +125,8 @@ class TestMessageTypes:
             to_agent=None,
             message_type="capability_request",
             content={
-                "capability": "get_weather",
-                "data": {"location": "Chicago"},
+                "capability": "search",
+                "data": {"query": "Chicago weather"},
             },
             request_id="req-1",
         )
@@ -136,7 +136,7 @@ class TestMessageTypes:
     def test_capability_response_message(self):
         """Test creating a capability_response message."""
         msg = Message(
-            from_agent="weather_agent",
+            from_agent="search_agent",
             to_agent="nlu",
             message_type="capability_response",
             content={
@@ -152,7 +152,7 @@ class TestMessageTypes:
     def test_error_message(self):
         """Test creating an error message."""
         msg = Message(
-            from_agent="weather_agent",
+            from_agent="search_agent",
             to_agent="nlu",
             message_type="error",
             content={"error": "API key expired"},

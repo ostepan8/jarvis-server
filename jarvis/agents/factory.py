@@ -11,7 +11,6 @@ from ..agents.nlu_agent import NLUAgent
 from ..agents.protocol_agent import ProtocolAgent
 from ..agents.lights_agent.lighting_agent import create_lighting_agent
 from ..agents.calendar_agent.agent import CollaborativeCalendarAgent
-from ..agents.weather_agent import WeatherAgent
 from ..agents.memory_agent import MemoryAgent
 from ..agents.chat_agent import ChatAgent
 from ..agents.search_agent import SearchAgent
@@ -25,7 +24,6 @@ from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
 from ..services.todo_service import TodoService
 from ..services.health_service import HealthService
-from ..utils import get_location_from_ip
 from ..night_agents import (
     NightAgent,
     NightModeControllerAgent,
@@ -57,10 +55,8 @@ class AgentFactory:
         refs.update(self._build_nlu(network, ai_client, vector_memory))
         refs.update(self._build_calendar(network, ai_client))
         refs.update(self._build_chat(network, ai_client))
-        refs.update(self._build_search(network))
+        refs.update(self._build_search(network, ai_client))
 
-        if self.config.flags.enable_weather:
-            refs.update(self._build_weather(network, ai_client))
         if self.config.flags.enable_canvas:
             refs.update(self._build_canvas(network, ai_client))
 
@@ -100,8 +96,8 @@ class AgentFactory:
     ) -> Dict[str, Any]:
         """Create all agents with heavy I/O running in parallel.
 
-        ChromaDB init and weather geolocation are offloaded to threads
-        while instant agents are built immediately on the main thread.
+        ChromaDB init is offloaded to a thread while instant agents
+        are built immediately on the main thread.
         """
         refs: Dict[str, Any] = {}
 
@@ -112,14 +108,10 @@ class AgentFactory:
             api_key=self.config.api_key,
         )
 
-        location_future = None
-        if self.config.flags.enable_weather:
-            location_future = asyncio.to_thread(get_location_from_ip)
-
         # --- Build all instant agents while I/O runs ---
         refs.update(self._build_calendar(network, ai_client))
         refs.update(self._build_chat(network, ai_client))
-        refs.update(self._build_search(network))
+        refs.update(self._build_search(network, ai_client))
         refs.update(self._build_protocol(network))
 
         if self.config.flags.enable_canvas:
@@ -164,34 +156,6 @@ class AgentFactory:
             })
 
         refs.update(self._build_nlu(network, ai_client, vector_memory))
-
-        # --- Await geolocation, then build weather ---
-        if location_future is not None:
-            try:
-                detected_location = await location_future
-                if not detected_location:
-                    detected_location = "Chicago"
-                    self.logger.log(
-                        "INFO",
-                        "Could not detect location from IP",
-                        f"Using default location '{detected_location}'",
-                    )
-                else:
-                    self.logger.log(
-                        "INFO",
-                        "Detected location from IP address",
-                        f"Using '{detected_location}' as default weather location",
-                    )
-                weather_agent = WeatherAgent(
-                    api_key=self.config.weather_api_key,
-                    logger=self.logger,
-                    ai_client=ai_client,
-                    default_location=detected_location,
-                )
-                network.register_agent(weather_agent)
-                refs["weather_agent"] = weather_agent
-            except Exception as exc:
-                self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
 
         return refs
 
@@ -250,7 +214,9 @@ class AgentFactory:
         network.register_agent(chat_agent)
         return {"chat_agent": chat_agent}
 
-    def _build_search(self, network: AgentNetwork) -> Dict[str, Any]:
+    def _build_search(
+        self, network: AgentNetwork, ai_client: Optional[BaseAIClient] = None
+    ) -> Dict[str, Any]:
         """Build and register SearchAgent if credentials are available."""
         if not self.config.google_search_api_key or not self.config.google_search_engine_id:
             self.logger.log(
@@ -266,43 +232,11 @@ class AgentFactory:
                 search_engine_id=self.config.google_search_engine_id,
                 logger=self.logger,
             )
-            search_agent = SearchAgent(search_service, self.logger)
+            search_agent = SearchAgent(search_service, self.logger, ai_client=ai_client)
             network.register_agent(search_agent)
             return {"search_agent": search_agent, "search_service": search_service}
         except Exception as exc:
             self.logger.log("WARNING", "SearchAgent init failed", str(exc))
-            return {}
-
-    def _build_weather(
-        self, network: AgentNetwork, ai_client: BaseAIClient
-    ) -> Dict[str, Any]:
-        try:
-            # Automatically detect location from IP address
-            detected_location = get_location_from_ip()
-            if detected_location:
-                self.logger.log(
-                    "INFO",
-                    "Detected location from IP address",
-                    f"Using '{detected_location}' as default weather location",
-                )
-            else:
-                detected_location = "Chicago"  # Fallback
-                self.logger.log(
-                    "INFO",
-                    "Could not detect location from IP",
-                    f"Using default location '{detected_location}'",
-                )
-
-            weather_agent = WeatherAgent(
-                api_key=self.config.weather_api_key,
-                logger=self.logger,
-                ai_client=ai_client,
-                default_location=detected_location,
-            )
-            network.register_agent(weather_agent)
-            return {"weather_agent": weather_agent}
-        except Exception as exc:
-            self.logger.log("WARNING", "WeatherAgent init failed", str(exc))
             return {}
 
     def _build_protocol(self, network: AgentNetwork) -> Dict[str, Any]:

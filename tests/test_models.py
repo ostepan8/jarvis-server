@@ -154,7 +154,6 @@ class TestUserConfig:
         assert config.openai_api_key is None
         assert config.anthropic_api_key is None
         assert config.calendar_api_url is None
-        assert config.weather_api_key is None
         assert config.hue_bridge_ip is None
         assert config.hue_username is None
 
@@ -163,7 +162,6 @@ class TestUserConfig:
             openai_api_key="sk-test",
             anthropic_api_key="ak-test",
             calendar_api_url="http://cal.local",
-            weather_api_key="wk-test",
             hue_bridge_ip="192.168.1.100",
             hue_username="hue-user",
         )

@@ -252,7 +252,7 @@ class TestCoordinatorLeadAgentIntegration:
         """Complex requests should be dispatched to the lead agent."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "What's the weather?"},
+            {"capability": "search", "prompt": "What's the weather?"},
             "call_1",
         )
         ai_client = MockAIClient(
@@ -263,9 +263,9 @@ class TestCoordinatorLeadAgentIntegration:
             weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
         )
         chat = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent(
-            "WeatherAgent",
-            {"get_weather"},
+        search_provider = ProviderAgent(
+            "SearchAgent",
+            {"search"},
             {"response": "72°F and sunny", "success": True},
         )
         lighting = ProviderAgent(
@@ -274,7 +274,7 @@ class TestCoordinatorLeadAgentIntegration:
             {"response": "Lights set to warm", "success": True},
         )
         orchestrator, network = await setup_full_network(
-            [chat, weather, lighting], ai_client=ai_client
+            [chat, search_provider, lighting], ai_client=ai_client
         )
 
         try:
@@ -321,10 +321,10 @@ class TestLeadAgentRecruitmentIntegration:
     @pytest.mark.asyncio
     async def test_lead_recruits_multiple_agents(self):
         """Lead agent should be able to recruit multiple agents sequentially."""
-        weather_call = make_tool_call(
+        search_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
-            "call_weather",
+            {"capability": "search", "prompt": "weather?"},
+            "call_search",
         )
         lights_call = make_tool_call(
             "recruit_agent",
@@ -332,19 +332,19 @@ class TestLeadAgentRecruitmentIntegration:
             "call_lights",
         )
         ai_client = MockAIClient(responses=[
-            ("", [weather_call]),
+            ("", [search_call]),
             ("", [lights_call]),
             ("Done! Weather is sunny and lights are warm.", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "sunny"}
+        search_provider = ProviderAgent(
+            "SearchAgent", {"search"}, {"response": "sunny"}
         )
         lighting = ProviderAgent(
             "LightingAgent", {"set_color"}, {"response": "lights warm"}
         )
         network = AgentNetwork()
-        for agent in [lead, weather, lighting]:
+        for agent in [lead, search_provider, lighting]:
             network.register_agent(agent)
         await network.start()
 
@@ -366,7 +366,7 @@ class TestLeadAgentRecruitmentIntegration:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                     "LightingAgent": ["set_color"],
                 },
             )
@@ -385,17 +385,17 @@ class TestLeadAgentRecruitmentIntegration:
         """When a recruited agent returns an error, lead should handle it."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
-            "call_weather",
+            {"capability": "search", "prompt": "weather?"},
+            "call_search",
         )
         ai_client = MockAIClient(responses=[
             ("", [recruit_call]),
             ("Sorry, I couldn't get the weather.", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        error_weather = ErrorAgent("WeatherAgent", {"get_weather"})
+        error_search = ErrorAgent("SearchAgent", {"search"})
         network = AgentNetwork()
-        for agent in [lead, error_weather]:
+        for agent in [lead, error_search]:
             network.register_agent(agent)
         await network.start()
 
@@ -417,7 +417,7 @@ class TestLeadAgentRecruitmentIntegration:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
             result = await lead._execute_as_lead("What's the weather?", brief)
@@ -431,7 +431,7 @@ class TestLeadAgentRecruitmentIntegration:
         """When budget runs out, lead should respond with what it has."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
+            {"capability": "search", "prompt": "weather?"},
             "call_1",
         )
         ai_client = MockAIClient(responses=[
@@ -439,9 +439,9 @@ class TestLeadAgentRecruitmentIntegration:
             ("I could only partially help.", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent("WeatherAgent", {"get_weather"})
+        search_provider = ProviderAgent("SearchAgent", {"search"})
         network = AgentNetwork()
-        for agent in [lead, weather]:
+        for agent in [lead, search_provider]:
             network.register_agent(agent)
         await network.start()
 
@@ -463,7 +463,7 @@ class TestLeadAgentRecruitmentIntegration:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
             result = await lead._execute_as_lead("Do many things", brief)
@@ -478,7 +478,7 @@ class TestLeadAgentRecruitmentIntegration:
         """Recruitment should detect and prevent circular chains."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
+            {"capability": "search", "prompt": "weather?"},
             "call_1",
         )
         ai_client = MockAIClient(responses=[
@@ -486,9 +486,9 @@ class TestLeadAgentRecruitmentIntegration:
             ("Couldn't recruit due to cycle.", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent("WeatherAgent", {"get_weather"})
+        search_provider = ProviderAgent("SearchAgent", {"search"})
         network = AgentNetwork()
-        for agent in [lead, weather]:
+        for agent in [lead, search_provider]:
             network.register_agent(agent)
         await network.start()
 
@@ -507,11 +507,11 @@ class TestLeadAgentRecruitmentIntegration:
                 ),
                 context=MissionContext(
                     user_input="test",
-                    # WeatherAgent already in chain - cycle!
-                    recruitment_chain=["ChatAgent", "WeatherAgent"],
+                    # SearchAgent already in chain - cycle!
+                    recruitment_chain=["ChatAgent", "SearchAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
             result = await lead._execute_as_lead("test", brief)
@@ -529,10 +529,10 @@ class TestFullPipelineE2E:
     @pytest.mark.asyncio
     async def test_full_pipeline_complex_with_multi_recruit(self):
         """End-to-end: process_request → coordinator triage → lead dispatch → 2 recruits → response."""
-        weather_call = make_tool_call(
+        search_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "What's the weather?"},
-            "call_weather",
+            {"capability": "search", "prompt": "What's the weather?"},
+            "call_search",
         )
         lights_call = make_tool_call(
             "recruit_agent",
@@ -542,7 +542,7 @@ class TestFullPipelineE2E:
         ai_client = MockAIClient(
             responses=[
                 # Turn 1: LLM recruits weather
-                ("", [weather_call]),
+                ("", [search_call]),
                 # Turn 2: LLM recruits lights
                 ("", [lights_call]),
                 # Turn 3: LLM synthesizes final response
@@ -551,9 +551,9 @@ class TestFullPipelineE2E:
             weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
         )
         chat = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent(
-            "WeatherAgent",
-            {"get_weather"},
+        search_provider = ProviderAgent(
+            "SearchAgent",
+            {"search"},
             {"response": "72°F and sunny", "success": True},
         )
         lighting = ProviderAgent(
@@ -562,7 +562,7 @@ class TestFullPipelineE2E:
             {"response": "Lights set to warm", "success": True},
         )
         orchestrator, network = await setup_full_network(
-            [chat, weather, lighting], ai_client=ai_client
+            [chat, search_provider, lighting], ai_client=ai_client
         )
 
         try:
@@ -581,10 +581,10 @@ class TestFullPipelineE2E:
     @pytest.mark.asyncio
     async def test_full_pipeline_parallel_recruit_calls(self):
         """End-to-end: LLM returns two recruit calls in one turn → both execute concurrently."""
-        weather_call = make_tool_call(
+        search_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
-            "call_weather",
+            {"capability": "search", "prompt": "weather?"},
+            "call_search",
         )
         lights_call = make_tool_call(
             "recruit_agent",
@@ -594,21 +594,21 @@ class TestFullPipelineE2E:
         ai_client = MockAIClient(
             responses=[
                 # Turn 1: LLM returns BOTH recruits at once
-                ("", [weather_call, lights_call]),
+                ("", [search_call, lights_call]),
                 # Turn 2: LLM synthesizes
                 ("Weather is sunny and lights are warm!", None),
             ],
             weak_response='{"complexity": "complex", "lead_agent": "ChatAgent", "lead_capability": "chat"}',
         )
         chat = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent(
-            "WeatherAgent", {"get_weather"}, {"response": "sunny"}
+        search_provider = ProviderAgent(
+            "SearchAgent", {"search"}, {"response": "sunny"}
         )
         lighting = ProviderAgent(
             "LightingAgent", {"set_color"}, {"response": "lights warm"}
         )
         orchestrator, network = await setup_full_network(
-            [chat, weather, lighting], ai_client=ai_client
+            [chat, search_provider, lighting], ai_client=ai_client
         )
 
         try:
@@ -694,7 +694,7 @@ class TestBudgetAndTimeoutEnforcement:
         """When deadline expires mid-loop, lead returns partial results."""
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
+            {"capability": "search", "prompt": "weather?"},
             "call_1",
         )
         # Budget will expire after the first recruit completes but before next iteration
@@ -704,9 +704,9 @@ class TestBudgetAndTimeoutEnforcement:
             ("This should not be reached", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        search_provider = ProviderAgent("SearchAgent", {"search"}, {"response": "sunny"})
         network = AgentNetwork()
-        for agent in [lead, weather]:
+        for agent in [lead, search_provider]:
             network.register_agent(agent)
         await network.start()
 
@@ -729,7 +729,7 @@ class TestBudgetAndTimeoutEnforcement:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
             # Small delay to ensure deadline passes during execution
@@ -743,10 +743,10 @@ class TestBudgetAndTimeoutEnforcement:
     @pytest.mark.asyncio
     async def test_parallel_tool_calls_both_execute(self):
         """When LLM returns two tool calls, both execute and results are recorded."""
-        weather_call = make_tool_call(
+        search_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "weather?"},
-            "call_weather",
+            {"capability": "search", "prompt": "weather?"},
+            "call_search",
         )
         lights_call = make_tool_call(
             "recruit_agent",
@@ -754,14 +754,14 @@ class TestBudgetAndTimeoutEnforcement:
             "call_lights",
         )
         ai_client = MockAIClient(responses=[
-            ("", [weather_call, lights_call]),
+            ("", [search_call, lights_call]),
             ("Weather is sunny and lights warm!", None),
         ])
         lead = LeadAgent("ChatAgent", ai_client, {"chat"})
-        weather = ProviderAgent("WeatherAgent", {"get_weather"}, {"response": "sunny"})
+        search_provider = ProviderAgent("SearchAgent", {"search"}, {"response": "sunny"})
         lighting = ProviderAgent("LightingAgent", {"set_color"}, {"response": "warm"})
         network = AgentNetwork()
-        for agent in [lead, weather, lighting]:
+        for agent in [lead, search_provider, lighting]:
             network.register_agent(agent)
         await network.start()
 
@@ -783,7 +783,7 @@ class TestBudgetAndTimeoutEnforcement:
                     recruitment_chain=["ChatAgent"],
                 ),
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                     "LightingAgent": ["set_color"],
                 },
             )

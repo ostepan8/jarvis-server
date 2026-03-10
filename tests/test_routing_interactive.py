@@ -97,7 +97,7 @@ async def _test_routing_flow(user_input: str, use_real_llm: bool = False):
         for capability in [
             "control_lights",
             "get_today_schedule",
-            "get_weather",
+            "search",
             "chat",
         ]:
             events = tracker.get_capability_usage(capability)

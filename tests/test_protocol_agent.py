@@ -589,7 +589,7 @@ class TestProtocolAgentEdgeCases:
         agent = protocol_agent_with_network
         steps = [
             ProtocolStep(agent="LightingAgent", function="turn_on_all_lights", parameters={}),
-            ProtocolStep(agent="WeatherAgent", function="get_weather", parameters={"city": "NY"}),
+            ProtocolStep(agent="SearchAgent", function="search", parameters={"query": "weather NY"}),
         ]
         proto = _make_protocol("Multi Step", steps=steps, proto_id="multi-1")
         agent.registry.protocols["multi-1"] = proto
@@ -601,4 +601,4 @@ class TestProtocolAgentEdgeCases:
         sent_msg = agent.network.send_message.call_args[0][0]
         assert len(sent_msg.content["steps"]) == 2
         assert sent_msg.content["steps"][0]["agent"] == "LightingAgent"
-        assert sent_msg.content["steps"][1]["function"] == "get_weather"
+        assert sent_msg.content["steps"][1]["function"] == "search"

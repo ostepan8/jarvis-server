@@ -20,7 +20,7 @@ from jarvis.core.builder import JarvisBuilder
 def minimal_flags():
     """Feature flags with all optional services disabled."""
     return FeatureFlags(
-        enable_weather=False,
+
         enable_lights=False,
         enable_canvas=False,
         enable_night_mode=False,

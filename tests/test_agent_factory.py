@@ -1,8 +1,7 @@
 """Tests for AgentFactory - agent construction from config."""
 
-import os
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 from jarvis.agents.factory import AgentFactory
 from jarvis.agents.agent_network import AgentNetwork
@@ -60,8 +59,7 @@ class TestAgentFactoryBuildAll:
         """Create a config with most optional features disabled."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -124,14 +122,6 @@ class TestAgentFactoryBuildAll:
         assert "protocol_agent" in refs
         assert "ProtocolAgent" in network.agents
 
-    def test_build_all_skips_weather_when_disabled(
-        self, mock_vector_memory, minimal_config, network, ai_client, logger
-    ):
-        """Test build_all skips weather agent when flag is disabled."""
-        factory = AgentFactory(minimal_config, logger)
-        refs = factory.build_all(network, ai_client)
-        assert "weather_agent" not in refs
-
     def test_build_all_skips_lights_when_disabled(
         self, mock_vector_memory, minimal_config, network, ai_client, logger
     ):
@@ -165,91 +155,6 @@ class TestAgentFactoryBuildAll:
         assert "search_agent" not in refs
 
 
-class TestAgentFactoryBuildWeather:
-    """Test weather agent building."""
-
-    @pytest.fixture
-    def network(self):
-        return AgentNetwork()
-
-    @pytest.fixture
-    def ai_client(self):
-        return DummyAIClient()
-
-    @pytest.fixture
-    def logger(self):
-        return JarvisLogger()
-
-    @patch("jarvis.agents.factory.get_location_from_ip", return_value="New York")
-    def test_build_weather_with_detected_location(
-        self, mock_location, mock_vector_memory, network, ai_client, logger
-    ):
-        """Test weather agent uses detected location."""
-        config = JarvisConfig(
-            flags=FeatureFlags(
-                enable_weather=True,
-                enable_lights=False,
-                enable_canvas=False,
-                enable_night_mode=False,
-                enable_roku=False,
-            ),
-            weather_api_key="fake-weather-key",
-            google_search_api_key=None,
-            google_search_engine_id=None,
-        )
-        factory = AgentFactory(config, logger)
-        refs = factory.build_all(network, ai_client)
-        assert "weather_agent" in refs
-
-    @patch("jarvis.agents.factory.get_location_from_ip", return_value=None)
-    def test_build_weather_falls_back_to_chicago(
-        self, mock_location, mock_vector_memory, network, ai_client, logger
-    ):
-        """Test weather agent falls back to Chicago when IP detection fails."""
-        config = JarvisConfig(
-            flags=FeatureFlags(
-                enable_weather=True,
-                enable_lights=False,
-                enable_canvas=False,
-                enable_night_mode=False,
-                enable_roku=False,
-            ),
-            weather_api_key="fake-weather-key",
-            google_search_api_key=None,
-            google_search_engine_id=None,
-        )
-        factory = AgentFactory(config, logger)
-        refs = factory.build_all(network, ai_client)
-        assert "weather_agent" in refs
-
-    @patch("jarvis.agents.factory.get_location_from_ip", return_value="Chicago")
-    @patch.dict("os.environ", {}, clear=False)
-    def test_build_weather_skips_without_api_key(
-        self, mock_location, mock_vector_memory, network, ai_client, logger
-    ):
-        """Test weather agent is skipped when no weather API key is configured."""
-        # Remove weather API keys from env to ensure the test is isolated
-        os.environ.pop("WEATHER_API_KEY", None)
-        os.environ.pop("OPENWEATHER_API_KEY", None)
-
-        config = JarvisConfig(
-            flags=FeatureFlags(
-                enable_weather=True,
-                enable_lights=False,
-                enable_canvas=False,
-                enable_night_mode=False,
-                enable_roku=False,
-            ),
-            weather_api_key=None,
-            google_search_api_key=None,
-            google_search_engine_id=None,
-        )
-        factory = AgentFactory(config, logger)
-        refs = factory.build_all(network, ai_client)
-        # WeatherAgent requires a weather API key; without one, it fails gracefully
-        assert "weather_agent" not in refs
-
-
 class TestAgentFactoryBuildRoku:
     """Test roku agent building."""
 
@@ -271,8 +176,7 @@ class TestAgentFactoryBuildRoku:
         """Test roku agent is skipped when no IP address configured."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=True,
@@ -307,8 +211,7 @@ class TestAgentFactoryBuildLights:
         """Test lights agent skipped for hue when no bridge IP."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=True,
+                                enable_lights=True,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -344,8 +247,7 @@ class TestAgentFactoryBuildSearch:
         """Test search agent skipped when no API key."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -363,8 +265,7 @@ class TestAgentFactoryBuildSearch:
         """Test search agent skipped when no engine ID."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -384,8 +285,7 @@ class TestAgentFactoryNetworkRegistration:
     def minimal_config(self):
         return JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -448,8 +348,7 @@ class TestAgentFactoryBuildAllAsync:
     def minimal_config(self):
         return JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,
@@ -491,32 +390,9 @@ class TestAgentFactoryBuildAllAsync:
         """Test build_all_async skips agents when flags are off."""
         factory = AgentFactory(minimal_config, logger)
         refs = await factory.build_all_async(network, ai_client)
-        assert "weather_agent" not in refs
         assert "lights_agent" not in refs
         assert "canvas_agent" not in refs
         assert "roku_agent" not in refs
-
-    @pytest.mark.asyncio
-    @patch("jarvis.agents.factory.get_location_from_ip", return_value="Boston")
-    async def test_build_all_async_with_weather(
-        self, mock_location, mock_vector_memory, network, ai_client, logger
-    ):
-        """Test build_all_async builds weather agent when enabled."""
-        config = JarvisConfig(
-            flags=FeatureFlags(
-                enable_weather=True,
-                enable_lights=False,
-                enable_canvas=False,
-                enable_night_mode=False,
-                enable_roku=False,
-            ),
-            weather_api_key="fake-key",
-            google_search_api_key=None,
-            google_search_engine_id=None,
-        )
-        factory = AgentFactory(config, logger)
-        refs = await factory.build_all_async(network, ai_client)
-        assert "weather_agent" in refs
 
     @pytest.mark.asyncio
     async def test_build_all_async_handles_chromadb_failure(
@@ -525,8 +401,7 @@ class TestAgentFactoryBuildAllAsync:
         """Test build_all_async gracefully handles VectorMemoryService failure."""
         config = JarvisConfig(
             flags=FeatureFlags(
-                enable_weather=False,
-                enable_lights=False,
+                                enable_lights=False,
                 enable_canvas=False,
                 enable_night_mode=False,
                 enable_roku=False,

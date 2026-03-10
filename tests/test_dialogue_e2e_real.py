@@ -39,16 +39,16 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 
 
-class DialogueWeatherAgent(NetworkAgent):
+class DialogueSearchAgent(NetworkAgent):
     """Weather agent that supports dialogue via a real AI client."""
 
     def __init__(self, ai_client):
-        super().__init__("WeatherAgent")
+        super().__init__("SearchAgent")
         self.ai_client = ai_client
 
     @property
     def capabilities(self) -> Set[str]:
-        return {"get_weather", "get_forecast"}
+        return {"search", "news_search"}
 
     @property
     def supports_dialogue(self) -> bool:
@@ -181,7 +181,7 @@ def make_brief(
 ) -> MissionBrief:
     if available_capabilities is None:
         available_capabilities = {
-            "WeatherAgent": ["get_weather", "get_forecast"],
+            "SearchAgent": ["search", "news_search"],
             "LightingAgent": ["lights_color", "lights_brightness"],
         }
     return MissionBrief(
@@ -214,21 +214,21 @@ class TestDialogueE2EReal:
 
     @pytest.mark.asyncio
     async def test_chat_dialogues_with_weather(self):
-        """ChatAgent conducts a multi-turn dialogue with WeatherAgent."""
+        """ChatAgent conducts a multi-turn dialogue with SearchAgent."""
         ai_client = make_real_ai_client()
         chat = ChatAgent(ai_client)
-        weather = DialogueWeatherAgent(ai_client)
-        network = await setup_real_network(chat, weather)
+        search_agent = DialogueSearchAgent(ai_client)
+        network = await setup_real_network(chat, search_agent)
 
         try:
             brief = make_brief(
                 user_input="Have a conversation with the weather agent about outdoor activities today",
                 available_capabilities={
-                    "WeatherAgent": ["get_weather", "get_forecast"],
+                    "SearchAgent": ["search", "news_search"],
                 },
             )
             session = await chat.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="I'm planning outdoor activities today. What are the current conditions and would you recommend being outside?",
                 goal="Determine if weather is suitable for outdoor activities",
                 brief=brief,
@@ -241,7 +241,7 @@ class TestDialogueE2EReal:
             transcript = session.format_transcript()
             assert len(transcript) > 0
             assert session.initiator == "ChatAgent"
-            assert session.responder == "WeatherAgent"
+            assert session.responder == "SearchAgent"
         finally:
             await network.stop()
 
@@ -250,18 +250,18 @@ class TestDialogueE2EReal:
         """Responder should set done=True for simple questions, ending dialogue early."""
         ai_client = make_real_ai_client()
         chat = ChatAgent(ai_client)
-        weather = DialogueWeatherAgent(ai_client)
-        network = await setup_real_network(chat, weather)
+        search_agent = DialogueSearchAgent(ai_client)
+        network = await setup_real_network(chat, search_agent)
 
         try:
             brief = make_brief(
                 user_input="What's the temperature right now?",
                 available_capabilities={
-                    "WeatherAgent": ["get_weather"],
+                    "SearchAgent": ["search"],
                 },
             )
             session = await chat.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="What is the current temperature?",
                 goal="Get the current temperature",
                 brief=brief,
@@ -307,15 +307,15 @@ class TestDialogueE2EReal:
         """Lead agent uses recruit (one-shot) and dialogue (multi-turn) in same mission."""
         ai_client = make_real_ai_client()
         chat = ChatAgent(ai_client)
-        weather = DialogueWeatherAgent(ai_client)
+        search_agent = DialogueSearchAgent(ai_client)
         lights = DialogueLightingAgent(ai_client)
-        network = await setup_real_network(chat, weather, lights)
+        network = await setup_real_network(chat, search_agent, lights)
 
         try:
             brief = make_brief(
                 user_input="Check the weather quickly, then have a conversation with the lighting agent about setting up the mood",
                 available_capabilities={
-                    "WeatherAgent": ["get_weather", "get_forecast"],
+                    "SearchAgent": ["search", "news_search"],
                     "LightingAgent": ["lights_color", "lights_brightness"],
                 },
                 max_recruitments=10,

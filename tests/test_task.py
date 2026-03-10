@@ -11,8 +11,8 @@ class TestTaskCreation:
 
     def test_create_task_with_capability(self):
         """Test creating a task with just a capability."""
-        task = Task(capability="get_weather")
-        assert task.capability == "get_weather"
+        task = Task(capability="search")
+        assert task.capability == "search"
         assert task.assigned_agent is None
         assert task.depends_on == []
         assert task.intent is None
@@ -142,12 +142,12 @@ class TestTaskAssignedAgent:
 
     def test_assign_agent(self):
         """Test assigning an agent to a task."""
-        task = Task(capability="get_weather", assigned_agent="WeatherAgent")
-        assert task.assigned_agent == "WeatherAgent"
+        task = Task(capability="search", assigned_agent="SearchAgent")
+        assert task.assigned_agent == "SearchAgent"
 
     def test_reassign_agent(self):
         """Test reassigning an agent."""
-        task = Task(capability="get_weather", assigned_agent="WeatherAgent")
+        task = Task(capability="search", assigned_agent="SearchAgent")
         task.assigned_agent = "AnotherAgent"
         assert task.assigned_agent == "AnotherAgent"
 

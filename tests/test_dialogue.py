@@ -293,7 +293,7 @@ def make_brief(
 ) -> MissionBrief:
     if available_capabilities is None:
         available_capabilities = {
-            "WeatherAgent": ["get_weather", "get_forecast"],
+            "SearchAgent": ["search", "news_search"],
             "LightingAgent": ["lights_color", "lights_brightness"],
         }
     if budget is None:
@@ -343,12 +343,12 @@ class TestDialogueTurn:
 
     def test_turn_to_dict_roundtrip(self):
         turn = DialogueTurn(
-            turn_number=2, speaker="WeatherAgent", message="Sunny", metadata={"temp": 72}
+            turn_number=2, speaker="SearchAgent", message="Sunny", metadata={"temp": 72}
         )
         d = turn.to_dict()
         restored = DialogueTurn.from_dict(d)
         assert restored.turn_number == 2
-        assert restored.speaker == "WeatherAgent"
+        assert restored.speaker == "SearchAgent"
         assert restored.message == "Sunny"
         assert restored.metadata == {"temp": 72}
 
@@ -357,12 +357,12 @@ class TestDialogueSession:
     def test_create_session(self):
         session = DialogueSession(
             initiator="LeadAgent",
-            responder="WeatherAgent",
+            responder="SearchAgent",
             goal="Check weather",
-            capability="get_weather",
+            capability="search",
         )
         assert session.initiator == "LeadAgent"
-        assert session.responder == "WeatherAgent"
+        assert session.responder == "SearchAgent"
         assert session.turn_count == 0
         assert session.is_complete is False
         assert session.status == DialogueStatus.ACTIVE
@@ -370,10 +370,10 @@ class TestDialogueSession:
     def test_add_turn(self):
         session = DialogueSession()
         session.add_turn("LeadAgent", "Hello")
-        session.add_turn("WeatherAgent", "Hi there")
+        session.add_turn("SearchAgent", "Hi there")
         assert session.turn_count == 2
         assert session.turns[0].speaker == "LeadAgent"
-        assert session.turns[1].speaker == "WeatherAgent"
+        assert session.turns[1].speaker == "SearchAgent"
         assert session.turns[0].turn_number == 1
         assert session.turns[1].turn_number == 2
 
@@ -408,23 +408,23 @@ class TestDialogueSession:
         session = DialogueSession(
             session_id="test-id",
             initiator="LeadAgent",
-            responder="WeatherAgent",
+            responder="SearchAgent",
             goal="Check weather",
-            capability="get_weather",
+            capability="search",
             max_turns=3,
             status=DialogueStatus.COMPLETED,
         )
         session.add_turn("LeadAgent", "Hello")
-        session.add_turn("WeatherAgent", "Hi")
+        session.add_turn("SearchAgent", "Hi")
 
         d = session.to_dict()
         restored = DialogueSession.from_dict(d)
 
         assert restored.session_id == "test-id"
         assert restored.initiator == "LeadAgent"
-        assert restored.responder == "WeatherAgent"
+        assert restored.responder == "SearchAgent"
         assert restored.goal == "Check weather"
-        assert restored.capability == "get_weather"
+        assert restored.capability == "search"
         assert restored.max_turns == 3
         assert restored.status == DialogueStatus.COMPLETED
         assert restored.turn_count == 2
@@ -449,15 +449,15 @@ class TestDialogueMethod:
         lead_ai = DialogueReplyAIClient([])  # Won't be called (responder ends it)
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="What's the weather?",
                 goal="Get current conditions",
                 brief=brief,
@@ -466,7 +466,7 @@ class TestDialogueMethod:
             assert session.status == DialogueStatus.COMPLETED
             assert session.turn_count == 2  # initiator + responder
             assert session.turns[0].speaker == "LeadAgent"
-            assert session.turns[1].speaker == "WeatherAgent"
+            assert session.turns[1].speaker == "SearchAgent"
             assert "72°F" in session.turns[1].message
         finally:
             await network.stop()
@@ -483,15 +483,15 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="What's the weather?",
                 goal="Get weather for outdoor activities",
                 brief=brief,
@@ -519,10 +519,10 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief(
@@ -533,7 +533,7 @@ class TestDialogueMethod:
                 )
             )
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="What's the weather?",
                 goal="Get weather",
                 brief=brief,
@@ -556,10 +556,10 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief(
@@ -573,7 +573,7 @@ class TestDialogueMethod:
             await asyncio.sleep(0.02)
             try:
                 session = await lead.dialogue(
-                    capability="get_weather",
+                    capability="search",
                     initial_message="What's the weather?",
                     goal="Get weather",
                     brief=brief,
@@ -601,15 +601,15 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="Start",
                 goal="Test max turns",
                 brief=brief,
@@ -618,7 +618,7 @@ class TestDialogueMethod:
             # Should complete at or before max_turns
             assert session.status == DialogueStatus.COMPLETED
             # At most 2 responder turns => up to 4 total turns (2 each)
-            responder_turns = [t for t in session.turns if t.speaker == "WeatherAgent"]
+            responder_turns = [t for t in session.turns if t.speaker == "SearchAgent"]
             assert len(responder_turns) <= 2
         finally:
             await network.stop()
@@ -629,7 +629,7 @@ class TestDialogueMethod:
         lead_ai = DialogueReplyAIClient([])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        silent = SilentProviderAgent("WeatherAgent", {"get_weather"})
+        silent = SilentProviderAgent("SearchAgent", {"search"})
         network = await setup_network(lead, silent)
 
         try:
@@ -641,7 +641,7 @@ class TestDialogueMethod:
                 )
             )
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="Hello?",
                 goal="Test timeout",
                 brief=brief,
@@ -663,23 +663,23 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=DialogueReplyAIClient([]))
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="Hello",
                 goal="Test context recording",
                 brief=brief,
             )
             results = brief.context.recruitment_results
             assert len(results) == 1
-            assert results[0]["agent"] == "WeatherAgent"
-            assert results[0]["capability"] == "dialogue:get_weather"
+            assert results[0]["agent"] == "SearchAgent"
+            assert results[0]["capability"] == "dialogue:search"
             assert "transcript" in results[0]["result"]
         finally:
             await network.stop()
@@ -706,19 +706,19 @@ class TestDialogueMethod:
     async def test_circular_recruitment_error(self):
         """Dialogue should raise CircularRecruitmentError for cycles."""
         lead = DialogueLeadAgent("LeadAgent", ai_client=DialogueReplyAIClient([]))
-        weather = DialogueProviderAgent("WeatherAgent", {"get_weather"})
-        network = await setup_network(lead, weather)
+        search_provider = DialogueProviderAgent("SearchAgent", {"search"})
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief(
                 context=MissionContext(
                     user_input="test",
-                    recruitment_chain=["LeadAgent", "WeatherAgent"],
+                    recruitment_chain=["LeadAgent", "SearchAgent"],
                 )
             )
             with pytest.raises(CircularRecruitmentError):
                 await lead.dialogue(
-                    capability="get_weather",
+                    capability="search",
                     initial_message="Hello",
                     goal="Test",
                     brief=brief,
@@ -737,15 +737,15 @@ class TestDialogueMethod:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             session = await lead.dialogue(
-                capability="get_weather",
+                capability="search",
                 initial_message="What's the weather?",
                 goal="Quick check",
                 brief=brief,
@@ -780,8 +780,8 @@ class TestDialogueToolDefinition:
         brief = make_brief()
         tool = agent._build_dialogue_tool_definition(brief)
         cap_enum = tool["function"]["parameters"]["properties"]["capability"]["enum"]
-        assert "get_weather" in cap_enum
-        assert "get_forecast" in cap_enum
+        assert "search" in cap_enum
+        assert "news_search" in cap_enum
         assert "lights_color" in cap_enum
 
     def test_required_fields(self):
@@ -838,7 +838,7 @@ class TestExecuteAsLeadWithDialogue:
         dialogue_call = make_tool_call(
             "start_dialogue",
             {
-                "capability": "get_weather",
+                "capability": "search",
                 "initial_message": "What's the weather?",
                 "goal": "Get current conditions",
                 "max_turns": 3,
@@ -851,10 +851,10 @@ class TestExecuteAsLeadWithDialogue:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
@@ -875,7 +875,7 @@ class TestExecuteAsLeadWithDialogue:
 
         recruit_call = make_tool_call(
             "recruit_agent",
-            {"capability": "get_weather", "prompt": "Get weather"},
+            {"capability": "search", "prompt": "Get weather"},
             "call_recruit",
         )
         dialogue_call = make_tool_call(
@@ -894,15 +894,15 @@ class TestExecuteAsLeadWithDialogue:
         ])
 
         lead = DialogueLeadAgent("LeadAgent", ai_client=lead_ai)
-        weather = DialogueProviderAgent(
-            "WeatherAgent",
-            {"get_weather"},
+        search_provider = DialogueProviderAgent(
+            "SearchAgent",
+            {"search"},
             static_response={"response": "Clear skies", "success": True},
         )
         lights = DialogueProviderAgent(
             "LightingAgent", {"lights_color"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather, lights)
+        network = await setup_network(lead, search_provider, lights)
 
         try:
             brief = make_brief()
@@ -930,11 +930,11 @@ class TestReceivingAgentDialogue:
             {"message": "It's 72°F!", "done": True},
         ])
         agent = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=ai_client
+            "SearchAgent", {"search"}, ai_client=ai_client
         )
         result = await agent._respond_to_dialogue(
             "What's the weather?",
-            {"goal": "Get conditions", "transcript": "", "capability": "get_weather"},
+            {"goal": "Get conditions", "transcript": "", "capability": "search"},
         )
         assert result["dialogue_message"] == "It's 72°F!"
         assert result["dialogue_done"] is True
@@ -965,14 +965,14 @@ class TestReceivingAgentDialogue:
 
         ai_client = CapturingAIClient()
         agent = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=ai_client
+            "SearchAgent", {"search"}, ai_client=ai_client
         )
         await agent._respond_to_dialogue(
             "What about tomorrow?",
             {
                 "goal": "Multi-day forecast",
                 "transcript": "[Turn 1] Lead: What's the weather?",
-                "capability": "get_weather",
+                "capability": "search",
             },
         )
         all_content = " ".join(m["content"] for m in captured_messages)
@@ -1046,16 +1046,16 @@ class TestHandleDialogueToolCall:
             {"message": "Done!", "done": True},
         ])
         lead = DialogueLeadAgent("LeadAgent", ai_client=DialogueReplyAIClient([]))
-        weather = DialogueProviderAgent(
-            "WeatherAgent", {"get_weather"}, ai_client=responder_ai
+        search_provider = DialogueProviderAgent(
+            "SearchAgent", {"search"}, ai_client=responder_ai
         )
-        network = await setup_network(lead, weather)
+        network = await setup_network(lead, search_provider)
 
         try:
             brief = make_brief()
             result = await lead._handle_dialogue_tool_call(
                 {
-                    "capability": "get_weather",
+                    "capability": "search",
                     "initial_message": "Hello",
                     "goal": "Test",
                     "max_turns": 3,

@@ -11,7 +11,6 @@ import os
 class FeatureFlags:
     """Feature toggles controlling optional subsystems."""
 
-    enable_weather: bool = True
     enable_lights: bool = False
     enable_canvas: bool = True
     enable_night_mode: bool = True
@@ -37,7 +36,6 @@ class JarvisConfig:
         == "true"
     )
     memory_dir: Optional[str] = None
-    weather_api_key: Optional[str] = None
 
     # Retry configuration for external service calls
     max_retries: int = 3
@@ -105,7 +103,6 @@ class UserConfig:
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
     calendar_api_url: Optional[str] = None
-    weather_api_key: Optional[str] = None
     hue_bridge_ip: Optional[str] = None
     hue_username: Optional[str] = None
     roku_ip_address: Optional[str] = None

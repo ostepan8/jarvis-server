@@ -14,13 +14,13 @@ class TestCapabilityCreation:
             return "result"
 
         cap = Capability(
-            name="get_weather",
-            description="Get current weather for a location",
+            name="search",
+            description="Search the web for information",
             parameters={"location": {"type": "string", "required": True}},
             handler=handler,
         )
-        assert cap.name == "get_weather"
-        assert cap.description == "Get current weather for a location"
+        assert cap.name == "search"
+        assert cap.description == "Search the web for information"
         assert "location" in cap.parameters
         assert cap.handler is handler
 
@@ -77,8 +77,8 @@ class TestCapabilityCreation:
             },
         }
         cap = Capability(
-            name="get_weather",
-            description="Get weather",
+            name="search",
+            description="Search web",
             parameters=params,
             handler=lambda **kwargs: None,
         )

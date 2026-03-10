@@ -51,7 +51,6 @@ def init_database() -> sqlite3.Connection:
             openai_api_key TEXT,
             anthropic_api_key TEXT,
             calendar_api_url TEXT,
-            weather_api_key TEXT,
             hue_bridge_ip TEXT,
             hue_username TEXT,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -184,7 +183,7 @@ def get_user_config(db: sqlite3.Connection, user_id: int) -> dict:
         "openai_api_key",
         "anthropic_api_key",
         "calendar_api_url",
-        "weather_api_key",
+
         "hue_bridge_ip",
         "hue_username",
     ]
@@ -200,7 +199,7 @@ def get_user_config(db: sqlite3.Connection, user_id: int) -> dict:
     sensitive = {
         "openai_api_key",
         "anthropic_api_key",
-        "weather_api_key",
+
         "hue_username",
     }
     result = {}
@@ -224,7 +223,7 @@ def set_user_config(db: sqlite3.Connection, user_id: int, config: dict) -> None:
     sensitive = {
         "openai_api_key",
         "anthropic_api_key",
-        "weather_api_key",
+
         "hue_username",
     }
 

@@ -91,7 +91,6 @@ async def get_user_jarvis(
         intent_timeout=base.config.intent_timeout,
         perf_tracking=base.config.perf_tracking,
         memory_dir=base.config.memory_dir,
-        weather_api_key=user_conf.get("weather_api_key") or base.config.weather_api_key,
         hue_bridge_ip=user_conf.get("hue_bridge_ip") or base.config.hue_bridge_ip,
         hue_username=user_conf.get("hue_username") or base.config.hue_username,
     )
