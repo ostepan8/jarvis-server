@@ -26,6 +26,7 @@ class SelfImprovementAgent(NightAgent):
         logger: Optional[JarvisLogger] = None,
         run_interval: int = 86400,
         log_db_path: str = "jarvis_logs.db",
+        use_prs: bool = True,
     ) -> None:
         super().__init__("SelfImprovementAgent", logger)
         self._service = SelfImprovementService(
@@ -33,6 +34,7 @@ class SelfImprovementAgent(NightAgent):
             todo_service=todo_service,
             log_db_path=log_db_path,
             logger=logger,
+            use_prs=use_prs,
         )
         self._run_interval = run_interval
         self._last_report: Optional[NightReport] = None

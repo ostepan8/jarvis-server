@@ -160,7 +160,7 @@ class TestConfigIntegration:
 
         flags = FeatureFlags()
         assert hasattr(flags, "enable_self_improvement")
-        assert flags.enable_self_improvement is False  # Default off
+        assert flags.enable_self_improvement is True  # Default on
 
     def test_self_improvement_agent_importable_from_night_agents(self):
         """Should be importable from the night_agents package."""

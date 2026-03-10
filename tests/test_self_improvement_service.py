@@ -82,7 +82,7 @@ class FakeExecutionResult:
 # ---------------------------------------------------------------------------
 
 
-def _make_service(tmp_path: Path) -> SelfImprovementService:
+def _make_service(tmp_path: Path, use_prs: bool = True) -> SelfImprovementService:
     """Build a SelfImprovementService with all external deps mocked out."""
     with patch(
         "jarvis.services.self_improvement_service.SystemAnalyzer"
@@ -97,6 +97,7 @@ def _make_service(tmp_path: Path) -> SelfImprovementService:
         svc = SelfImprovementService(
             project_root=str(tmp_path),
             logger=MagicMock(),
+            use_prs=use_prs,
         )
 
         # Replace report dir to avoid touching the real home directory
@@ -528,7 +529,7 @@ class TestExecuteTask:
     @pytest.mark.asyncio
     async def test_successful_execution(self, tmp_path):
         """Happy path: create worktree, execute, test, merge, cleanup."""
-        svc = _make_service(tmp_path)
+        svc = _make_service(tmp_path, use_prs=False)
         svc._runner.create_worktree = AsyncMock(
             return_value=("/tmp/wt-fix-test", "branch-fix-test")
         )
@@ -556,13 +557,13 @@ class TestExecuteTask:
         assert result.files_changed == 2
         assert result.error_message == ""
         svc._runner.cleanup_worktree.assert_awaited_once_with(
-            "/tmp/wt-fix-test", "branch-fix-test"
+            "/tmp/wt-fix-test", "branch-fix-test", keep_branch=False
         )
 
     @pytest.mark.asyncio
     async def test_execution_failure(self, tmp_path):
         """When execution itself fails, return failed result."""
-        svc = _make_service(tmp_path)
+        svc = _make_service(tmp_path, use_prs=False)
         svc._runner.create_worktree = AsyncMock(
             return_value=("/tmp/wt-fail", "branch-fail")
         )
@@ -590,7 +591,7 @@ class TestExecuteTask:
     @pytest.mark.asyncio
     async def test_test_failure_prevents_merge(self, tmp_path):
         """When tests fail, should not attempt merge."""
-        svc = _make_service(tmp_path)
+        svc = _make_service(tmp_path, use_prs=False)
         svc._runner.create_worktree = AsyncMock(
             return_value=("/tmp/wt-test-fail", "branch-test-fail")
         )
@@ -640,7 +641,7 @@ class TestExecuteTask:
     @pytest.mark.asyncio
     async def test_cleanup_always_runs(self, tmp_path):
         """Worktree cleanup should run even if merge raises."""
-        svc = _make_service(tmp_path)
+        svc = _make_service(tmp_path, use_prs=False)
         svc._runner.create_worktree = AsyncMock(
             return_value=("/tmp/wt-cleanup", "branch-cleanup")
         )
@@ -664,7 +665,7 @@ class TestExecuteTask:
         assert result.success is False
         assert "merge boom" in result.error_message
         svc._runner.cleanup_worktree.assert_awaited_once_with(
-            "/tmp/wt-cleanup", "branch-cleanup"
+            "/tmp/wt-cleanup", "branch-cleanup", keep_branch=False
         )
 
 
@@ -689,7 +690,7 @@ class TestRunImprovementCycle:
     @pytest.mark.asyncio
     async def test_full_cycle_with_discoveries(self, tmp_path):
         """End-to-end cycle: discover, prioritize, execute, report."""
-        svc = _make_service(tmp_path)
+        svc = _make_service(tmp_path, use_prs=False)
         svc._runner.check_available = AsyncMock(return_value=True)
 
         discoveries = [
@@ -848,3 +849,332 @@ class TestTodoStatusUpdate:
 
         # Should not raise
         await svc._update_todo_status("any-id", success=True)
+
+
+# ---------------------------------------------------------------------------
+# TestPRFlow
+# ---------------------------------------------------------------------------
+
+
+class TestPRFlow:
+    """Verify the PR creation path in _execute_task."""
+
+    @pytest.mark.asyncio
+    async def test_pr_flow_full_success(self, tmp_path):
+        """Push + PR created — pr_url set, merged is False, branch kept."""
+        svc = _make_service(tmp_path, use_prs=True)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-pr", "branch-pr")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=2)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.push_branch = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.create_pull_request = AsyncMock(
+            return_value=FakeExecutionResult(
+                success=True,
+                stdout="https://github.com/user/repo/pull/42\n",
+            )
+        )
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix broken test",
+            "The test_foo is failing",
+            "high",
+            relevant_files=["tests/test_foo.py"],
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.test_passed is True
+        assert result.merged is False
+        assert result.pr_url == "https://github.com/user/repo/pull/42"
+        assert result.branch_name == "branch-pr"
+        # Branch should be kept for the open PR
+        svc._runner.cleanup_worktree.assert_awaited_once_with(
+            "/tmp/wt-pr", "branch-pr", keep_branch=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_pr_flow_push_fails(self, tmp_path):
+        """When push fails, success is False and no PR is attempted."""
+        svc = _make_service(tmp_path, use_prs=True)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-push-fail", "branch-push-fail")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.push_branch = AsyncMock(
+            return_value=FakeExecutionResult(success=False, stderr="rejected")
+        )
+        svc._runner.create_pull_request = AsyncMock()
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix test",
+            "broken",
+            "high",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is False
+        assert result.pr_url is None
+        assert "Push failed" in result.error_message or "rejected" in result.error_message
+        svc._runner.create_pull_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pr_flow_pr_creation_fails(self, tmp_path):
+        """Push OK but PR creation fails — success True, pr_url None, branch kept."""
+        svc = _make_service(tmp_path, use_prs=True)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-pr-fail", "branch-pr-fail")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.push_branch = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.create_pull_request = AsyncMock(
+            return_value=FakeExecutionResult(success=False, stderr="error")
+        )
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix test",
+            "broken",
+            "high",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.pr_url is None
+        assert "PR creation failed" in result.error_message
+        # Branch should still be kept since it's on the remote
+        svc._runner.cleanup_worktree.assert_awaited_once_with(
+            "/tmp/wt-pr-fail", "branch-pr-fail", keep_branch=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_legacy_merge_flow(self, tmp_path):
+        """With use_prs=False, should use the old merge path."""
+        svc = _make_service(tmp_path, use_prs=False)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-merge", "branch-merge")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.merge_to_main = AsyncMock(return_value=True)
+        svc._runner.push_branch = AsyncMock()
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix test",
+            "broken",
+            "high",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.merged is True
+        assert result.pr_url is None
+        svc._runner.merge_to_main.assert_awaited_once()
+        svc._runner.push_branch.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# TestPRHelpers
+# ---------------------------------------------------------------------------
+
+
+class TestPRHelpers:
+    """Verify PR title and body construction."""
+
+    def test_build_pr_title_format(self):
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix broken test_foo",
+            "desc",
+            "high",
+        )
+        title = SelfImprovementService._build_pr_title(discovery)
+        assert title.startswith("fix(night-agent): ")
+        assert "Fix broken test_foo" in title
+
+    def test_build_pr_title_truncates_long_titles(self):
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "A" * 100,
+            "desc",
+            "high",
+        )
+        title = SelfImprovementService._build_pr_title(discovery)
+        assert len(title) <= 72
+
+    def test_build_pr_body_contains_discovery_info(self):
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.TEST_FAILURE,
+            "Fix test",
+            "The test_foo function fails when input is empty",
+            "high",
+            relevant_files=["tests/test_foo.py", "jarvis/agents/foo.py"],
+        )
+        body = SelfImprovementService._build_pr_body(
+            discovery, files_changed=2, test_passed=True
+        )
+        assert "test_failure" in body or "TEST_FAILURE" in body or str(discovery.discovery_type) in body
+        assert "high" in body
+        assert "tests/test_foo.py" in body
+        assert "jarvis/agents/foo.py" in body
+        assert "empty" in body
+        assert "All passing" in body
+
+    def test_build_pr_body_no_relevant_files(self):
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.LOG_ERROR,
+            "Fix log error",
+            "Some error in logs",
+            "medium",
+        )
+        body = SelfImprovementService._build_pr_body(
+            discovery, files_changed=1, test_passed=False
+        )
+        assert "No specific files" in body
+        assert "Some failures" in body
+
+
+# ---------------------------------------------------------------------------
+# TestNightReportPRFields
+# ---------------------------------------------------------------------------
+
+
+class TestNightReportPRFields:
+    """Verify NightReport serialization of new PR fields."""
+
+    def test_to_dict_includes_pr_url_and_branch(self):
+        report = NightReport(
+            started_at="2026-03-10T00:00:00",
+            completed_at="2026-03-10T01:00:00",
+            tasks_attempted=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            total_files_changed=2,
+            total_duration_seconds=60.0,
+            results=[
+                ImprovementTaskResult(
+                    task_title="Fix test",
+                    discovery_type="test_failure",
+                    success=True,
+                    files_changed=2,
+                    test_passed=True,
+                    merged=False,
+                    pr_url="https://github.com/user/repo/pull/42",
+                    branch_name="worktree-night-fix-test",
+                ),
+            ],
+        )
+        d = report.to_dict()
+        assert d["results"][0]["pr_url"] == "https://github.com/user/repo/pull/42"
+        assert d["results"][0]["branch_name"] == "worktree-night-fix-test"
+
+    def test_to_dict_pr_url_none_when_not_set(self):
+        report = NightReport(
+            started_at="2026-03-10T00:00:00",
+            completed_at="2026-03-10T01:00:00",
+            tasks_attempted=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            total_files_changed=1,
+            total_duration_seconds=30.0,
+            results=[
+                ImprovementTaskResult(
+                    task_title="Fix test",
+                    discovery_type="test_failure",
+                    success=True,
+                    files_changed=1,
+                    test_passed=True,
+                    merged=True,
+                ),
+            ],
+        )
+        d = report.to_dict()
+        assert d["results"][0]["pr_url"] is None
+        assert d["results"][0]["branch_name"] is None
+
+    def test_summary_text_includes_pr_link(self):
+        report = NightReport(
+            started_at="2026-03-10T00:00:00",
+            completed_at="2026-03-10T01:00:00",
+            tasks_attempted=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            total_files_changed=2,
+            total_duration_seconds=45.0,
+            results=[
+                ImprovementTaskResult(
+                    task_title="Fix test",
+                    discovery_type="test_failure",
+                    success=True,
+                    files_changed=2,
+                    test_passed=True,
+                    merged=False,
+                    pr_url="https://github.com/user/repo/pull/42",
+                ),
+            ],
+        )
+        text = report.to_summary_text()
+        assert "https://github.com/user/repo/pull/42" in text
+        assert "PR:" in text
+
+    def test_save_and_load_report_with_pr_fields(self, tmp_path):
+        """Round-trip: save a report with PR fields, load it back."""
+        svc = _make_service(tmp_path)
+
+        report = NightReport(
+            started_at="2026-03-10T00:00:00",
+            completed_at="2026-03-10T01:00:00",
+            tasks_attempted=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            total_files_changed=2,
+            total_duration_seconds=60.0,
+            results=[
+                ImprovementTaskResult(
+                    task_title="Fix test",
+                    discovery_type="test_failure",
+                    success=True,
+                    files_changed=2,
+                    test_passed=True,
+                    merged=False,
+                    pr_url="https://github.com/user/repo/pull/42",
+                    branch_name="worktree-night-fix-test",
+                ),
+            ],
+        )
+
+        svc._save_report(report)
+        loaded = svc.get_latest_report()
+        assert loaded is not None
+        assert loaded.results[0].pr_url == "https://github.com/user/repo/pull/42"
+        assert loaded.results[0].branch_name == "worktree-night-fix-test"

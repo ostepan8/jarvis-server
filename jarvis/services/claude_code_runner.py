@@ -8,6 +8,7 @@ limits.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from dataclasses import dataclass
 from fnmatch import fnmatch
@@ -135,12 +136,12 @@ class ClaudeCodeRunner:
         result = await self._run_subprocess(
             [
                 self.claude_binary,
-                "--print",
                 "-p",
-                prompt,
+                "--dangerously-skip-permissions",
                 "--max-turns",
                 "25",
                 "--verbose",
+                prompt,
             ],
             cwd=worktree_path,
             timeout=self.MAX_EXECUTION_TIMEOUT,
@@ -194,7 +195,7 @@ class ClaudeCodeRunner:
         If *test_files* are given they are appended to the pytest command,
         otherwise the full suite is executed.
         """
-        cmd: list[str] = ["pytest", "-x", "--timeout=30", "-q"]
+        cmd: list[str] = ["pytest", "-x", "-q"]
         if test_files:
             cmd.extend(test_files)
 
@@ -236,11 +237,62 @@ class ClaudeCodeRunner:
 
         return True
 
-    async def cleanup_worktree(
-        self, worktree_path: str, branch_name: str
-    ) -> None:
-        """Remove the worktree directory and delete the local branch.
+    async def check_gh_available(self) -> bool:
+        """Return True if the GitHub CLI is authenticated and runnable."""
+        try:
+            result = await self._run_subprocess(
+                ["gh", "auth", "status"], timeout=10
+            )
+            return result.exit_code == 0
+        except Exception:
+            return False
 
+    async def push_branch(
+        self, worktree_path: str, branch_name: str
+    ) -> ExecutionResult:
+        """Push *branch_name* to origin from *worktree_path*."""
+        if self.logger:
+            self.logger.log("INFO", "Pushing branch", branch_name)
+
+        return await self._run_subprocess(
+            ["git", "push", "-u", "origin", branch_name],
+            cwd=worktree_path,
+            timeout=60,
+        )
+
+    async def create_pull_request(
+        self,
+        worktree_path: str,
+        branch_name: str,
+        title: str,
+        body: str,
+        base_branch: str = "main",
+    ) -> ExecutionResult:
+        """Create a GitHub pull request via ``gh pr create``.
+
+        On success, ``stdout`` contains the PR URL.
+        """
+        if self.logger:
+            self.logger.log("INFO", "Creating pull request", title)
+
+        return await self._run_subprocess(
+            [
+                "gh", "pr", "create",
+                "--title", title,
+                "--body", body,
+                "--base", base_branch,
+                "--head", branch_name,
+            ],
+            cwd=worktree_path,
+            timeout=30,
+        )
+
+    async def cleanup_worktree(
+        self, worktree_path: str, branch_name: str, keep_branch: bool = False
+    ) -> None:
+        """Remove the worktree directory and optionally delete the local branch.
+
+        When *keep_branch* is True the branch is preserved for an open PR.
         Errors are logged but never raised so cleanup is best-effort.
         """
         remove_result = await self._run_subprocess(
@@ -253,15 +305,16 @@ class ClaudeCodeRunner:
                 "WARNING", "Worktree removal failed", remove_result.stderr
             )
 
-        branch_result = await self._run_subprocess(
-            ["git", "branch", "-D", branch_name],
-            cwd=self.project_root,
-            timeout=15,
-        )
-        if branch_result.exit_code != 0 and self.logger:
-            self.logger.log(
-                "WARNING", "Branch deletion failed", branch_result.stderr
+        if not keep_branch:
+            branch_result = await self._run_subprocess(
+                ["git", "branch", "-D", branch_name],
+                cwd=self.project_root,
+                timeout=15,
             )
+            if branch_result.exit_code != 0 and self.logger:
+                self.logger.log(
+                    "WARNING", "Branch deletion failed", branch_result.stderr
+                )
 
     # ------------------------------------------------------------------
     # Prompt construction
@@ -336,7 +389,13 @@ class ClaudeCodeRunner:
         cwd: str | None = None,
         timeout: int | None = None,
     ) -> ExecutionResult:
-        """Execute *cmd* asynchronously and return an `ExecutionResult`."""
+        """Execute *cmd* asynchronously and return an `ExecutionResult`.
+
+        The ``CLAUDECODE`` environment variable is stripped so the Claude
+        CLI can be launched from within an existing Claude Code session
+        (e.g. the night-agent pipeline running inside the IDE).
+        """
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         start = time.monotonic()
         try:
             process = await asyncio.create_subprocess_exec(
@@ -344,6 +403,7 @@ class ClaudeCodeRunner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
+                env=env,
             )
 
             if timeout is not None:

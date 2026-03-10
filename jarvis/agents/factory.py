@@ -438,6 +438,7 @@ class AgentFactory:
             project_root=project_root,
             todo_service=todo_service,
             logger=self.logger,
+            use_prs=self.config.self_improvement_use_prs,
         )
         network.register_night_agent(agent)
         return {"self_improvement_agent": agent}

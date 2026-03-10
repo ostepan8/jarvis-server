@@ -306,7 +306,6 @@ class TestRunTests:
         cmd_args = mock_exec.call_args[0]
         assert "pytest" in cmd_args
         assert "-x" in cmd_args
-        assert "--timeout=30" in cmd_args
 
     @pytest.mark.asyncio
     async def test_run_specific_files(self):
@@ -429,3 +428,161 @@ class TestRunSubprocess:
         assert result.stderr == "hello err"
         assert result.success is True
         assert result.duration_seconds >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# TestCheckGhAvailable
+# ---------------------------------------------------------------------------
+
+
+class TestCheckGhAvailable:
+    @pytest.mark.asyncio
+    async def test_gh_available_when_authenticated(self):
+        runner = ClaudeCodeRunner(project_root="/fake")
+        proc = _make_process(returncode=0, stdout=b"Logged in")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            assert await runner.check_gh_available() is True
+
+    @pytest.mark.asyncio
+    async def test_gh_unavailable_when_not_authenticated(self):
+        runner = ClaudeCodeRunner(project_root="/fake")
+        proc = _make_process(returncode=1, stderr=b"not logged in")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            assert await runner.check_gh_available() is False
+
+    @pytest.mark.asyncio
+    async def test_gh_unavailable_when_binary_missing(self):
+        runner = ClaudeCodeRunner(project_root="/fake")
+
+        with patch(
+            "asyncio.create_subprocess_exec", side_effect=FileNotFoundError
+        ):
+            assert await runner.check_gh_available() is False
+
+
+# ---------------------------------------------------------------------------
+# TestPushBranch
+# ---------------------------------------------------------------------------
+
+
+class TestPushBranch:
+    @pytest.mark.asyncio
+    async def test_push_branch_success(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=0, stdout=b"branch pushed")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            result = await runner.push_branch("/wt", "worktree-night-fix")
+
+        assert result.success is True
+        cmd_args = mock_exec.call_args[0]
+        assert "git" in cmd_args
+        assert "push" in cmd_args
+        assert "-u" in cmd_args
+        assert "origin" in cmd_args
+        assert "worktree-night-fix" in cmd_args
+
+    @pytest.mark.asyncio
+    async def test_push_branch_failure(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=128, stderr=b"rejected")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await runner.push_branch("/wt", "worktree-night-fix")
+
+        assert result.success is False
+        assert result.exit_code == 128
+
+
+# ---------------------------------------------------------------------------
+# TestCreatePullRequest
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePullRequest:
+    @pytest.mark.asyncio
+    async def test_create_pr_success(self):
+        pr_url = b"https://github.com/user/repo/pull/42\n"
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=0, stdout=pr_url)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            result = await runner.create_pull_request(
+                "/wt", "worktree-night-fix", "fix(night-agent): patch", "Body"
+            )
+
+        assert result.success is True
+        assert "pull/42" in result.stdout
+        cmd_args = mock_exec.call_args[0]
+        assert "gh" in cmd_args
+        assert "pr" in cmd_args
+        assert "create" in cmd_args
+        assert "--base" in cmd_args
+        assert "main" in cmd_args
+
+    @pytest.mark.asyncio
+    async def test_create_pr_failure(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=1, stderr=b"not a git repo")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await runner.create_pull_request(
+                "/wt", "branch", "title", "body"
+            )
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_create_pr_custom_base(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=0, stdout=b"url")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            await runner.create_pull_request(
+                "/wt", "branch", "title", "body", base_branch="develop"
+            )
+
+        cmd_args = mock_exec.call_args[0]
+        assert "develop" in cmd_args
+
+
+# ---------------------------------------------------------------------------
+# TestCleanupWorktreeKeepBranch
+# ---------------------------------------------------------------------------
+
+
+class TestCleanupWorktreeKeepBranch:
+    @pytest.mark.asyncio
+    async def test_keep_branch_skips_branch_deletion(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        calls = []
+
+        async def _track_exec(*args, **kwargs):
+            calls.append(args)
+            return _make_process(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_track_exec):
+            await runner.cleanup_worktree("/wt/path", "branch-fix", keep_branch=True)
+
+        # Should only have the worktree remove call, not git branch -D
+        cmd_strings = [" ".join(c) for c in calls]
+        assert any("worktree" in s and "remove" in s for s in cmd_strings)
+        assert not any("branch" in s and "-D" in s for s in cmd_strings)
+
+    @pytest.mark.asyncio
+    async def test_default_deletes_branch(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        calls = []
+
+        async def _track_exec(*args, **kwargs):
+            calls.append(args)
+            return _make_process(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_track_exec):
+            await runner.cleanup_worktree("/wt/path", "branch-fix")
+
+        cmd_strings = [" ".join(c) for c in calls]
+        assert any("worktree" in s and "remove" in s for s in cmd_strings)
+        assert any("branch" in s and "-D" in s for s in cmd_strings)

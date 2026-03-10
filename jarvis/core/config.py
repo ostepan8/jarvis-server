@@ -18,7 +18,7 @@ class FeatureFlags:
     enable_todo: bool = True
     enable_coordinator: bool = True
     enable_health: bool = True
-    enable_self_improvement: bool = False
+    enable_self_improvement: bool = True
     enable_feedback: bool = True
 
 
@@ -42,6 +42,7 @@ class JarvisConfig:
     memory_auto_promote: bool = True
     memory_auto_consolidate: bool = False
     feedback_dir: Optional[str] = None  # Feedback corrections directory (~/.jarvis/feedback)
+    self_improvement_use_prs: bool = True  # Push branch + create PR instead of merging to main
 
     # Retry configuration for external service calls
     max_retries: int = 3

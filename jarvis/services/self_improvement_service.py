@@ -59,6 +59,8 @@ class ImprovementTaskResult:
     error_message: str = ""
     duration_seconds: float = 0.0
     todo_id: Optional[str] = None
+    pr_url: Optional[str] = None
+    branch_name: Optional[str] = None
 
 
 @dataclass
@@ -99,6 +101,8 @@ class NightReport:
                     "error_message": r.error_message,
                     "duration_seconds": r.duration_seconds,
                     "todo_id": r.todo_id,
+                    "pr_url": r.pr_url,
+                    "branch_name": r.branch_name,
                 }
                 for r in self.results
             ],
@@ -119,6 +123,8 @@ class NightReport:
             for r in self.results:
                 status = "OK" if r.success else "FAIL"
                 lines.append(f"  [{status}] {r.task_title} ({r.discovery_type})")
+                if r.pr_url:
+                    lines.append(f"         PR: {r.pr_url}")
                 if r.error_message:
                     lines.append(f"         Error: {r.error_message}")
         return "\n".join(lines)
@@ -147,10 +153,12 @@ class SelfImprovementService:
         todo_service: Optional[TodoService] = None,
         log_db_path: str = "jarvis_logs.db",
         logger: Optional[JarvisLogger] = None,
+        use_prs: bool = True,
     ) -> None:
         self._project_root = project_root
         self._logger = logger or JarvisLogger()
         self._todo_service = todo_service
+        self._use_prs = use_prs
         self._analyzer = SystemAnalyzer(project_root, log_db_path, todo_service, logger)
         self._runner = ClaudeCodeRunner(project_root, logger=logger)
 
@@ -289,20 +297,19 @@ class SelfImprovementService:
     async def _execute_task(self, discovery: Discovery) -> ImprovementTaskResult:
         """Execute a single improvement task in an isolated worktree.
 
-        Creates a worktree, runs the fix, tests, merges on success,
-        and always cleans up the worktree.
+        Creates a worktree, runs the fix, tests, then either pushes a PR
+        (when ``use_prs`` is enabled) or merges directly to main.
         """
         task_start = time.monotonic()
         worktree_path: Optional[str] = None
         branch_name: Optional[str] = None
+        keep_branch = False
 
         try:
-            # Create an isolated worktree — returns (path, branch)
             worktree_path, branch_name = await self._runner.create_worktree(
                 discovery.title
             )
 
-            # Execute the fix inside the worktree
             exec_result = await self._runner.execute_task(
                 discovery.description,
                 discovery.relevant_files,
@@ -320,9 +327,9 @@ class SelfImprovementService:
                     error_message=exec_result.stderr or "Execution failed",
                     duration_seconds=time.monotonic() - task_start,
                     todo_id=discovery.todo_id,
+                    branch_name=branch_name,
                 )
 
-            # Run tests in the worktree
             test_result = await self._runner.run_tests(worktree_path)
 
             if not test_result.success:
@@ -336,11 +343,16 @@ class SelfImprovementService:
                     error_message=test_result.stderr or "Tests failed",
                     duration_seconds=time.monotonic() - task_start,
                     todo_id=discovery.todo_id,
+                    branch_name=branch_name,
                 )
 
-            # Merge to main
-            merged = await self._runner.merge_to_main(worktree_path, branch_name)
+            # --- PR flow vs legacy merge ---
+            if self._use_prs:
+                return await self._finish_with_pr(
+                    discovery, exec_result, worktree_path, branch_name, task_start
+                )
 
+            merged = await self._runner.merge_to_main(worktree_path, branch_name)
             return ImprovementTaskResult(
                 task_title=discovery.title,
                 discovery_type=str(discovery.discovery_type),
@@ -351,6 +363,7 @@ class SelfImprovementService:
                 error_message="" if merged else "Merge failed",
                 duration_seconds=time.monotonic() - task_start,
                 todo_id=discovery.todo_id,
+                branch_name=branch_name,
             )
 
         except Exception as exc:
@@ -364,17 +377,127 @@ class SelfImprovementService:
                 error_message=str(exc),
                 duration_seconds=time.monotonic() - task_start,
                 todo_id=discovery.todo_id,
+                branch_name=branch_name,
             )
         finally:
+            # _finish_with_pr sets this when the branch has been pushed
+            keep_branch = getattr(self, "_keep_branch_hint", False)
+            self._keep_branch_hint = False
             if worktree_path and branch_name:
                 try:
-                    await self._runner.cleanup_worktree(worktree_path, branch_name)
+                    await self._runner.cleanup_worktree(
+                        worktree_path, branch_name, keep_branch=keep_branch
+                    )
                 except Exception as cleanup_err:
                     self._logger.log(
                         "WARNING",
                         "Worktree cleanup failed",
                         f"{worktree_path}: {cleanup_err}",
                     )
+
+    async def _finish_with_pr(
+        self,
+        discovery: Discovery,
+        exec_result: Any,
+        worktree_path: str,
+        branch_name: str,
+        task_start: float,
+    ) -> ImprovementTaskResult:
+        """Push the branch and create a pull request.
+
+        Sets ``keep_branch`` on the enclosing ``_execute_task`` frame
+        so the finally block preserves the branch for the open PR.
+        """
+        push_result = await self._runner.push_branch(worktree_path, branch_name)
+
+        if not push_result.success:
+            return ImprovementTaskResult(
+                task_title=discovery.title,
+                discovery_type=str(discovery.discovery_type),
+                success=False,
+                files_changed=exec_result.files_changed,
+                test_passed=True,
+                merged=False,
+                error_message=push_result.stderr or "Push failed",
+                duration_seconds=time.monotonic() - task_start,
+                todo_id=discovery.todo_id,
+                branch_name=branch_name,
+            )
+
+        title = self._build_pr_title(discovery)
+        body = self._build_pr_body(
+            discovery, exec_result.files_changed, test_passed=True
+        )
+        pr_result = await self._runner.create_pull_request(
+            worktree_path, branch_name, title, body
+        )
+
+        pr_url = pr_result.stdout.strip() if pr_result.success else None
+
+        # Whether or not the PR was created, the branch is on the remote
+        # so we keep it locally too.
+        # Mutate the keep_branch flag in the caller's finally block
+        # by storing it on the instance temporarily.
+        self._keep_branch_hint = True
+
+        return ImprovementTaskResult(
+            task_title=discovery.title,
+            discovery_type=str(discovery.discovery_type),
+            success=True,
+            files_changed=exec_result.files_changed,
+            test_passed=True,
+            merged=False,
+            error_message="" if pr_url else "PR creation failed (branch pushed)",
+            duration_seconds=time.monotonic() - task_start,
+            todo_id=discovery.todo_id,
+            pr_url=pr_url,
+            branch_name=branch_name,
+        )
+
+    # ------------------------------------------------------------------
+    # PR helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_pr_title(discovery: Discovery) -> str:
+        """Format a commit-style PR title, truncated to 72 chars."""
+        prefix = "fix(night-agent): "
+        max_title_len = 72 - len(prefix)
+        title = discovery.title[:max_title_len]
+        return f"{prefix}{title}"
+
+    @staticmethod
+    def _build_pr_body(
+        discovery: Discovery, files_changed: int, test_passed: bool
+    ) -> str:
+        """Build structured markdown for the PR description."""
+        files_section = ""
+        if discovery.relevant_files:
+            files_section = "\n".join(
+                f"- `{f}`" for f in discovery.relevant_files
+            )
+        else:
+            files_section = "_No specific files identified._"
+
+        test_status = "All passing" if test_passed else "Some failures"
+
+        return (
+            "## Night Agent Auto-Fix\n"
+            "\n"
+            f"**Discovery type:** {discovery.discovery_type}\n"
+            f"**Priority:** {discovery.priority}\n"
+            f"**Files changed:** {files_changed}\n"
+            f"**Tests:** {test_status}\n"
+            "\n"
+            "### Description\n"
+            f"{discovery.description}\n"
+            "\n"
+            "### Relevant files\n"
+            f"{files_section}\n"
+            "\n"
+            "---\n"
+            "_Automatically generated by the Jarvis self-improvement agent._\n"
+        )
 
     # ------------------------------------------------------------------
     # Todo integration
@@ -436,6 +559,8 @@ class SelfImprovementService:
                 error_message=r.get("error_message", ""),
                 duration_seconds=r.get("duration_seconds", 0.0),
                 todo_id=r.get("todo_id"),
+                pr_url=r.get("pr_url"),
+                branch_name=r.get("branch_name"),
             )
             for r in data.get("results", [])
         ]
