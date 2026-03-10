@@ -131,18 +131,88 @@ CONNECTION_KEYS = [
 
 
 @dataclass
+class ModelPreset:
+    """A named AI model configuration preset."""
+
+    label: str
+    provider: str  # "openai" | "anthropic"
+    strong_model: str
+    weak_model: str
+
+    def to_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "provider": self.provider,
+            "strong_model": self.strong_model,
+            "weak_model": self.weak_model,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ModelPreset:
+        return cls(
+            label=data.get("label", "Unnamed"),
+            provider=data.get("provider", "openai"),
+            strong_model=data.get("strong_model", "gpt-4o"),
+            weak_model=data.get("weak_model", "gpt-4o-mini"),
+        )
+
+
+BUILTIN_PRESETS: dict[str, ModelPreset] = {
+    "balanced": ModelPreset(
+        label="Balanced",
+        provider="openai",
+        strong_model="gpt-4o",
+        weak_model="gpt-4o-mini",
+    ),
+    "full_power": ModelPreset(
+        label="Full Power",
+        provider="openai",
+        strong_model="gpt-4o",
+        weak_model="gpt-4o",
+    ),
+    "economy": ModelPreset(
+        label="Economy",
+        provider="openai",
+        strong_model="gpt-4o-mini",
+        weak_model="gpt-4o-mini",
+    ),
+    "claude": ModelPreset(
+        label="Claude",
+        provider="anthropic",
+        strong_model="claude-sonnet-4-6",
+        weak_model="claude-haiku-4-5-20251001",
+    ),
+    "claude_haiku": ModelPreset(
+        label="Claude Haiku",
+        provider="anthropic",
+        strong_model="claude-haiku-4-5-20251001",
+        weak_model="claude-haiku-4-5-20251001",
+    ),
+}
+
+
+AI_SETTINGS_KEYS = ["ai_provider", "strong_model", "weak_model"]
+
+
+@dataclass
 class ConfigProfile:
     """A named configuration profile (e.g. 'Boston House')."""
 
     label: str
     feature_flags: dict = field(default_factory=dict)
     connections: dict = field(default_factory=dict)
+    ai_settings: dict = field(default_factory=dict)
+    model_presets: dict = field(default_factory=dict)
+    active_preset: str | None = None
 
     def to_dict(self) -> dict:
         return {
             "label": self.label,
             "feature_flags": dict(self.feature_flags),
             "connections": dict(self.connections),
+            "ai_settings": dict(self.ai_settings),
+            "model_presets": dict(self.model_presets),
+            "active_preset": self.active_preset,
         }
 
     @classmethod
@@ -151,6 +221,9 @@ class ConfigProfile:
             label=data.get("label", "Unnamed"),
             feature_flags=data.get("feature_flags", {}),
             connections=data.get("connections", {}),
+            ai_settings=data.get("ai_settings", {}),
+            model_presets=data.get("model_presets", {}),
+            active_preset=data.get("active_preset"),
         )
 
     @classmethod
@@ -158,7 +231,12 @@ class ConfigProfile:
         """Snapshot current JarvisConfig into a profile."""
         flags = {name: getattr(config.flags, name) for name in FLAG_NAMES}
         conns = {key: getattr(config, key, None) for key in CONNECTION_KEYS}
-        return cls(label=label, feature_flags=flags, connections=conns)
+        ai = {
+            "ai_provider": config.ai_provider,
+            "strong_model": config.strong_model,
+            "weak_model": config.weak_model,
+        }
+        return cls(label=label, feature_flags=flags, connections=conns, ai_settings=ai)
 
 
 def save_config(active_profile: str, profiles: dict[str, ConfigProfile]) -> None:
@@ -195,3 +273,11 @@ def apply_profile(config: JarvisConfig, profile: ConfigProfile) -> None:
     for conn_key, value in profile.connections.items():
         if hasattr(config, conn_key) and value is not None:
             setattr(config, conn_key, value)
+    # Apply AI model settings
+    ai = profile.ai_settings
+    if ai.get("ai_provider"):
+        config.ai_provider = ai["ai_provider"]
+    if ai.get("strong_model"):
+        config.strong_model = ai["strong_model"]
+    if ai.get("weak_model"):
+        config.weak_model = ai["weak_model"]

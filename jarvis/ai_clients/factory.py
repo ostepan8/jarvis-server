@@ -27,7 +27,12 @@ class AIClientFactory:
                 kwargs["weak_model"] = weak_model
             return OpenAIClient(**kwargs)
         if provider == "anthropic":
-            return AnthropicClient(api_key=api_key)
+            a_kwargs: dict = {"api_key": api_key}
+            if strong_model:
+                a_kwargs["strong_model"] = strong_model
+            if weak_model:
+                a_kwargs["weak_model"] = weak_model
+            return AnthropicClient(**a_kwargs)
         if provider in {"dummy", "mock"}:
             return DummyAIClient()
         raise ValueError(f"Unsupported AI provider: {provider}")
