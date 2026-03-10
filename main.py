@@ -16,6 +16,7 @@ from jarvis.cli.commands_dashboard import (
     show_command_detail,
     show_commands_all,
 )
+from jarvis.cli.models_dashboard import run_models_dashboard
 from jarvis.cli.modes import show_modes_dashboard, enter_mode_by_slug
 
 from jarvis.io import (
@@ -134,6 +135,9 @@ async def demo(
             if cmd == "/config":
                 await run_config_dashboard(jarvis)
                 continue
+            if cmd == "/models":
+                await run_models_dashboard(jarvis)
+                continue
             if cmd == "/agents":
                 await show_agents_detail(jarvis)
                 continue
@@ -155,6 +159,7 @@ async def demo(
                 print("  /commands all   - Show every trigger phrase for every command")
                 print("  /commands <name> - Show details for a specific command")
                 print("  /config         - Interactive config dashboard")
+                print("  /models         - AI model & preset management")
                 print("  /agents         - View active agents")
                 print("  /modes          - SSH into a device (direct control)")
                 print("  /help           - Show this help")

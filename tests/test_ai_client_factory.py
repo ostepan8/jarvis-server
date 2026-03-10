@@ -128,8 +128,8 @@ class TestAIClientFactory:
         )
         assert isinstance(client, DummyAIClient)
 
-    def test_anthropic_custom_models_not_passed(self):
-        """Test factory does not pass custom models to AnthropicClient (not supported by factory)."""
+    def test_create_anthropic_with_custom_models(self):
+        """Test factory forwards custom models to AnthropicClient."""
         client = AIClientFactory.create(
             "anthropic",
             api_key="test-key",
@@ -137,9 +137,19 @@ class TestAIClientFactory:
             weak_model="claude-3-haiku-custom",
         )
         assert isinstance(client, AnthropicClient)
-        # AnthropicClient uses its own defaults since factory doesn't forward models
-        assert client.strong_model == "claude-3-opus-20240229"
-        assert client.weak_model == "claude-3-haiku-20240307"
+        assert client.strong_model == "claude-3-opus-custom"
+        assert client.weak_model == "claude-3-haiku-custom"
+
+    def test_create_anthropic_with_strong_model_only(self):
+        """Test factory passes only strong_model to AnthropicClient."""
+        client = AIClientFactory.create(
+            "anthropic",
+            api_key="test-key",
+            strong_model="claude-sonnet-4-6",
+        )
+        assert isinstance(client, AnthropicClient)
+        assert client.strong_model == "claude-sonnet-4-6"
+        assert client.weak_model == "claude-3-haiku-20240307"  # default
 
 
 if __name__ == "__main__":
