@@ -24,15 +24,19 @@ class OutputHandler:
 
 
 class ConsoleInput(InputHandler):
+    MAX_HISTORY_LINES = 1000
+
     def __init__(self):
         self.history_file = None
         if READLINE_AVAILABLE:
             try:
+                readline.set_history_length(self.MAX_HISTORY_LINES)
                 history_path = os.path.expanduser("~/.jarvis_history")
                 if os.path.exists(history_path):
-                    readline.read_history_file(history_path)
+                    # Skip loading if the file is unreasonably large
+                    if os.path.getsize(history_path) < 1_000_000:
+                        readline.read_history_file(history_path)
                 self.history_file = history_path
-                # Save history once on exit, not on every input
                 atexit.register(self._save_history)
             except Exception:
                 pass

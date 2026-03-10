@@ -228,6 +228,16 @@ class JarvisSystem:
         )
         return runtime
 
+    def _setup_protocol_system(
+        self,
+        load_protocol_directory: bool = False,
+        definition_dir: Path | None = None,
+    ) -> None:
+        """Initialize the protocol runtime and assign it to self."""
+        self.protocol_runtime = self._build_protocol_runtime(
+            load_protocol_directory, definition_dir
+        )
+
     async def _start_network(self) -> None:
         await self.network.start()
 
