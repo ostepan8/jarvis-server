@@ -212,7 +212,7 @@ class TestChatAgentLeadPrompt:
         chat = ChatAgent(ai_client)
         brief = make_brief()
         prompt = chat._build_lead_system_prompt(brief)
-        assert "friendly" in prompt.lower() or "conversational" in prompt.lower()
+        assert "jarvis" in prompt.lower() or "dry-witted" in prompt.lower()
 
     def test_includes_user_request(self):
         ai_client = MockAIClient()

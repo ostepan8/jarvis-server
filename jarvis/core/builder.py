@@ -22,9 +22,13 @@ class BuilderOptions:
     with_chat: bool = True
     with_search: bool = True
     with_protocols: bool = True
+    with_weather: bool = True
     with_lights: bool = True
     with_roku: bool = True
     with_software: bool = False  # was commented out in your code
+    with_health: bool = True
+    with_canvas: bool = True
+    with_todo: bool = True
     with_night_agents: bool = True
     with_self_improvement: bool = True
 
@@ -70,6 +74,10 @@ class JarvisBuilder:
         self._opts.with_search = enabled
         return self
 
+    def weather(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_weather = enabled
+        return self
+
     def lights(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_lights = enabled
         return self
@@ -78,6 +86,18 @@ class JarvisBuilder:
         self._opts.with_roku = enabled
         return self
 
+
+    def health(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_health = enabled
+        return self
+
+    def canvas(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_canvas = enabled
+        return self
+
+    def todo(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_todo = enabled
+        return self
 
     def software_agent(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_software = enabled
@@ -178,6 +198,13 @@ class JarvisBuilder:
             refs.update(factory._build_lights(jarvis.network, ai_client))
         if self._opts.with_roku and jarvis.config.flags.enable_roku:
             refs.update(factory._build_roku(jarvis.network, ai_client))
+        if self._opts.with_health and jarvis.config.flags.enable_health:
+            refs.update(factory._build_health(jarvis.network))
+        if self._opts.with_canvas and jarvis.config.flags.enable_canvas:
+            refs.update(factory._build_canvas(jarvis.network, ai_client))
+        if self._opts.with_todo and jarvis.config.flags.enable_todo:
+            refs.update(factory._build_todo(jarvis.network, ai_client))
+
         if self._opts.with_software:
             # Placeholder for future implementation
             pass

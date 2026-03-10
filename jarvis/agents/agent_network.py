@@ -261,12 +261,6 @@ class AgentNetwork:
         try:
             await target_queue.put(message)
             self._metrics["queued_messages"] += 1
-            if message.message_type == "capability_response":
-                self.logger.log(
-                    "INFO",
-                    f"Queued capability_response message",
-                    f"request_id={message.request_id}, to_agent={message.to_agent}, priority={priority.name}, queue_size={target_queue.qsize()}",
-                )
         except asyncio.QueueFull:
             self.logger.log(
                 "WARNING",
@@ -374,32 +368,15 @@ class AgentNetwork:
                 if message is None:
                     continue
 
-                if message.message_type == "capability_response":
-                    self.logger.log(
-                        "INFO",
-                        f"[WORKER] Processing capability_response message (worker {worker_id})",
-                        f"{message.from_agent} -> {message.to_agent or 'ALL'}: request_id={message.request_id}",
-                    )
-                else:
-                    self.logger.log(
-                        "DEBUG",
-                        f"Processing message (worker {worker_id})",
-                        f"{message.from_agent} -> {message.to_agent or 'ALL'}: {message.message_type}",
-                    )
+                self.logger.log(
+                    "DEBUG",
+                    f"Processing message (worker {worker_id})",
+                    f"{message.from_agent} -> {message.to_agent or 'ALL'}: {message.message_type}",
+                )
 
                 # 1) If it's a response to a capability_request, fulfill the Future
                 if message.message_type == "capability_response":
-                    self.logger.log(
-                        "INFO",
-                        f"[WORKER] About to call _handle_capability_response",
-                        f"request_id={message.request_id}, worker={worker_id}",
-                    )
                     await self._handle_capability_response(message)
-                    self.logger.log(
-                        "INFO",
-                        f"[WORKER] Completed _handle_capability_response",
-                        f"request_id={message.request_id}, worker={worker_id}",
-                    )
                     continue
 
                 # 2) If it's an error reply, treat it as a response too
@@ -467,53 +444,12 @@ class AgentNetwork:
 
     async def _handle_capability_response(self, message: Message) -> None:
         """Handle capability response message - fulfill future and optionally deliver to agent."""
-        self.logger.log(
-            "INFO",
-            f"Handling capability_response for request {message.request_id}",
-            f"from={message.from_agent}, to={message.to_agent}, content_keys={list(message.content.keys()) if isinstance(message.content, dict) else 'N/A'}",
-        )
-
         fut_data = self._response_futures.get(message.request_id)
-        self.logger.log(
-            "INFO",
-            f"[FUTURE_LOOKUP] Looking up future for request {message.request_id}",
-            f"found={fut_data is not None}, available_futures={list(self._response_futures.keys())[:10]}",
-        )
 
         if fut_data:
             fut, _ = fut_data
-            fut_id = id(fut)
-            self.logger.log(
-                "INFO",
-                f"[FUTURE_STATE] Future state before set_result",
-                f"request_id={message.request_id}, done={fut.done()}, cancelled={fut.cancelled()}, fut_id={fut_id}",
-            )
             if not fut.done():
-                self.logger.log(
-                    "INFO",
-                    f"[FUTURE_FULFILL] Fulfilling future for request {message.request_id}",
-                    f"from={message.from_agent}, to={message.to_agent}, content_type={type(message.content).__name__}, fut_id={fut_id}",
-                )
-                # Set the result directly - we're already in the event loop
                 fut.set_result(message.content)
-                self.logger.log(
-                    "INFO",
-                    f"[FUTURE_SET] set_result() called",
-                    f"request_id={message.request_id}, done_after_set={fut.done()}, cancelled={fut.cancelled()}, fut_id={fut_id}",
-                )
-                # Yield to event loop to allow waiting coroutine to resume
-                await asyncio.sleep(0)
-                self.logger.log(
-                    "INFO",
-                    f"[FUTURE_YIELDED] Yielded to event loop after set_result",
-                    f"request_id={message.request_id}, done={fut.done()}, cancelled={fut.cancelled()}, fut_id={fut_id}",
-                )
-                # Don't clean up here - let wait_for_response handle it
-                self.logger.log(
-                    "INFO",
-                    f"[FUTURE_FULFILLED] Future fulfilled for request {message.request_id}",
-                    f"done={fut.done()}, cancelled={fut.cancelled()}, fut_id={fut_id}",
-                )
             else:
                 self.logger.log(
                     "DEBUG",
@@ -522,13 +458,12 @@ class AgentNetwork:
                 )
         else:
             self.logger.log(
-                "WARNING",
+                "DEBUG",
                 f"No future found for capability_response",
-                f"request_id={message.request_id}, from={message.from_agent}, to={message.to_agent}, available_futures={list(self._response_futures.keys())[:5]}",
+                f"request_id={message.request_id}, from={message.from_agent}",
             )
 
-        # Only deliver to agent if it's not a direct response (to_agent indicates forwarding)
-        # Most responses are handled via future fulfillment above
+        # Deliver to agent if it's a forwarded response (not a direct future fulfillment)
         if message.to_agent and message.to_agent in self.agents:
             asyncio.create_task(self.agents[message.to_agent].receive_message(message))
 
@@ -637,9 +572,8 @@ class AgentNetwork:
         )
         await self.send_message(msg)
 
-        # Get providers and log them
         self.logger.log(
-            "INFO",
+            "DEBUG",
             f"Capability request broadcast",
             f"Capability: {capability}, Potential providers: {len(providers)}",
         )
@@ -658,125 +592,34 @@ class AgentNetwork:
         """
         Await and return the result for a previously requested capability_response.
         """
-        self.logger.log(
-            "INFO",
-            f"wait_for_response called",
-            f"request_id={request_id}, timeout={timeout}, available_futures={list(self._response_futures.keys())[:5]}",
-        )
         fut_data = self._response_futures.get(request_id)
         if not fut_data:
-            self.logger.log(
-                "ERROR",
-                f"No future found in wait_for_response",
-                f"request_id={request_id}, available={list(self._response_futures.keys())[:10]}",
-            )
             raise KeyError(f"No pending request with id {request_id}")
         fut, _ = fut_data
-        self.logger.log(
-            "INFO",
-            f"[WAIT_START] Waiting for future to complete",
-            f"request_id={request_id}, future_done={fut.done()}, future_cancelled={fut.cancelled()}, future_id={id(fut)}",
-        )
+
         try:
-            # Poll loop: check if done, if not yield and check again
-            # This ensures we catch the future even if it's fulfilled in a different task
             start_time = time.time()
-            poll_count = 0
-            last_log_time = start_time
-
-            fut_id = id(fut)
-            # Try to await the future directly with a short timeout, then check
-            # This is more efficient than polling
             check_interval = 0.1  # Check every 100ms
-            while not fut.done():
-                poll_count += 1
-                elapsed = time.time() - start_time
 
-                # Check timeout first
+            while not fut.done():
+                elapsed = time.time() - start_time
                 if timeout and elapsed > timeout:
-                    self.logger.log(
-                        "ERROR",
-                        f"[POLL_TIMEOUT] Timeout in polling loop",
-                        f"request_id={request_id}, elapsed={elapsed:.2f}s, timeout={timeout}, poll_count={poll_count}, fut_done={fut.done()}, fut_cancelled={fut.cancelled()}, fut_id={fut_id}",
-                    )
                     raise asyncio.TimeoutError(f"Timeout after {timeout}s")
 
-                # Log every 0.5 seconds to track progress
-                if time.time() - last_log_time >= 0.5:
-                    # Re-check future from dict to ensure we have the right one
-                    fut_data_check = self._response_futures.get(request_id)
-                    if fut_data_check:
-                        fut_check, _ = fut_data_check
-                        fut_id_check = id(fut_check)
-                        if fut_id_check != fut_id:
-                            self.logger.log(
-                                "WARNING",
-                                f"[POLL_LOOP] Future object changed!",
-                                f"request_id={request_id}, old_fut_id={fut_id}, new_fut_id={fut_id_check}",
-                            )
-                            fut = fut_check
-                            fut_id = fut_id_check
-
-                    # Double-check future state right before logging
-                    done_state = fut.done()
-                    cancelled_state = fut.cancelled()
-                    current_fut_id = id(fut)
-                    self.logger.log(
-                        "INFO",
-                        f"[POLL_LOOP] Still waiting for future",
-                        f"request_id={request_id}, poll_count={poll_count}, elapsed={elapsed:.2f}s, fut_done={done_state}, fut_cancelled={cancelled_state}, fut_id={current_fut_id}",
-                    )
-                    last_log_time = time.time()
-
-                # Try to await with a short timeout - this will raise TimeoutError if not done
-                # But we catch it and continue polling
                 try:
                     await asyncio.wait_for(asyncio.shield(fut), timeout=check_interval)
-                    # If we get here, the future is done!
                     break
                 except asyncio.TimeoutError:
-                    # Future not done yet, continue polling
                     continue
 
-            # Future is done - get result
-            elapsed = time.time() - start_time
-            self.logger.log(
-                "INFO",
-                f"[POLL_DONE] Future detected as done (polling)",
-                f"request_id={request_id}, elapsed={elapsed:.2f}s, poll_count={poll_count}, fut_done={fut.done()}, fut_cancelled={fut.cancelled()}",
-            )
-
-            self.logger.log(
-                "INFO",
-                f"[GET_RESULT] Calling fut.result()",
-                f"request_id={request_id}, fut_done={fut.done()}",
-            )
             result = fut.result()
-            self.logger.log(
-                "INFO",
-                f"[RESULT_GOT] Got result from future",
-                f"request_id={request_id}, result_type={type(result).__name__}, result_keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}",
-            )
-
-            # Clean up
-            self.logger.log(
-                "INFO",
-                f"[CLEANUP] Cleaning up future from _response_futures",
-                f"request_id={request_id}",
-            )
             self._response_futures.pop(request_id, None)
-
-            self.logger.log(
-                "INFO",
-                f"[RETURN] Returning result from wait_for_response",
-                f"request_id={request_id}, result_type={type(result).__name__}",
-            )
             return result
-        except asyncio.TimeoutError as e:
+        except asyncio.TimeoutError:
             self.logger.log(
                 "ERROR",
                 f"Timeout waiting for response",
-                f"request_id={request_id}, timeout={timeout}, future_done={fut.done()}",
+                f"request_id={request_id}, timeout={timeout}",
             )
             self._response_futures.pop(request_id, None)
             raise

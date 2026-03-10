@@ -27,6 +27,9 @@ class TestBuilderOptions:
         assert opts.with_lights is True
         assert opts.with_roku is True
         assert opts.with_software is False  # Default off
+        assert opts.with_health is True
+        assert opts.with_canvas is True
+        assert opts.with_todo is True
         assert opts.with_night_agents is True
 
     def test_override_values(self):
@@ -47,11 +50,14 @@ class TestBuilderOptions:
             with_calendar=False,
             with_chat=False,
             with_search=False,
-
+            with_weather=False,
             with_protocols=False,
             with_lights=False,
             with_roku=False,
             with_software=False,
+            with_health=False,
+            with_canvas=False,
+            with_todo=False,
             with_night_agents=False,
             with_self_improvement=False,
         )

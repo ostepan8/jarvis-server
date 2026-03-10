@@ -54,14 +54,16 @@ class SearchAgent(NetworkAgent):
         return response_text
 
     async def _synthesize_response(
-        self, query: str, results: List[Dict[str, Any]]
+        self, query: str, results: List[Dict[str, Any]], total_results: int = 0
     ) -> str:
         """Use AI client to synthesize a natural answer from search results.
 
         Falls back to _format_raw_results if AI client is unavailable or fails.
         """
+        if total_results == 0:
+            total_results = len(results)
         if not self.ai_client or not results:
-            return self._format_raw_results(results, len(results))
+            return self._format_raw_results(results, total_results)
 
         try:
             context_parts = []
@@ -102,7 +104,7 @@ class SearchAgent(NetworkAgent):
                 str(exc),
             )
 
-        return self._format_raw_results(results, len(results))
+        return self._format_raw_results(results, total_results)
 
     async def _handle_capability_request(self, message: Message) -> None:
         capability = message.content.get("capability")
@@ -145,7 +147,7 @@ class SearchAgent(NetworkAgent):
             total_results = search_results.get("total_results", 0)
 
             # Use AI synthesis if available, otherwise format raw results
-            response_text = await self._synthesize_response(query, results)
+            response_text = await self._synthesize_response(query, results, total_results)
 
             await self.send_capability_response(
                 message.from_agent,
