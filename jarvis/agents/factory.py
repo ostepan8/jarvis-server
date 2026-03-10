@@ -69,9 +69,6 @@ class AgentFactory:
         if self.config.flags.enable_roku:
             refs.update(self._build_roku(network, ai_client))
 
-        if self.config.flags.enable_coding:
-            refs.update(self._build_coding(network, ai_client))
-
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
 
@@ -281,33 +278,6 @@ class AgentFactory:
             return {"roku_agent": roku_agent}
         except Exception as exc:
             self.logger.log("WARNING", "RokuAgent init failed", str(exc))
-            return {}
-
-    def _build_coding(
-        self, network: AgentNetwork, ai_client: BaseAIClient
-    ) -> Dict[str, Any]:
-        """Build and register CodingAgent with ClaudeCodeService."""
-        from pathlib import Path
-        from ..agents.coding_agent import CodingAgent
-        from ..services.claude_code_service import ClaudeCodeService
-
-        try:
-            repo_root = str(Path(__file__).parent.parent.parent)
-            service = ClaudeCodeService(
-                repo_root=repo_root,
-                logger=self.logger,
-                claude_binary=self.config.claude_binary,
-                default_timeout=self.config.coding_task_timeout,
-            )
-            coding_agent = CodingAgent(
-                claude_code_service=service,
-                ai_client=ai_client,
-                logger=self.logger,
-            )
-            network.register_agent(coding_agent)
-            return {"coding_agent": coding_agent, "claude_code_service": service}
-        except Exception as exc:
-            self.logger.log("WARNING", "CodingAgent init failed", str(exc))
             return {}
 
     def _build_todo(

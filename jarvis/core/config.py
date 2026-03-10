@@ -16,7 +16,6 @@ class FeatureFlags:
     enable_canvas: bool = True
     enable_night_mode: bool = True
     enable_roku: bool = True
-    enable_coding: bool = False
     enable_todo: bool = True
     enable_coordinator: bool = True
 
@@ -44,9 +43,6 @@ class JarvisConfig:
     retry_max_delay: float = 60.0
     retry_exponential_base: float = 2.0
 
-    # Circuit breaker configuration
-    circuit_breaker_failure_threshold: int = 5
-    circuit_breaker_recovery_timeout: float = 60.0
     hue_bridge_ip: Optional[str] = field(
         default_factory=lambda: os.getenv("PHILLIPS_HUE_BRIDGE_IP")
     )
@@ -82,12 +78,6 @@ class JarvisConfig:
     strong_model: str = "gpt-4o"
     weak_model: str = "gpt-4o-mini"
 
-    # CodingAgent configuration
-    claude_binary: str = field(
-        default_factory=lambda: os.getenv("CLAUDE_BINARY", "claude")
-    )
-    coding_task_timeout: float = 300.0
-
     # Network worker count
     worker_count: int = 3
 
@@ -99,9 +89,6 @@ class JarvisConfig:
     use_fast_classifier: bool = True
 
     flags: FeatureFlags = field(default_factory=FeatureFlags)
-    # perf_tracking: bool = os.getenv(
-    #     "PERF_TRACE", os.getenv("PERF_TRACKING", "false")
-    # ).lower() == "true"
 
 
 @dataclass

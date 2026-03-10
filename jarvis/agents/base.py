@@ -366,29 +366,6 @@ class NetworkAgent:
 
         return await self.network.wait_for_response(req_id, timeout=timeout)
 
-    async def _route_to_nlu_for_reclassification(
-        self, user_input: str, context: Dict[str, Any], request_id: str
-    ) -> str:
-        """
-        Route back to NLU for re-classification. This allows NLU to handle
-        complex multi-step requests that agents discover during execution.
-        """
-        if not self.network:
-            raise RuntimeError("Agent not connected to network")
-
-        # Add context to the input for NLU
-        enhanced_input = f"{user_input}\n\nContext from previous step: {context}"
-
-        new_request_id = str(uuid.uuid4())
-        await self.network.request_capability(
-            from_agent=self.name,
-            capability="intent_matching",
-            data={"input": enhanced_input, "context": context},
-            request_id=new_request_id,
-        )
-
-        return new_request_id
-
     # ------------------------------------------------------------------
     # Context extraction helpers for DAG execution
     # ------------------------------------------------------------------

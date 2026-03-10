@@ -10,7 +10,7 @@ from .weather_agent import WeatherAgent
 from .memory_agent import MemoryAgent
 from .chat_agent import ChatAgent
 
-# from .canvas import CanvasAgent
+from .canvas import CanvasAgent
 
 __all__ = [
     "CollaborativeCalendarAgent",
@@ -21,5 +21,5 @@ __all__ = [
     "WeatherAgent",
     "MemoryAgent",
     "ChatAgent",
-    # "CanvasAgent",
+    "CanvasAgent",
 ]
