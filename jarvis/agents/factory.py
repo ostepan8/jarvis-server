@@ -24,6 +24,7 @@ from ..services.calendar_service import CalendarService
 from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
 from ..services.todo_service import TodoService
+from ..services.health_service import HealthService
 from ..utils import get_location_from_ip
 from ..night_agents import (
     NightAgent,
@@ -73,6 +74,9 @@ class AgentFactory:
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
 
+        if self.config.flags.enable_health:
+            refs.update(self._build_health(network))
+
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -116,6 +120,8 @@ class AgentFactory:
             refs.update(self._build_roku(network, ai_client))
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
+        if self.config.flags.enable_health:
+            refs.update(self._build_health(network))
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -388,6 +394,25 @@ class AgentFactory:
             return {"todo_service": todo_service, "todo_agent": todo_agent}
         except Exception as exc:
             self.logger.log("WARNING", "TodoAgent init failed", str(exc))
+            return {}
+
+    def _build_health(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register HealthAgent for system monitoring."""
+        try:
+            from ..agents.health_agent import HealthAgent
+
+            health_service = HealthService(timeout=5.0)
+            health_agent = HealthAgent(
+                health_service=health_service,
+                logger=self.logger,
+                probe_interval=self.config.health_probe_interval,
+                report_interval=self.config.health_report_interval,
+                report_dir=self.config.health_report_dir,
+            )
+            network.register_agent(health_agent)
+            return {"health_service": health_service, "health_agent": health_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "HealthAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(

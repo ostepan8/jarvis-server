@@ -990,6 +990,11 @@ Special cases:
 - "What's on my todo list" → {{"dag": {{"list_tasks": []}}}}
 - "Delete task abc123" → {{"dag": {{"delete_task": []}}}}
 - "Update task abc123 priority to high" → {{"dag": {{"update_task": []}}}}
+- "Is the system healthy?" → {{"dag": {{"system_health_check": []}}}}
+- "What's down?" → {{"dag": {{"system_health_check": []}}}}
+- "Show health report" → {{"dag": {{"health_report": []}}}}
+- "Show dependency map" → {{"dag": {{"dependency_map": []}}}}
+- "List incidents" → {{"dag": {{"incident_list": []}}}}
 
 Return ONLY the JSON."""
         return prompt

@@ -18,6 +18,7 @@ class FeatureFlags:
     enable_roku: bool = True
     enable_todo: bool = True
     enable_coordinator: bool = True
+    enable_health: bool = True
 
 
 @dataclass
@@ -87,6 +88,11 @@ class JarvisConfig:
 
     # Fast-path embedding classifier
     use_fast_classifier: bool = True
+
+    # Health monitoring
+    health_probe_interval: float = 60.0
+    health_report_interval: float = 3600.0
+    health_report_dir: Optional[str] = None
 
     flags: FeatureFlags = field(default_factory=FeatureFlags)
 

@@ -149,6 +149,7 @@ class NetworkAgent:
         self.message_handlers["capability_request"] = self._handle_capability_request
         self.message_handlers["capability_response"] = self._handle_capability_response
         self.message_handlers["error"] = self._handle_error
+        self.message_handlers["health_alert"] = self._handle_health_alert
 
     async def receive_message(self, message: Message) -> None:
         """Handle an incoming message."""
@@ -179,6 +180,10 @@ class NetworkAgent:
 
     async def _handle_error(self, message: Message) -> None:
         self.logger.log("ERROR", f"Error from {message.from_agent}", message.content)
+
+    async def _handle_health_alert(self, message: Message) -> None:
+        """Handle health alert broadcasts. Override in subclasses to react."""
+        pass
 
     async def run_capability(self, capability: str, **kwargs: Any) -> Any:
         """Execute a capability using the agent's function map.

@@ -21,6 +21,7 @@ from server.routers.users import router as users_router
 from server.routers.agents import router as agents_router
 from server.routers.goodmorning import router as goodmorning_router
 from server.routers.admin import router as admin_router
+from server.routers.health import router as health_router
 
 
 def create_app() -> FastAPI:
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(protocol_router, prefix="/protocols", tags=["protocols"])
     app.include_router(users_router, prefix="/users", tags=["users"])
     app.include_router(goodmorning_router, prefix="/goodmorning", tags=["goodmorning"])
+    app.include_router(health_router, prefix="/health", tags=["health"])
     app.include_router(admin_router)
 
     # Add startup and shutdown events

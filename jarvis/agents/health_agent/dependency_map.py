@@ -45,7 +45,7 @@ def build_dependency_graph(
 
     # Build from static knowledge
     for agent_name, deps in STATIC_DEPENDENCIES.items():
-        agent_node = nodes.setdefault(
+        nodes.setdefault(
             agent_name,
             DependencyNode(
                 name=agent_name,

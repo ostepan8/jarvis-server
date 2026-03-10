@@ -31,7 +31,7 @@ class ProbeResult:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {
+        result: Dict[str, Any] = {
             "component": self.component,
             "component_type": self.component_type,
             "status": self.status.value,
