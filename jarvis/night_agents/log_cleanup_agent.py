@@ -57,7 +57,7 @@ class LogCleanupAgent(NightAgent):
     async def _handle_capability_response(self, message: Message) -> None:
         return None
 
-    async def start_background_tasks(self) -> None:
+    async def start_background_tasks(self, progress_callback=None) -> None:
         """Start the periodic log cleanup task."""
         self._create_background_task(self._periodic_cleanup())
 

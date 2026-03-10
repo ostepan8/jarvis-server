@@ -14,7 +14,7 @@ class NightAgent(NetworkAgent):
         super().__init__(name, logger)
         self._background_tasks: list[asyncio.Task] = []
 
-    async def start_background_tasks(self) -> None:
+    async def start_background_tasks(self, progress_callback=None) -> None:
         """Start background work. Override in subclass."""
         return None
 

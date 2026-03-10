@@ -90,8 +90,9 @@ class SelfImprovementAgent(NightAgent):
     async def _handle_capability_response(self, message: Message) -> None:
         return None
 
-    async def start_background_tasks(self) -> None:
+    async def start_background_tasks(self, progress_callback=None) -> None:
         """Start the periodic improvement cycle."""
+        self._progress_callback = progress_callback
         self._create_background_task(self._periodic_improvement())
 
     async def _periodic_improvement(self) -> None:
@@ -99,6 +100,9 @@ class SelfImprovementAgent(NightAgent):
         while True:
             try:
                 await self._run_cycle()
+            except asyncio.CancelledError:
+                self._service.pause_cycle(getattr(self, "_progress_callback", None))
+                raise
             except Exception as exc:
                 if self.logger:
                     self.logger.log(
@@ -112,7 +116,8 @@ class SelfImprovementAgent(NightAgent):
         """Execute one improvement cycle and cache the report."""
         if self.logger:
             self.logger.log("INFO", "Self-improvement cycle starting", "")
-        report = await self._service.run_improvement_cycle()
+        callback = getattr(self, "_progress_callback", None)
+        report = await self._service.run_improvement_cycle(progress_callback=callback)
         self._last_report = report
         if self.logger:
             self.logger.log(

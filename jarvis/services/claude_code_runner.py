@@ -407,11 +407,29 @@ class ClaudeCodeRunner:
             )
 
             if timeout is not None:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), timeout=timeout
+                    )
+                except asyncio.CancelledError:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                        await process.wait()
+                    raise
             else:
-                stdout, stderr = await process.communicate()
+                try:
+                    stdout, stderr = await process.communicate()
+                except asyncio.CancelledError:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                        await process.wait()
+                    raise
 
             duration = time.monotonic() - start
             return ExecutionResult(
