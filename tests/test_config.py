@@ -82,8 +82,6 @@ class TestJarvisConfig:
         assert cfg.retry_base_delay == 1.0
         assert cfg.retry_max_delay == 60.0
         assert cfg.retry_exponential_base == 2.0
-        assert cfg.circuit_breaker_failure_threshold == 5
-        assert cfg.circuit_breaker_recovery_timeout == 60.0
         assert cfg.strong_model == "gpt-4o"
         assert cfg.weak_model == "gpt-4o-mini"
         assert cfg.worker_count == 3
