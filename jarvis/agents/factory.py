@@ -114,8 +114,6 @@ class AgentFactory:
             refs.update(self._build_lights(network, ai_client))
         if self.config.flags.enable_roku:
             refs.update(self._build_roku(network, ai_client))
-        if self.config.flags.enable_coding:
-            refs.update(self._build_coding(network, ai_client))
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
         if self.config.flags.enable_night_mode and system is not None:
