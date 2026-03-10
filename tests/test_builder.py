@@ -53,6 +53,7 @@ class TestBuilderOptions:
             with_roku=False,
             with_software=False,
             with_night_agents=False,
+            with_self_improvement=False,
         )
         for field_name in BuilderOptions.__dataclass_fields__:
             assert getattr(opts, field_name) is False

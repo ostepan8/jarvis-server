@@ -30,6 +30,7 @@ from ..night_agents import (
     NightAgent,
     NightModeControllerAgent,
     LogCleanupAgent,
+    SelfImprovementAgent,
 )
 
 if TYPE_CHECKING:
@@ -80,6 +81,15 @@ class AgentFactory:
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
+        if self.config.flags.enable_self_improvement and system is not None:
+            si_refs = self._build_self_improvement(
+                network, system, refs.get("todo_service")
+            )
+            refs.update(si_refs)
+            night_agents = refs.get("night_agents", [])
+            night_agents.append(si_refs["self_improvement_agent"])
+            refs["night_agents"] = night_agents
+
         return refs
 
     async def build_all_async(
@@ -124,6 +134,15 @@ class AgentFactory:
             refs.update(self._build_health(network))
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
+
+        if self.config.flags.enable_self_improvement and system is not None:
+            si_refs = self._build_self_improvement(
+                network, system, refs.get("todo_service")
+            )
+            refs.update(si_refs)
+            night_agents = refs.get("night_agents", [])
+            night_agents.append(si_refs["self_improvement_agent"])
+            refs["night_agents"] = night_agents
 
         # --- Await ChromaDB init, then build memory + NLU ---
         try:
@@ -430,3 +449,20 @@ class AgentFactory:
             "night_controller": controller,
             "night_agents": night_agents,
         }
+
+    def _build_self_improvement(
+        self,
+        network: AgentNetwork,
+        system: "JarvisSystem",
+        todo_service: Optional[TodoService] = None,
+    ) -> Dict[str, Any]:
+        from pathlib import Path
+
+        project_root = str(Path(__file__).parent.parent.parent)
+        agent = SelfImprovementAgent(
+            project_root=project_root,
+            todo_service=todo_service,
+            logger=self.logger,
+        )
+        network.register_night_agent(agent)
+        return {"self_improvement_agent": agent}

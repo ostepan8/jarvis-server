@@ -19,6 +19,7 @@ class FeatureFlags:
     enable_todo: bool = True
     enable_coordinator: bool = True
     enable_health: bool = True
+    enable_self_improvement: bool = False
 
 
 @dataclass

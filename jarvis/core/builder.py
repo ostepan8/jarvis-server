@@ -27,6 +27,7 @@ class BuilderOptions:
     with_roku: bool = True
     with_software: bool = False  # was commented out in your code
     with_night_agents: bool = True
+    with_self_improvement: bool = True
 
 
 class JarvisBuilder:
@@ -89,6 +90,10 @@ class JarvisBuilder:
 
     def night_agents(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_night_agents = enabled
+        return self
+
+    def self_improvement(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_self_improvement = enabled
         return self
 
     # ------- Convenience creators --------
@@ -185,6 +190,18 @@ class JarvisBuilder:
             pass
         if self._opts.with_night_agents and jarvis.config.flags.enable_night_mode:
             refs.update(factory._build_night_agents(jarvis.network, jarvis))
+
+        if (
+            self._opts.with_self_improvement
+            and jarvis.config.flags.enable_self_improvement
+        ):
+            si_refs = factory._build_self_improvement(
+                jarvis.network, jarvis, refs.get("todo_service")
+            )
+            refs.update(si_refs)
+            night_agents = refs.get("night_agents", [])
+            night_agents.append(si_refs["self_improvement_agent"])
+            refs["night_agents"] = night_agents
 
         # Store agent refs internally (properties provide backward-compatible access)
         jarvis._agent_refs = refs
