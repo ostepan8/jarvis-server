@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import os
-from typing import Optional
 
 from dotenv import load_dotenv
 from tzlocal import get_localzone_name
@@ -9,7 +8,7 @@ from colorama import Fore, Style, init as colorama_init
 
 # NEW: use the builder
 from jarvis.core import JarvisBuilder
-from jarvis import JarvisLogger
+from jarvis.core.system import JarvisSystem
 from jarvis.cli.config_dashboard import run_config_dashboard, show_agents_detail
 from jarvis.cli.commands_dashboard import (
     show_commands_overview,
@@ -36,7 +35,7 @@ load_dotenv()
 IDLE_TIMEOUT_SECONDS = int(os.getenv("JARVIS_IDLE_TIMEOUT", "300"))
 
 
-async def build_jarvis():
+async def build_jarvis() -> "JarvisSystem":
     """
     Build a Jarvis instance using the new builder style.
     Toggle features here as you like without touching the rest of main.
@@ -140,7 +139,7 @@ async def demo(
             if input_task is None:
                 input_task = asyncio.create_task(input_handler.get_input("Jarvis> "))
 
-            done, pending = await asyncio.wait({input_task}, timeout=IDLE_TIMEOUT_SECONDS)
+            done, _ = await asyncio.wait({input_task}, timeout=IDLE_TIMEOUT_SECONDS)
 
             if not done:
                 # Idle timeout — slip into night mode if not already there
