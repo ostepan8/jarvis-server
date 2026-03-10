@@ -27,7 +27,12 @@ _DB_SKIP_PATTERNS = [
 
 
 class JarvisLogger:
-    """Thread-safe logger that writes to stdout and a SQLite database."""
+    """Thread-safe logger that writes to a SQLite database.
+
+    Console output is suppressed — all logs are stored in SQLite for
+    later inspection via the log viewer.  Only catastrophic logger
+    failures are printed to stderr as a last resort.
+    """
 
     def __init__(
         self,
@@ -45,13 +50,10 @@ class JarvisLogger:
             available, otherwise ``DEFAULT_LOG_DB_PATH`` is applied.  The lazy
             import prevents circular imports during package initialization.
         log_level:
-            Standard library logging level for console output.
+            Retained for API compatibility; no longer affects output since
+            console logging has been removed.
         verbose:
-            If False (default), only WARNING and ERROR level logs are written
-            to console and database. If True, all log levels are written
-            according to log_level for console. Database still skips DEBUG
-            logs and routine initialization messages (e.g., "Agent registered",
-            "Network started") even in verbose mode to reduce bloat.
+            Retained for API compatibility; no longer affects output.
         """
 
         if db_path is None:
@@ -71,16 +73,13 @@ class JarvisLogger:
         # Initialize the database schema
         self._ensure_table()
 
-        # Set up console logging
+        # Console logging intentionally omitted — all output goes to
+        # SQLite only.  Use the log viewer to inspect stored entries.
         self.logger = logging.getLogger("jarvis")
         if not self.logger.handlers:
-            # In non-verbose mode, only show warnings and errors
-            console_level = logging.WARNING if not verbose else log_level
-            self.logger.setLevel(console_level)
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.DEBUG)
+            # NullHandler prevents "No handlers could be found" warnings
+            self.logger.addHandler(logging.NullHandler())
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a thread-local database connection."""
@@ -143,16 +142,12 @@ class JarvisLogger:
         return False
 
     def log(self, level: str, action: str, details: Optional[Any] = None) -> None:
-        """Thread-safe log method that writes to stdout and SQLite database."""
+        """Thread-safe log method that writes to the SQLite database.
+
+        All INFO and above are recorded for later inspection via the log viewer.
+        """
         try:
             level_name = level.upper()
-
-            # In non-verbose mode, only log WARNING and ERROR level messages
-            if not self.verbose:
-                numeric_level = getattr(logging, level_name, logging.INFO)
-                # Only proceed if it's WARNING or ERROR
-                if numeric_level < logging.WARNING:
-                    return  # Skip DEBUG and INFO in non-verbose mode
 
             # Format details
             if details is not None and not isinstance(details, str):
@@ -163,15 +158,8 @@ class JarvisLogger:
             else:
                 details_str = details or ""
 
-            # Log to console (thread-safe by default)
-            message = f"{action}: {details_str}" if details_str else action
-            self.logger.log(getattr(logging, level_name, logging.INFO), message)
-
-            # Check if we should skip database logging (even in verbose mode)
+            # Database: always record INFO and above
             skip_db = self._should_skip_db_log(level_name, action)
-
-            # Log to database (made thread-safe with our context manager)
-            # Skip routine initialization messages and DEBUG logs even in verbose mode
             if not skip_db:
                 timestamp = datetime.now().isoformat()
 
