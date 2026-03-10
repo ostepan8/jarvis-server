@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Dict, List, Optional
+from typing import Any, Callable, ClassVar, Dict, Optional
 
 NightProgressCallback = Optional[Callable[[str, str, dict], None]]
 

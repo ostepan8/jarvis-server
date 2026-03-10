@@ -52,7 +52,7 @@ class ConcreteNightAgent(NightAgent):
     async def _handle_capability_response(self, message):
         return None
 
-    async def start_background_tasks(self):
+    async def start_background_tasks(self, progress_callback=None):
         self.started = True
         self._create_background_task(self._dummy_loop())
 
