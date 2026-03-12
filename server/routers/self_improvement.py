@@ -14,8 +14,12 @@ import uuid
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse
 
-from jarvis.services.self_improvement_service import SelfImprovementService
+from jarvis.services.self_improvement_service import (
+    NightCycleState,
+    SelfImprovementService,
+)
 from ..models import CycleRequest, DiscoveryRequest, TaskSubmitRequest, TestRunRequest
 
 router = APIRouter()
@@ -248,6 +252,79 @@ async def list_reports(request: Request, limit: int = Query(20)):
     return {
         "count": len(limited),
         "reports": [{"filename": f.name, "path": str(f)} for f in limited],
+    }
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+async def get_dashboard():
+    """Serve the Night Mode dashboard — because staring at logs is so 2003."""
+    dashboard_path = os.path.join(
+        os.path.dirname(__file__), "..", "static", "night_dashboard.html"
+    )
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    raise HTTPException(
+        status_code=404,
+        detail="Dashboard HTML not found. Someone misplaced the blueprints.",
+    )
+
+
+@router.get("/live")
+async def get_live_state(request: Request):
+    """Single endpoint returning everything the dashboard needs.
+
+    Aggregates night mode status, cycle state, latest report, backlog,
+    and cached discoveries into one tidy payload.  Polled every 3 seconds
+    by the dashboard — efficient enough not to be embarrassing.
+    """
+    jarvis_system = getattr(request.app.state, "jarvis_system", None)
+    night_mode = getattr(jarvis_system, "night_mode", False) if jarvis_system else False
+
+    # Cycle state from persistent file
+    cycle_state = None
+    raw_state = NightCycleState.load()
+    if raw_state:
+        cycle_state = {
+            "cycle_id": raw_state.cycle_id,
+            "started_at": raw_state.started_at,
+            "status": raw_state.status,
+            "current_task_index": raw_state.current_task_index,
+            "total_tasks": len(raw_state.discoveries),
+            "completed_results": raw_state.completed_results,
+            "discoveries": raw_state.discoveries,
+            "skipped_count": raw_state.skipped_count,
+        }
+
+    # Latest report
+    latest_report = _state.get("last_report")
+    if not latest_report:
+        service = _get_service(request)
+        report = service.get_latest_report()
+        if report:
+            latest_report = report.to_dict()
+
+    # Backlog items from TodoService
+    backlog = []
+    if jarvis_system:
+        todo_svc = getattr(jarvis_system, "_agent_refs", {}).get("todo_service")
+        if todo_svc:
+            try:
+                items = todo_svc.list(tag="night-agent-backlog")
+                backlog = [
+                    item.to_dict() for item in items
+                    if item.status.value != "done"
+                ]
+            except Exception:
+                pass
+
+    return {
+        "night_mode": night_mode,
+        "running": _state["running"],
+        "cycle_state": cycle_state,
+        "latest_report": latest_report,
+        "backlog": backlog,
+        "discoveries": _state["discoveries"],
+        "cycle_error": _state.get("cycle_error"),
     }
 
 
