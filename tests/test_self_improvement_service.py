@@ -52,6 +52,18 @@ class FakeDiscovery:
         self.source_detail = source_detail
         self.todo_id = todo_id
 
+    def to_dict(self) -> dict:
+        """Serialize to dict, mirroring Discovery.to_dict()."""
+        return {
+            "discovery_type": self.discovery_type.value,
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "relevant_files": list(self.relevant_files),
+            "source_detail": self.source_detail,
+            "todo_id": self.todo_id,
+        }
+
 
 class FakeExecutionResult:
     """Minimal stub matching the ExecutionResult dataclass contract."""
