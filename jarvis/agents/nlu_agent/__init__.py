@@ -1008,6 +1008,12 @@ Special cases:
 - "Show memory stats" → {{"dag": {{"memory_stats": []}}}}
 - "Consolidate my preferences" → {{"dag": {{"consolidate_memories": []}}}}
 - "Promote that memory to long-term" → {{"dag": {{"promote_memory": []}}}}
+- "How's the machine doing?" → {{"dag": {{"device_status": []}}}}
+- "Check CPU and memory usage" → {{"dag": {{"device_status": []}}}}
+- "What's eating all my RAM?" → {{"dag": {{"device_diagnostics": []}}}}
+- "Show top processes" → {{"dag": {{"device_diagnostics": []}}}}
+- "Clean up temp files" → {{"dag": {{"device_cleanup": []}}}}
+- "Is the disk almost full?" → {{"dag": {{"device_status": []}}}}
 
 Return ONLY the JSON."""
         return prompt

@@ -24,6 +24,7 @@ from ..services.search_service import GoogleSearchService
 from ..services.canvas_service import CanvasService
 from ..services.todo_service import TodoService
 from ..services.health_service import HealthService
+from ..services.device_monitor_service import DeviceMonitorService
 from ..services.markdown_memory import MarkdownMemoryService
 from ..night_agents import (
     NightAgent,
@@ -74,6 +75,9 @@ class AgentFactory:
 
         if self.config.flags.enable_health:
             refs.update(self._build_health(network))
+
+        if self.config.flags.enable_device_monitor:
+            refs.update(self._build_device_monitor(network))
 
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
@@ -127,6 +131,8 @@ class AgentFactory:
             refs.update(self._build_todo(network, ai_client))
         if self.config.flags.enable_health:
             refs.update(self._build_health(network))
+        if self.config.flags.enable_device_monitor:
+            refs.update(self._build_device_monitor(network))
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -407,6 +413,22 @@ class AgentFactory:
             return {"health_service": health_service, "health_agent": health_agent}
         except Exception as exc:
             self.logger.log("WARNING", "HealthAgent init failed", str(exc))
+            return {}
+
+    def _build_device_monitor(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register DeviceMonitorAgent for host hardware monitoring."""
+        try:
+            from ..agents.device_monitor_agent import DeviceMonitorAgent
+
+            device_service = DeviceMonitorService()
+            device_agent = DeviceMonitorAgent(
+                device_service=device_service,
+                logger=self.logger,
+            )
+            network.register_agent(device_agent)
+            return {"device_service": device_service, "device_monitor_agent": device_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "DeviceMonitorAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(
