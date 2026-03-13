@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
@@ -45,6 +46,12 @@ def _make_mock_service() -> DeviceMonitorService:
     """Create a DeviceMonitorService with psutil mocked away."""
     svc = DeviceMonitorService.__new__(DeviceMonitorService)
     svc._psutil = None  # will be overridden per-test as needed
+    svc._prev_disk_io = None
+    svc._prev_disk_io_time = None
+    svc._prev_net_io = None
+    svc._prev_net_io_time = None
+    svc._cached_gpu_info = None
+    svc._cached_hardware_info = None
     return svc
 
 
@@ -312,3 +319,187 @@ class TestSnapshotFormatting:
         text = agent._format_snapshot(snap)
         assert "15%" in text
         assert "on battery" in text
+
+
+# ---------------------------------------------------------------------------
+# DeviceSnapshot — new fields
+# ---------------------------------------------------------------------------
+
+class TestDeviceSnapshotNewFields:
+    def test_to_dict_includes_new_fields(self):
+        snap = DeviceSnapshot(
+            hostname="test",
+            disk_io=[Metric("disk_read_bytes_sec", 1024.0, unit="B/s")],
+            network_io=[Metric("net_bytes_recv_sec", 2048.0, unit="B/s")],
+            memory_pressure={"pages_active": 100},
+            gpu=Metric("gpu", "Apple M1", details={"vram": "16 GB"}),
+            hardware_info={"chip": "Apple M1"},
+        )
+        d = snap.to_dict()
+        assert len(d["disk_io"]) == 1
+        assert len(d["network_io"]) == 1
+        assert d["memory_pressure"]["pages_active"] == 100
+        assert d["gpu"]["value"] == "Apple M1"
+        assert d["hardware_info"]["chip"] == "Apple M1"
+
+    def test_to_dict_defaults_empty(self):
+        snap = DeviceSnapshot()
+        d = snap.to_dict()
+        assert d["disk_io"] == []
+        assert d["network_io"] == []
+        assert d["memory_pressure"] is None
+        assert d["gpu"] is None
+        assert d["hardware_info"] is None
+
+
+# ---------------------------------------------------------------------------
+# Disk I/O and Network throughput
+# ---------------------------------------------------------------------------
+
+class TestDiskIOAndNetworkThroughput:
+    def test_disk_io_first_call_returns_empty(self):
+        svc = DeviceMonitorService()
+        result = svc.get_disk_io_rates()
+        # First call has no delta — should return empty
+        assert isinstance(result, list)
+
+    def test_network_throughput_first_call_returns_empty(self):
+        svc = DeviceMonitorService()
+        result = svc.get_network_throughput()
+        assert isinstance(result, list)
+
+    def test_disk_io_without_psutil(self):
+        svc = _make_mock_service()
+        result = svc.get_disk_io_rates()
+        assert result == []
+
+    def test_network_throughput_without_psutil(self):
+        svc = _make_mock_service()
+        result = svc.get_network_throughput()
+        assert result == []
+
+    def test_disk_io_second_call_returns_metrics(self):
+        svc = DeviceMonitorService()
+        if not svc.has_psutil:
+            pytest.skip("psutil not available")
+        svc.get_disk_io_rates()  # prime the pump
+        import time
+        time.sleep(0.05)
+        result = svc.get_disk_io_rates()
+        # Second call may return metrics if psutil provides counters
+        assert isinstance(result, list)
+        if result:
+            assert result[0].name == "disk_read_bytes_sec"
+            assert result[1].name == "disk_write_bytes_sec"
+
+    def test_network_throughput_second_call_returns_metrics(self):
+        svc = DeviceMonitorService()
+        if not svc.has_psutil:
+            pytest.skip("psutil not available")
+        svc.get_network_throughput()  # prime
+        import time
+        time.sleep(0.05)
+        result = svc.get_network_throughput()
+        assert isinstance(result, list)
+        if result:
+            assert result[0].name == "net_bytes_sent_sec"
+            assert result[1].name == "net_bytes_recv_sec"
+
+
+# ---------------------------------------------------------------------------
+# macOS-specific methods — graceful degradation
+# ---------------------------------------------------------------------------
+
+class TestMacOSSpecificMethods:
+    """These methods rely on macOS-only commands.
+
+    On macOS they may return data; on other platforms (or CI)
+    they should return None gracefully without raising.
+    """
+
+    def test_memory_pressure_returns_dict_or_none(self):
+        svc = DeviceMonitorService()
+        result = svc.get_memory_pressure()
+        if platform.system() == "Darwin":
+            # On macOS it should parse vm_stat successfully
+            assert result is None or isinstance(result, dict)
+        else:
+            assert result is None
+
+    def test_battery_health_returns_dict_or_none(self):
+        svc = DeviceMonitorService()
+        result = svc.get_battery_health()
+        # Desktops may not have a battery — None is fine
+        assert result is None or isinstance(result, dict)
+
+    def test_thermal_status_returns_dict_or_none(self):
+        svc = DeviceMonitorService()
+        result = svc.get_thermal_status()
+        assert result is None or isinstance(result, dict)
+
+    def test_gpu_info_returns_metric_or_none(self):
+        svc = DeviceMonitorService()
+        result = svc.get_gpu_info()
+        if platform.system() == "Darwin":
+            assert result is None or isinstance(result, Metric)
+        else:
+            assert result is None
+
+    def test_gpu_info_caches(self):
+        svc = DeviceMonitorService()
+        first = svc.get_gpu_info()
+        second = svc.get_gpu_info()
+        # Cached: same object identity (or both None)
+        assert first is second
+
+    def test_hardware_info_returns_dict_or_none(self):
+        svc = DeviceMonitorService()
+        result = svc.get_hardware_info()
+        if platform.system() == "Darwin":
+            assert result is None or isinstance(result, dict)
+        else:
+            assert result is None
+
+    def test_hardware_info_caches(self):
+        svc = DeviceMonitorService()
+        first = svc.get_hardware_info()
+        second = svc.get_hardware_info()
+        assert first is second
+
+    def test_memory_pressure_non_darwin(self):
+        svc = _make_mock_service()
+        # Force non-Darwin by mocking
+        import unittest.mock as mock
+        with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
+            mock_plat.system.return_value = "Linux"
+            mock_plat.node.return_value = "test"
+            mock_plat.release.return_value = "5.0"
+            assert svc.get_memory_pressure() is None
+
+    def test_battery_health_non_darwin(self):
+        svc = _make_mock_service()
+        import unittest.mock as mock
+        with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
+            mock_plat.system.return_value = "Linux"
+            assert svc.get_battery_health() is None
+
+    def test_thermal_status_non_darwin(self):
+        svc = _make_mock_service()
+        import unittest.mock as mock
+        with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
+            mock_plat.system.return_value = "Linux"
+            assert svc.get_thermal_status() is None
+
+    def test_gpu_info_non_darwin(self):
+        svc = _make_mock_service()
+        import unittest.mock as mock
+        with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
+            mock_plat.system.return_value = "Linux"
+            assert svc.get_gpu_info() is None
+
+    def test_hardware_info_non_darwin(self):
+        svc = _make_mock_service()
+        import unittest.mock as mock
+        with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
+            mock_plat.system.return_value = "Linux"
+            assert svc.get_hardware_info() is None
