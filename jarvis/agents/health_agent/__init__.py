@@ -146,6 +146,15 @@ class HealthAgent(NetworkAgent):
         sqlite_result = await self.health_service.probe_sqlite()
         service_statuses.append(sqlite_result)
 
+        # Managed server probes (from ServerManagerAgent)
+        if self.network and "ServerManagerAgent" in self.network.agents:
+            try:
+                server_agent = self.network.agents["ServerManagerAgent"]
+                server_probes = await server_agent.get_health_probes()
+                service_statuses.extend(server_probes)
+            except Exception:
+                pass
+
         # Network metrics
         network_metrics = None
         if self.network:

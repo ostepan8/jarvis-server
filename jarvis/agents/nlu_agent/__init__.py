@@ -1017,6 +1017,11 @@ Special cases:
 - "Has CPU been high all day?" → {{"dag": {{"device_history": []}}}}
 - "Show memory trends" → {{"dag": {{"device_history": []}}}}
 - "What were thermals like overnight?" → {{"dag": {{"device_history": []}}}}
+- "Start the calendar server" → {{"dag": {{"start_server": []}}}}
+- "Stop the API" → {{"dag": {{"stop_server": []}}}}
+- "Restart grafana" → {{"dag": {{"restart_server": []}}}}
+- "Is the calendar server running?" → {{"dag": {{"server_status": []}}}}
+- "Show all servers" → {{"dag": {{"list_servers": []}}}}
 
 Return ONLY the JSON."""
         return prompt
