@@ -1014,6 +1014,9 @@ Special cases:
 - "Show top processes" → {{"dag": {{"device_diagnostics": []}}}}
 - "Clean up temp files" → {{"dag": {{"device_cleanup": []}}}}
 - "Is the disk almost full?" → {{"dag": {{"device_status": []}}}}
+- "Has CPU been high all day?" → {{"dag": {{"device_history": []}}}}
+- "Show memory trends" → {{"dag": {{"device_history": []}}}}
+- "What were thermals like overnight?" → {{"dag": {{"device_history": []}}}}
 
 Return ONLY the JSON."""
         return prompt

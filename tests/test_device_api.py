@@ -18,9 +18,17 @@ from httpx import ASGITransport
 # ---------------------------------------------------------------------------
 
 def _ensure_device_modules():
-    """Inject stub modules for device_monitor_agent/service if not importable."""
+    """Import real device modules, or inject stubs if not available."""
     svc_mod_name = "jarvis.services.device_monitor_service"
     agent_mod_name = "jarvis.agents.device_monitor_agent"
+
+    # Try importing the real modules first
+    try:
+        import jarvis.services.device_monitor_service  # noqa: F401
+        import jarvis.agents.device_monitor_agent  # noqa: F401
+        return  # Real modules available — no stubs needed
+    except (ImportError, ModuleNotFoundError):
+        pass
 
     if svc_mod_name not in sys.modules:
         svc_mod = types.ModuleType(svc_mod_name)

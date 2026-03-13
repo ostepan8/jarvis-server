@@ -18,6 +18,7 @@ STATIC_DEPENDENCIES: Dict[str, List[str]] = {
     "TodoAgent": ["SQLite"],
     "ProtocolAgent": [],
     "CanvasAgent": ["CanvasService"],
+    "DeviceMonitorAgent": ["psutil", "SQLite"],
 }
 
 SERVICE_TYPES: Dict[str, str] = {

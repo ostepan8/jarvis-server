@@ -22,6 +22,7 @@ from server.routers.agents import router as agents_router
 from server.routers.goodmorning import router as goodmorning_router
 from server.routers.admin import router as admin_router
 from server.routers.health import router as health_router
+from server.routers.device import router as device_router
 from server.routers.self_improvement import router as self_improvement_router
 
 
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router, prefix="/users", tags=["users"])
     app.include_router(goodmorning_router, prefix="/goodmorning", tags=["goodmorning"])
     app.include_router(health_router, prefix="/health", tags=["health"])
+    app.include_router(device_router, prefix="/device", tags=["device"])
     app.include_router(self_improvement_router, prefix="/self-improvement", tags=["self-improvement"])
     app.include_router(admin_router)
 

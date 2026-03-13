@@ -359,25 +359,80 @@ class AgentFactory:
     def _build_roku(
         self, network: AgentNetwork, ai_client: BaseAIClient
     ) -> Dict[str, Any]:
-        if not self.config.roku_ip_address:
+        from ..services.roku_discovery import RokuDeviceRegistry
+
+        # Load persisted registry (or start fresh)
+        registry = RokuDeviceRegistry.load()
+
+        # Register devices from env vars
+        ips_to_probe: list[str] = []
+        if self.config.roku_ip_address:
+            ips_to_probe.append(self.config.roku_ip_address)
+        if self.config.roku_ip_addresses:
+            ips_to_probe.extend(self.config.roku_ip_addresses)
+
+        for ip in ips_to_probe:
+            info = self._probe_roku_device(ip)
+            if info:
+                registry.register_manual(
+                    ip=ip,
+                    serial=info["serial"],
+                    device_name=info.get("device_name", ""),
+                    model=info.get("model", ""),
+                )
+
+        if not registry.devices:
             self.logger.log(
-                "INFO", "Skipping Roku agent", "No Roku IP address configured"
+                "INFO", "Skipping Roku agent", "No Roku devices configured or discovered"
             )
             return {}
+
+        # Set default to first device if none set
+        if not registry.default_serial:
+            first = next(iter(registry.devices))
+            registry.set_default(first)
 
         try:
             roku_agent = RokuAgent(
                 ai_client=ai_client,
-                device_ip=self.config.roku_ip_address,
+                device_registry=registry,
                 username=self.config.roku_username,
                 password=self.config.roku_password,
                 logger=self.logger,
             )
             network.register_agent(roku_agent)
-            return {"roku_agent": roku_agent}
+            return {"roku_agent": roku_agent, "roku_registry": registry}
         except Exception as exc:
             self.logger.log("WARNING", "RokuAgent init failed", str(exc))
             return {}
+
+    @staticmethod
+    def _probe_roku_device(ip: str) -> Optional[Dict[str, str]]:
+        """Probe a Roku device at the given IP for serial/model/name.
+
+        Creates a temporary synchronous HTTP connection.  Returns None if
+        the device is unreachable.
+        """
+        import httpx
+        import xml.etree.ElementTree as ET
+
+        try:
+            resp = httpx.get(f"http://{ip}:8060/query/device-info", timeout=5.0)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            info: Dict[str, str] = {}
+            for child in root:
+                info[child.tag] = child.text or ""
+            serial = info.get("serial-number", "").strip()
+            if not serial:
+                return None
+            return {
+                "serial": serial,
+                "device_name": info.get("user-device-name", "") or info.get("friendly-device-name", ""),
+                "model": info.get("model-name", ""),
+            }
+        except Exception:
+            return None
 
     def _build_todo(
         self, network: AgentNetwork, ai_client: BaseAIClient
@@ -419,14 +474,22 @@ class AgentFactory:
         """Build and register DeviceMonitorAgent for host hardware monitoring."""
         try:
             from ..agents.device_monitor_agent import DeviceMonitorAgent
+            from ..services.metrics_store import MetricsStore
 
             device_service = DeviceMonitorService()
+            metrics_store = MetricsStore(logger=self.logger)
             device_agent = DeviceMonitorAgent(
                 device_service=device_service,
+                metrics_store=metrics_store,
                 logger=self.logger,
+                probe_interval=self.config.device_monitor_probe_interval,
             )
             network.register_agent(device_agent)
-            return {"device_service": device_service, "device_monitor_agent": device_agent}
+            return {
+                "device_service": device_service,
+                "metrics_store": metrics_store,
+                "device_monitor_agent": device_agent,
+            }
         except Exception as exc:
             self.logger.log("WARNING", "DeviceMonitorAgent init failed", str(exc))
             return {}

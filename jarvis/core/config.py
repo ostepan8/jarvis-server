@@ -70,6 +70,13 @@ class JarvisConfig:
     roku_ip_address: Optional[str] = field(
         default_factory=lambda: os.getenv("ROKU_IP_ADDRESS")
     )
+    roku_ip_addresses: Optional[List[str]] = field(
+        default_factory=lambda: (
+            [ip.strip() for ip in os.getenv("ROKU_IP_ADDRESSES", "").split(",")]
+            if os.getenv("ROKU_IP_ADDRESSES", "").strip()
+            else None
+        )
+    )
     roku_username: Optional[str] = field(
         default_factory=lambda: os.getenv("ROKU_USERNAME")
     )
@@ -100,6 +107,9 @@ class JarvisConfig:
     health_probe_interval: float = 60.0
     health_report_interval: float = 3600.0
     health_report_dir: Optional[str] = None
+
+    # Device monitoring
+    device_monitor_probe_interval: float = 30.0
 
     flags: FeatureFlags = field(default_factory=FeatureFlags)
 
