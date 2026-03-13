@@ -26,6 +26,11 @@ class DiscoveryType(str, Enum):
     TEST_FAILURE = "test_failure"
     MANUAL_TODO = "manual_todo"
     CODE_QUALITY = "code_quality"
+    UNUSED_IMPORT = "unused_import"
+    EXCEPTION_ANTIPATTERN = "exception_antipattern"
+    COMPLEXITY_HOTSPOT = "complexity_hotspot"
+    DEAD_CODE = "dead_code"
+    STALE_COMMENT = "stale_comment"
 
 
 @dataclass
@@ -39,6 +44,9 @@ class Discovery:
     relevant_files: list[str] = field(default_factory=list)
     source_detail: str = ""
     todo_id: Optional[str] = None
+    confidence: str = "medium"
+    code_context: str = ""       # 10-15 numbered lines around the finding
+    function_scope: str = ""     # enclosing function/class name
 
     def to_dict(self) -> dict:
         """Serialize all fields to a plain dict (enum stored as string value)."""
@@ -50,6 +58,9 @@ class Discovery:
             "relevant_files": list(self.relevant_files),
             "source_detail": self.source_detail,
             "todo_id": self.todo_id,
+            "confidence": self.confidence,
+            "code_context": self.code_context,
+            "function_scope": self.function_scope,
         }
 
     @classmethod
@@ -63,6 +74,9 @@ class Discovery:
             relevant_files=data.get("relevant_files", []),
             source_detail=data.get("source_detail", ""),
             todo_id=data.get("todo_id"),
+            confidence=data.get("confidence", "medium"),
+            code_context=data.get("code_context", ""),
+            function_scope=data.get("function_scope", ""),
         )
 
 
@@ -327,5 +341,373 @@ class SystemAnalyzer:
                                 source_detail=methods_str,
                             )
                         )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Context enrichment helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_context(source: str, lineno: int, radius: int = 7) -> str:
+        """Return numbered source lines [lineno-radius .. lineno+radius]."""
+        lines = source.splitlines()
+        start = max(0, lineno - 1 - radius)
+        end = min(len(lines), lineno + radius)
+        numbered = []
+        for i, line in enumerate(lines[start:end], start=start + 1):
+            marker = ">>>" if i == lineno else "   "
+            numbered.append(f"{marker} {i:4d} | {line}")
+        return "\n".join(numbered)
+
+    @staticmethod
+    def _find_enclosing_scope(tree: ast.Module, lineno: int) -> str:
+        """Return name of innermost function/class containing lineno."""
+        best_name = ""
+        best_start = 0
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                end_line = getattr(node, "end_lineno", None) or 9999
+                if node.lineno <= lineno <= end_line:
+                    if node.lineno >= best_start:
+                        best_start = node.lineno
+                        best_name = node.name
+        return best_name
+
+    # ------------------------------------------------------------------
+    # Unused imports analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_unused_imports(self) -> list[Discovery]:
+        """Find imports that are never referenced in the rest of the file."""
+        return await asyncio.to_thread(self._analyze_unused_imports_sync)
+
+    def _analyze_unused_imports_sync(self) -> list[Discovery]:
+        import re
+
+        root = Path(self.project_root)
+        scan_dirs = [
+            root / "jarvis" / "agents",
+            root / "jarvis" / "services",
+        ]
+
+        discoveries: list[Discovery] = []
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                try:
+                    source = py_file.read_text(encoding="utf-8")
+                    tree = ast.parse(source, filename=str(py_file))
+                except Exception:
+                    continue
+
+                # Collect imported names with their line numbers
+                imported: list[tuple[str, int]] = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            name = alias.asname or alias.name.split(".")[0]
+                            imported.append((name, node.lineno))
+                    elif isinstance(node, ast.ImportFrom):
+                        for alias in node.names:
+                            name = alias.asname or alias.name
+                            imported.append((name, node.lineno))
+
+                if not imported:
+                    continue
+
+                # Check which names are never referenced outside import lines
+                import_lines = {ln for _, ln in imported}
+                non_import_source = "\n".join(
+                    line for i, line in enumerate(source.splitlines(), 1)
+                    if i not in import_lines
+                )
+
+                unused: list[tuple[str, int]] = []
+                for name, ln in imported:
+                    if name == "*":
+                        continue
+                    # Simple word-boundary check in non-import lines
+                    if not re.search(rf"\b{re.escape(name)}\b", non_import_source):
+                        unused.append((name, ln))
+
+                if unused:
+                    rel_path = str(py_file.relative_to(root))
+                    names_str = ", ".join(f"{n} (line {ln})" for n, ln in unused)
+                    # Extract context around first unused import
+                    first_lineno = unused[0][1]
+                    ctx = self._extract_context(source, first_lineno)
+                    scope = self._find_enclosing_scope(tree, first_lineno)
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.UNUSED_IMPORT,
+                            title=f"Unused imports in {rel_path}",
+                            description=f"Unused imports in {rel_path}: {names_str}",
+                            priority="low",
+                            relevant_files=[rel_path],
+                            source_detail=names_str,
+                            code_context=ctx,
+                            function_scope=scope,
+                        )
+                    )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Exception antipatterns analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_exception_antipatterns(self) -> list[Discovery]:
+        """Find bare excepts and swallowed exceptions."""
+        return await asyncio.to_thread(self._analyze_exception_antipatterns_sync)
+
+    def _analyze_exception_antipatterns_sync(self) -> list[Discovery]:
+        root = Path(self.project_root)
+        scan_dirs = [
+            root / "jarvis" / "agents",
+            root / "jarvis" / "services",
+        ]
+
+        discoveries: list[Discovery] = []
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                try:
+                    source = py_file.read_text(encoding="utf-8")
+                    tree = ast.parse(source, filename=str(py_file))
+                except Exception:
+                    continue
+
+                antipatterns: list[tuple[str, int]] = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ExceptHandler):
+                        if node.type is None:
+                            antipatterns.append(
+                                (f"Bare except: at line {node.lineno}", node.lineno)
+                            )
+                        # Check for swallowed exceptions (except with only pass)
+                        elif (
+                            len(node.body) == 1
+                            and isinstance(node.body[0], ast.Pass)
+                        ):
+                            antipatterns.append(
+                                (f"Swallowed exception at line {node.lineno}", node.lineno)
+                            )
+
+                if antipatterns:
+                    rel_path = str(py_file.relative_to(root))
+                    details_str = "; ".join(desc for desc, _ in antipatterns)
+                    first_lineno = antipatterns[0][1]
+                    ctx = self._extract_context(source, first_lineno)
+                    scope = self._find_enclosing_scope(tree, first_lineno)
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.EXCEPTION_ANTIPATTERN,
+                            title=f"Exception antipatterns in {rel_path}",
+                            description=f"Found {len(antipatterns)} antipattern(s) in {rel_path}: {details_str}",
+                            priority="medium",
+                            relevant_files=[rel_path],
+                            source_detail=details_str,
+                            code_context=ctx,
+                            function_scope=scope,
+                        )
+                    )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Complexity hotspots analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_complexity_hotspots(self) -> list[Discovery]:
+        """Find overly long functions."""
+        return await asyncio.to_thread(self._analyze_complexity_hotspots_sync)
+
+    def _analyze_complexity_hotspots_sync(self, threshold: int = 50) -> list[Discovery]:
+        root = Path(self.project_root)
+        scan_dirs = [
+            root / "jarvis" / "agents",
+            root / "jarvis" / "services",
+        ]
+
+        discoveries: list[Discovery] = []
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                try:
+                    source = py_file.read_text(encoding="utf-8")
+                    tree = ast.parse(source, filename=str(py_file))
+                except Exception:
+                    continue
+
+                hotspots: list[tuple[str, int]] = []
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        end_line = getattr(node, "end_lineno", None)
+                        if end_line is None:
+                            continue
+                        func_lines = end_line - node.lineno + 1
+                        if func_lines >= threshold:
+                            hotspots.append(
+                                (f"{node.name} ({func_lines} lines, line {node.lineno})", node.lineno)
+                            )
+
+                if hotspots:
+                    rel_path = str(py_file.relative_to(root))
+                    details_str = "; ".join(desc for desc, _ in hotspots)
+                    first_lineno = hotspots[0][1]
+                    ctx = self._extract_context(source, first_lineno)
+                    scope = self._find_enclosing_scope(tree, first_lineno)
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.COMPLEXITY_HOTSPOT,
+                            title=f"Complexity hotspots in {rel_path}",
+                            description=f"Long functions in {rel_path}: {details_str}",
+                            priority="medium",
+                            relevant_files=[rel_path],
+                            source_detail=details_str,
+                            code_context=ctx,
+                            function_scope=scope,
+                        )
+                    )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Dead code analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_dead_code(self) -> list[Discovery]:
+        """Find functions/methods defined but never referenced elsewhere."""
+        return await asyncio.to_thread(self._analyze_dead_code_sync)
+
+    def _analyze_dead_code_sync(self) -> list[Discovery]:
+        import re
+
+        root = Path(self.project_root)
+        scan_dirs = [
+            root / "jarvis" / "agents",
+            root / "jarvis" / "services",
+        ]
+
+        # Phase 1: collect all function/method definitions
+        all_defs: list[tuple[str, str, int]] = []  # (name, file_path, lineno)
+        all_sources: list[tuple[str, str]] = []     # (file_path, source)
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                try:
+                    source = py_file.read_text(encoding="utf-8")
+                    tree = ast.parse(source, filename=str(py_file))
+                except Exception:
+                    continue
+
+                rel_path = str(py_file.relative_to(root))
+                all_sources.append((rel_path, source))
+
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        # Skip private/dunder methods and common framework hooks
+                        if node.name.startswith("_"):
+                            continue
+                        all_defs.append((node.name, rel_path, node.lineno))
+
+        # Phase 2: count references across all sources
+        discoveries: list[Discovery] = []
+        combined_source = "\n".join(src for _, src in all_sources)
+
+        for name, def_path, lineno in all_defs:
+            # Count occurrences — at least 2 means definition + usage
+            ref_count = len(re.findall(rf"\b{re.escape(name)}\b", combined_source))
+            if ref_count <= 1:
+                # Find the source text for this file
+                file_source = ""
+                for src_path, src_text in all_sources:
+                    if src_path == def_path:
+                        file_source = src_text
+                        break
+                ctx = self._extract_context(file_source, lineno) if file_source else ""
+                discoveries.append(
+                    Discovery(
+                        discovery_type=DiscoveryType.DEAD_CODE,
+                        title=f"Potentially dead: {name} in {def_path}",
+                        description=f"Function '{name}' at line {lineno} in {def_path} appears unreferenced.",
+                        priority="low",
+                        relevant_files=[def_path],
+                        source_detail=f"{name} (line {lineno})",
+                        code_context=ctx,
+                        function_scope=name,
+                    )
+                )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Stale comments analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_stale_comments(self) -> list[Discovery]:
+        """Find TODO/FIXME/HACK/XXX comments."""
+        return await asyncio.to_thread(self._analyze_stale_comments_sync)
+
+    def _analyze_stale_comments_sync(self) -> list[Discovery]:
+        import re
+
+        root = Path(self.project_root)
+        scan_dirs = [
+            root / "jarvis" / "agents",
+            root / "jarvis" / "services",
+        ]
+
+        pattern = re.compile(r"#\s*(TODO|FIXME|HACK|XXX)\b", re.IGNORECASE)
+        discoveries: list[Discovery] = []
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                try:
+                    source = py_file.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+
+                matches: list[tuple[str, int]] = []
+                for i, line in enumerate(source.splitlines(), 1):
+                    m = pattern.search(line)
+                    if m:
+                        marker = m.group(1).upper()
+                        matches.append((f"{marker} at line {i}", i))
+
+                if matches:
+                    rel_path = str(py_file.relative_to(root))
+                    details_str = "; ".join(desc for desc, _ in matches)
+                    first_lineno = matches[0][1]
+                    ctx = self._extract_context(source, first_lineno)
+                    # Parse source to get enclosing scope
+                    try:
+                        tree_for_scope = ast.parse(source)
+                        scope = self._find_enclosing_scope(tree_for_scope, first_lineno)
+                    except Exception:
+                        scope = ""
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.STALE_COMMENT,
+                            title=f"Stale comments in {rel_path}",
+                            description=f"Found {len(matches)} marker comment(s) in {rel_path}: {details_str}",
+                            priority="low",
+                            relevant_files=[rel_path],
+                            source_detail=details_str,
+                            code_context=ctx,
+                            function_scope=scope,
+                        )
+                    )
 
         return discoveries
