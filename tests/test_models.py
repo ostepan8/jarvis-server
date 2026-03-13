@@ -29,10 +29,10 @@ class TestJarvisRequest:
         with pytest.raises(ValidationError):
             JarvisRequest()
 
-    def test_command_int_coerced_to_string(self):
-        """Pydantic v2 coerces int to str for str fields."""
-        req = JarvisRequest(command=123)
-        assert req.command == "123"
+    def test_command_int_rejected(self):
+        """Pydantic v2 strict str rejects non-string input."""
+        with pytest.raises(ValidationError):
+            JarvisRequest(command=123)
 
     def test_extra_fields_ignored(self):
         req = JarvisRequest(command="hello", extra="data")

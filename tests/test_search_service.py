@@ -27,11 +27,12 @@ def mock_logger():
 @pytest.fixture
 def search_service(mock_logger):
     """Create a GoogleSearchService with test credentials."""
-    return GoogleSearchService(
-        api_key="test-api-key",
-        search_engine_id="test-engine-id",
-        logger=mock_logger,
-    )
+    with patch.dict("os.environ", {"GOOGLE_SERVICE_ACCOUNT_FILE": ""}, clear=False):
+        return GoogleSearchService(
+            api_key="test-api-key",
+            search_engine_id="test-engine-id",
+            logger=mock_logger,
+        )
 
 
 @pytest.fixture
@@ -50,11 +51,12 @@ class TestGoogleSearchServiceInit:
 
     def test_init_with_explicit_credentials(self, mock_logger):
         """Test initialization with explicitly provided credentials."""
-        service = GoogleSearchService(
-            api_key="my-key",
-            search_engine_id="my-engine",
-            logger=mock_logger,
-        )
+        with patch.dict("os.environ", {"GOOGLE_SERVICE_ACCOUNT_FILE": ""}, clear=False):
+            service = GoogleSearchService(
+                api_key="my-key",
+                search_engine_id="my-engine",
+                logger=mock_logger,
+            )
         assert service.api_key == "my-key"
         assert service.search_engine_id == "my-engine"
         assert service.base_url == "https://www.googleapis.com/customsearch/v1"
@@ -66,6 +68,7 @@ class TestGoogleSearchServiceInit:
             {
                 "GOOGLE_SEARCH_API_KEY": "env-key",
                 "GOOGLE_SEARCH_ENGINE_ID": "env-engine",
+                "GOOGLE_SERVICE_ACCOUNT_FILE": "",
             },
         ):
             service = GoogleSearchService(logger=mock_logger)
@@ -85,15 +88,16 @@ class TestGoogleSearchServiceInit:
 
     def test_init_logs_credential_status(self, mock_logger):
         """Test that initialization logs whether credentials are present."""
-        GoogleSearchService(
-            api_key="key",
-            search_engine_id="engine",
-            logger=mock_logger,
-        )
+        with patch.dict("os.environ", {"GOOGLE_SERVICE_ACCOUNT_FILE": ""}, clear=False):
+            GoogleSearchService(
+                api_key="key",
+                search_engine_id="engine",
+                logger=mock_logger,
+            )
         mock_logger.log.assert_called_once_with(
             "INFO",
             "Google Search service initialized",
-            {"has_api_key": True, "has_search_engine_id": True},
+            {"auth_mode": "api_key", "has_search_engine_id": True},
         )
 
 
@@ -220,7 +224,7 @@ class TestGoogleSearchServiceSearch:
         with patch("httpx.AsyncClient") as MockClient:
             mock_client_instance = AsyncMock()
 
-            async def capture_get(url, params=None):
+            async def capture_get(url, params=None, **kwargs):
                 captured_params.update(params or {})
                 return mock_response
 
