@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,7 @@ class DiscoveryType(str, Enum):
     UNUSED_IMPORT = "unused_import"
     EXCEPTION_ANTIPATTERN = "exception_antipattern"
     COMPLEXITY_HOTSPOT = "complexity_hotspot"
+    MISSING_TESTS = "missing_tests"
     DEAD_CODE = "dead_code"
     STALE_COMMENT = "stale_comment"
 
@@ -107,6 +109,12 @@ class SystemAnalyzer:
             ("logs", self.analyze_logs),
             ("tests", self.analyze_tests),
             ("todos", self.analyze_todos),
+            ("unused_imports", self.analyze_unused_imports),
+            ("exception_antipatterns", self.analyze_exception_antipatterns),
+            ("complexity_hotspots", self.analyze_complexity_hotspots),
+            ("stale_comments", self.analyze_stale_comments),
+            ("missing_tests", self.analyze_missing_tests),
+            ("dead_code", self.analyze_dead_code),
             ("code_quality", self.analyze_code_quality),
         ]
 
@@ -383,8 +391,6 @@ class SystemAnalyzer:
         return await asyncio.to_thread(self._analyze_unused_imports_sync)
 
     def _analyze_unused_imports_sync(self) -> list[Discovery]:
-        import re
-
         root = Path(self.project_root)
         scan_dirs = [
             root / "jarvis" / "agents",
@@ -588,8 +594,6 @@ class SystemAnalyzer:
         return await asyncio.to_thread(self._analyze_dead_code_sync)
 
     def _analyze_dead_code_sync(self) -> list[Discovery]:
-        import re
-
         root = Path(self.project_root)
         scan_dirs = [
             root / "jarvis" / "agents",
@@ -659,8 +663,6 @@ class SystemAnalyzer:
         return await asyncio.to_thread(self._analyze_stale_comments_sync)
 
     def _analyze_stale_comments_sync(self) -> list[Discovery]:
-        import re
-
         root = Path(self.project_root)
         scan_dirs = [
             root / "jarvis" / "agents",
@@ -707,6 +709,79 @@ class SystemAnalyzer:
                             source_detail=details_str,
                             code_context=ctx,
                             function_scope=scope,
+                        )
+                    )
+
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Missing tests analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_missing_tests(self) -> list[Discovery]:
+        """Find agent/service modules with no corresponding test file."""
+        return await asyncio.to_thread(self._analyze_missing_tests_sync)
+
+    def _analyze_missing_tests_sync(self) -> list[Discovery]:
+        root = Path(self.project_root)
+        tests_dir = root / "tests"
+        scan_dirs = [
+            ("agents", root / "jarvis" / "agents"),
+            ("services", root / "jarvis" / "services"),
+        ]
+
+        discoveries: list[Discovery] = []
+
+        existing_tests: set[str] = set()
+        if tests_dir.is_dir():
+            for test_file in tests_dir.glob("test_*.py"):
+                existing_tests.add(test_file.stem)
+
+        for _category, scan_dir in scan_dirs:
+            if not scan_dir.is_dir():
+                continue
+            for py_file in scan_dir.rglob("*.py"):
+                if py_file.name == "__init__.py":
+                    continue
+                module_name = py_file.stem
+                expected_test = f"test_{module_name}"
+                if expected_test not in existing_tests:
+                    rel_path = str(py_file.relative_to(root))
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.MISSING_TESTS,
+                            title=f"Missing tests for {rel_path}",
+                            description=(
+                                f"Module {rel_path} has no corresponding test file "
+                                f"(expected tests/{expected_test}.py)"
+                            ),
+                            priority="medium",
+                            relevant_files=[rel_path],
+                            source_detail=f"expected: tests/{expected_test}.py",
+                            confidence="high",
+                        )
+                    )
+
+        agents_dir = root / "jarvis" / "agents"
+        if agents_dir.is_dir():
+            for agent_dir in agents_dir.iterdir():
+                if not agent_dir.is_dir() or not agent_dir.name.endswith("_agent"):
+                    continue
+                expected_test = f"test_{agent_dir.name}"
+                if expected_test not in existing_tests:
+                    rel_path = str(agent_dir.relative_to(root))
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.MISSING_TESTS,
+                            title=f"Missing tests for {rel_path}",
+                            description=(
+                                f"Agent module {rel_path} has no corresponding test file "
+                                f"(expected tests/{expected_test}.py)"
+                            ),
+                            priority="medium",
+                            relevant_files=[rel_path],
+                            source_detail=f"expected: tests/{expected_test}.py",
+                            confidence="high",
                         )
                     )
 
