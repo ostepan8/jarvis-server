@@ -17,7 +17,7 @@ import json
 import os
 import time
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Dict, List, Optional
 
@@ -94,7 +94,7 @@ class _SSDPProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:  # type: ignore[override]
         self.transport = transport
 
-    def datagram_received(self, data: bytes, addr: tuple) -> None:
+    def datagram_received(self, data: bytes, addr: tuple) -> None:  # noqa: ARG002
         try:
             text = data.decode("utf-8", errors="replace")
             for line in text.splitlines():
@@ -105,7 +105,7 @@ class _SSDPProtocol(asyncio.DatagramProtocol):
         except Exception:
             pass
 
-    def error_received(self, exc: Exception) -> None:  # pragma: no cover
+    def error_received(self, exc: Exception) -> None:  # pragma: no cover  # noqa: ARG002
         pass
 
 

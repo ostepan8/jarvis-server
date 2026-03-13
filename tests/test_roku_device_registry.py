@@ -16,8 +16,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-import json
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,7 +28,6 @@ from jarvis.services.roku_discovery import (
     RokuDeviceRegistry,
     _SSDPProtocol,
     _fetch_device_info,
-    _ssdp_search,
 )
 
 
@@ -44,25 +41,6 @@ def registry(tmp_path: Path, monkeypatch):
     state_file = tmp_path / "roku_devices.json"
     monkeypatch.setattr(RokuDeviceRegistry, "STATE_FILE", state_file)
     return RokuDeviceRegistry()
-
-
-def _make_device(
-    serial: str = "SN001",
-    ip: str = "192.168.1.10",
-    device_name: str = "Roku Ultra",
-    friendly_name: str = "",
-    model: str = "4800X",
-    is_online: bool = True,
-) -> RokuDeviceInfo:
-    return RokuDeviceInfo(
-        serial_number=serial,
-        ip_address=ip,
-        device_name=device_name,
-        friendly_name=friendly_name,
-        model=model,
-        last_seen=time.time(),
-        is_online=is_online,
-    )
 
 
 DEVICE_INFO_XML = """\
@@ -132,7 +110,7 @@ class TestManualRegistration:
 
 class TestPersistence:
 
-    def test_persistence_round_trip(self, registry: RokuDeviceRegistry, tmp_path: Path, monkeypatch):
+    def test_persistence_round_trip(self, registry: RokuDeviceRegistry):
         """Saving then loading should reproduce all fields faithfully."""
         registry.register_manual(ip="10.0.0.1", serial="S1", device_name="Roku Express", model="3930")
         registry.set_friendly_name("S1", "Kitchen")
@@ -151,7 +129,7 @@ class TestPersistence:
         assert loaded.default_serial == "S1"
         assert loaded.last_used_serial == "S1"
 
-    def test_persistence_corrupt_file(self, registry: RokuDeviceRegistry, tmp_path: Path, monkeypatch):
+    def test_persistence_corrupt_file(self, registry: RokuDeviceRegistry):
         """Corrupt JSON on disk should yield an empty registry, not an explosion."""
         RokuDeviceRegistry.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         RokuDeviceRegistry.STATE_FILE.write_text("{{{not json at all")
@@ -161,7 +139,7 @@ class TestPersistence:
         assert len(loaded.devices) == 0
         assert loaded.default_serial is None
 
-    def test_persistence_missing_file(self, registry: RokuDeviceRegistry, tmp_path: Path, monkeypatch):
+    def test_persistence_missing_file(self, registry: RokuDeviceRegistry):
         """No file at all should produce an empty registry."""
         loaded = RokuDeviceRegistry.load()
         assert len(loaded.devices) == 0
