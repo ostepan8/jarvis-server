@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from jarvis.core.errors import SafetyViolationError, WorktreeError
-from jarvis.services.claude_code_runner import ClaudeCodeRunner, ExecutionResult
+from jarvis.services.claude_code_runner import (
+    ClaudeCodeRunner,
+    ExecutionResult,
+    INIT_MD_PATH,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +196,56 @@ class TestExecutionResult:
 # ---------------------------------------------------------------------------
 
 
+class TestSlugify:
+    def test_simple_name_includes_hash(self):
+        result = ClaudeCodeRunner._slugify("fix-bug")
+        assert result.startswith("fix-bug-")
+        assert len(result) == len("fix-bug-") + 8  # 8-char hash
+
+    def test_spaces_become_hyphens(self):
+        result = ClaudeCodeRunner._slugify("fix the bug")
+        assert result.startswith("fix-the-bug-")
+
+    def test_colons_and_slashes_replaced(self):
+        result = ClaudeCodeRunner._slugify(
+            "Test failure: tests/test_health_service.py::TestClass::test_method"
+        )
+        assert ":" not in result
+        assert "/" not in result
+        assert "::" not in result
+
+    def test_truncated_to_max_length(self):
+        long_name = "a" * 100
+        result = ClaudeCodeRunner._slugify(long_name, max_length=60)
+        assert len(result) <= 60
+
+    def test_no_leading_or_trailing_hyphens(self):
+        result = ClaudeCodeRunner._slugify("--weird--name--")
+        assert result.startswith("weird-name-")
+
+    def test_empty_string_returns_unnamed(self):
+        result = ClaudeCodeRunner._slugify(":::")
+        assert result.startswith("unnamed-")
+
+    def test_uppercase_lowered(self):
+        result = ClaudeCodeRunner._slugify("FIX-BUG")
+        assert result.startswith("fix-bug-")
+
+    def test_different_inputs_produce_different_slugs(self):
+        """Two test failures from the same file must not collide."""
+        a = ClaudeCodeRunner._slugify(
+            "Test failure: tests/test_search_service.py::TestInit::test_with_explicit_credentials"
+        )
+        b = ClaudeCodeRunner._slugify(
+            "Test failure: tests/test_search_service.py::TestInit::test_with_env_vars"
+        )
+        assert a != b
+
+    def test_deterministic(self):
+        """Same input always produces the same slug."""
+        assert ClaudeCodeRunner._slugify("fix-bug") == ClaudeCodeRunner._slugify("fix-bug")
+
+
 class TestCreateWorktree:
     @pytest.mark.asyncio
     async def test_success(self):
@@ -201,8 +255,26 @@ class TestCreateWorktree:
         with patch("asyncio.create_subprocess_exec", return_value=proc):
             path, branch = await runner.create_worktree("fix-bug")
 
-        assert path.endswith("night-fix-bug")
-        assert branch == "worktree-night-fix-bug"
+        slug = ClaudeCodeRunner._slugify("fix-bug")
+        assert path.endswith(f"night-{slug}")
+        assert branch == f"worktree-night-{slug}"
+
+    @pytest.mark.asyncio
+    async def test_sanitizes_test_failure_title(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=0)
+
+        ugly_name = "Test failure: tests/test_health_service.py::TestClass::test_method"
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            path, branch = await runner.create_worktree(ugly_name)
+
+        # Branch name must be git-safe
+        assert ":" not in branch
+        assert "/" not in branch
+        assert " " not in branch
+        # Verify the sanitized name was actually passed to git
+        cmd_args = mock_exec.call_args[0]
+        assert branch in cmd_args
 
     @pytest.mark.asyncio
     async def test_failure_raises_worktree_error(self):
@@ -332,7 +404,8 @@ class TestMergeToMain:
         proc = _make_process(returncode=0)
 
         with patch("asyncio.create_subprocess_exec", return_value=proc):
-            assert await runner.merge_to_main("/wt", "worktree-night-fix") is True
+            with patch.object(runner, "update_init_md", new_callable=AsyncMock):
+                assert await runner.merge_to_main("/wt", "worktree-night-fix") is True
 
     @pytest.mark.asyncio
     async def test_conflict_aborts_and_returns_false(self):
@@ -586,3 +659,143 @@ class TestCleanupWorktreeKeepBranch:
         cmd_strings = [" ".join(c) for c in calls]
         assert any("worktree" in s and "remove" in s for s in cmd_strings)
         assert any("branch" in s and "-D" in s for s in cmd_strings)
+
+
+# ---------------------------------------------------------------------------
+# TestUpdateInitMd
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateInitMd:
+    @pytest.mark.asyncio
+    async def test_writes_init_md_with_git_log(self, tmp_path):
+        runner = ClaudeCodeRunner(project_root=str(tmp_path))
+
+        log_output = b"abc1234 feat(agents): add FooAgent (2 hours ago)\ndef5678 fix(nlu): handle empty input (1 day ago)\n"
+
+        call_count = 0
+
+        async def _fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # git log
+                return _make_process(returncode=0, stdout=log_output)
+            if call_count == 2:
+                # git diff --stat
+                return _make_process(returncode=0, stdout=b"")
+            # git worktree list
+            return _make_process(returncode=0, stdout=b"")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+            await runner.update_init_md()
+
+        init_file = tmp_path / ".claude" / "INIT.md"
+        assert init_file.exists()
+        content = init_file.read_text()
+        assert "Implementation Briefing" in content
+        assert "abc1234" in content
+        assert "FooAgent" in content
+
+    @pytest.mark.asyncio
+    async def test_includes_active_worktrees(self, tmp_path):
+        runner = ClaudeCodeRunner(project_root=str(tmp_path))
+
+        porcelain = (
+            b"worktree /project\n"
+            b"branch refs/heads/main\n"
+            b"\n"
+            b"worktree /project/.claude/worktrees/fix-bug\n"
+            b"branch refs/heads/worktree-fix-bug\n"
+            b"\n"
+        )
+
+        call_count = 0
+
+        async def _fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_process(returncode=0, stdout=b"abc fix (1h ago)\n")
+            if call_count == 2:
+                return _make_process(returncode=0, stdout=b"")
+            return _make_process(returncode=0, stdout=porcelain)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+            await runner.update_init_md()
+
+        content = (tmp_path / ".claude" / "INIT.md").read_text()
+        assert "Active Worktrees" in content
+        assert "worktree-fix-bug" in content
+        # main should be excluded
+        assert "` → `/project`" not in content
+
+    @pytest.mark.asyncio
+    async def test_handles_all_commands_failing(self, tmp_path):
+        runner = ClaudeCodeRunner(project_root=str(tmp_path))
+
+        async def _fail(*args, **kwargs):
+            return _make_process(returncode=1, stderr=b"nope")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_fail):
+            await runner.update_init_md()
+
+        content = (tmp_path / ".claude" / "INIT.md").read_text()
+        assert "Implementation Briefing" in content
+        # Still writes the file — just with header only
+        assert "Recent Commits" not in content
+
+    @pytest.mark.asyncio
+    async def test_merge_to_main_calls_update_init_md(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+        proc = _make_process(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            with patch.object(runner, "update_init_md", new_callable=AsyncMock) as mock_update:
+                result = await runner.merge_to_main("/wt", "branch-fix")
+
+        assert result is True
+        mock_update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_merge_conflict_does_not_call_update_init_md(self):
+        runner = ClaudeCodeRunner(project_root="/project")
+
+        call_count = 0
+
+        async def _fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_process(returncode=1, stderr=b"CONFLICT")
+            return _make_process(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+            with patch.object(runner, "update_init_md", new_callable=AsyncMock) as mock_update:
+                result = await runner.merge_to_main("/wt", "branch-fix")
+
+        assert result is False
+        mock_update.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# TestBuildPromptInitMdInjection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPromptInitMdInjection:
+    def test_injects_init_md_when_present(self, tmp_path):
+        runner = ClaudeCodeRunner(project_root=str(tmp_path))
+        init_dir = tmp_path / ".claude"
+        init_dir.mkdir()
+        (init_dir / "INIT.md").write_text("# Briefing\n- abc1234 feat: added X\n")
+
+        prompt = runner._build_prompt("Fix bug", ["foo.py"])
+        assert "IMPLEMENTATION CONTEXT" in prompt
+        assert "abc1234" in prompt
+
+    def test_no_injection_when_missing(self, tmp_path):
+        runner = ClaudeCodeRunner(project_root=str(tmp_path))
+
+        prompt = runner._build_prompt("Fix bug", ["foo.py"])
+        assert "IMPLEMENTATION CONTEXT" not in prompt

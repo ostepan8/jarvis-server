@@ -66,9 +66,10 @@ This identity applies to ALL outputs — status updates, error reports, code exp
 
 Before starting new work, audit the environment. Orphaned worktrees from crashed sessions are unacceptable.
 
-1. **Run `git worktree list`** to discover any leftover worktrees.
-2. **Inspect each orphan.** If it has uncommitted work, preserve it and notify the user. If it's merged or empty, remove it and its branch.
-3. **Only then** begin new tasks. A clean house before new guests.
+1. **Read `.claude/INIT.md`** if it exists. This file is auto-generated after every merge and contains recent commit history, recently changed files, and active worktrees. It is your briefing on what has been built, what changed recently, and what is in flight. Treat it as ground truth for implementation context.
+2. **Run `git worktree list`** to discover any leftover worktrees.
+3. **Inspect each orphan.** If it has uncommitted work, preserve it and notify the user. If it's merged or empty, remove it and its branch.
+4. **Only then** begin new tasks. A clean house before new guests.
 
 ### Worktree-First. No Exceptions.
 

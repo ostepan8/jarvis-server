@@ -197,6 +197,38 @@ async def demo(
             if cmd == "/modes":
                 await show_modes_dashboard(jarvis)
                 continue
+            if cmd.startswith("/backlog"):
+                todo_svc = getattr(jarvis, "_agent_refs", {}).get("todo_service")
+                if not todo_svc:
+                    print(f"{Fore.RED}Todo service not available.{Style.RESET_ALL}")
+                    continue
+                arg = cmd[len("/backlog"):].strip()
+                if arg == "clear":
+                    items = todo_svc.list(tag="night-agent-backlog")
+                    items = [i for i in items if i.status.value != "done"]
+                    for item in items:
+                        todo_svc.complete(item.id)
+                    print(f"{Fore.GREEN}Cleared {len(items)} backlog items.{Style.RESET_ALL}")
+                else:
+                    items = todo_svc.list(tag="night-agent-backlog")
+                    items = [i for i in items if i.status.value != "done"]
+                    if not items:
+                        print(f"{Fore.GREEN}Backlog is empty. The night agent has nothing to complain about.{Style.RESET_ALL}")
+                    else:
+                        print(f"\n{Fore.MAGENTA}Night Agent Backlog ({len(items)} items):{Style.RESET_ALL}\n")
+                        for item in items:
+                            pri_color = {
+                                "urgent": Fore.RED, "high": Fore.YELLOW,
+                                "medium": Fore.WHITE, "low": Fore.CYAN,
+                            }.get(item.priority.value, Fore.WHITE)
+                            print(f"  {Fore.BLUE}{item.id}{Style.RESET_ALL}  "
+                                  f"{pri_color}[{item.priority.value}]{Style.RESET_ALL}  "
+                                  f"{item.title}")
+                            if item.description:
+                                first_line = item.description.split("\n")[0][:80]
+                                print(f"         {Fore.WHITE}{first_line}{Style.RESET_ALL}")
+                        print(f"\n  {Fore.WHITE}Use '/backlog clear' to mark all as done.{Style.RESET_ALL}\n")
+                continue
             if cmd == "/help":
                 print("\nAvailable commands:")
                 print("  /commands       - Browse all trigger phrases (shortest first)")
@@ -207,6 +239,7 @@ async def demo(
                 print("  /agents         - View active agents")
                 print("  /modes          - SSH into a device (direct control)")
                 print("  /night          - Toggle night mode (auto-improvement)")
+                print("  /backlog        - View failed night agent tasks")
                 print("  /help           - Show this help")
                 print("  exit            - Quit Jarvis\n")
                 continue
@@ -231,6 +264,15 @@ async def demo(
             result_keys = list(result.keys()) if isinstance(result, dict) else "N/A"
             logger.log("DEBUG", "Request completed", {"result_type": str(type(result)), "result_keys": result_keys})
             await _display_result(result, output_handler)
+
+            # Detect night mode activated via protocol (e.g. "goodnight")
+            # and late-bind the printer before queued background tasks run.
+            if jarvis.night_mode and night_printer is None:
+                night_printer = NightModePrinter()
+                for agent in jarvis.night_agents:
+                    if hasattr(agent, "_progress_callback"):
+                        agent._progress_callback = night_printer.on_event
+                jarvis._night_progress_callback = night_printer.on_event
     finally:
         await jarvis.shutdown()
 

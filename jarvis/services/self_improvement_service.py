@@ -20,7 +20,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional
 NightProgressCallback = Optional[Callable[[str, str, dict], None]]
 
 from ..logging import JarvisLogger
-from ..services.todo_service import TodoService
+from ..services.todo_service import TaskStatus, TodoService
 from .system_analyzer import SystemAnalyzer, Discovery, DiscoveryType
 from .claude_code_runner import ClaudeCodeRunner
 
@@ -31,9 +31,13 @@ from .claude_code_runner import ClaudeCodeRunner
 
 PRIORITY_ORDER: Dict[DiscoveryType, int] = {
     DiscoveryType.TEST_FAILURE: 0,
-    DiscoveryType.LOG_ERROR: 1,
-    DiscoveryType.MANUAL_TODO: 2,
-    DiscoveryType.CODE_QUALITY: 3,
+    DiscoveryType.EXCEPTION_ANTIPATTERN: 1,
+    DiscoveryType.LOG_ERROR: 2,
+    DiscoveryType.UNUSED_IMPORT: 3,
+    DiscoveryType.MANUAL_TODO: 4,
+    DiscoveryType.MISSING_TESTS: 5,
+    DiscoveryType.COMPLEXITY_HOTSPOT: 6,
+    DiscoveryType.CODE_QUALITY: 7,
 }
 
 # Priority string ordering (for secondary sort within the same type)
@@ -358,6 +362,8 @@ class SelfImprovementService:
                 self._emit(progress_callback, "task_failure", f"Failed: {result.error_message}", {
                     "title": result.task_title, "error": result.error_message
                 })
+                # Push to backlog so the user can review and we skip it next cycle.
+                self._push_to_backlog(discovery, result.error_message or "Unknown")
 
             # Update todo status if linked
             if discovery.todo_id and self._todo_service:
@@ -468,6 +474,7 @@ class SelfImprovementService:
                 self._emit(progress_callback, "task_failure", f"Failed: {result.error_message}", {
                     "title": result.task_title, "error": result.error_message
                 })
+                self._push_to_backlog(discovery, result.error_message or "Unknown")
 
             if discovery.todo_id and self._todo_service:
                 await self._update_todo_status(discovery.todo_id, result.success)
@@ -515,13 +522,22 @@ class SelfImprovementService:
     # Prioritization
     # ------------------------------------------------------------------
 
+    BACKLOG_TAG: ClassVar[str] = "night-agent-backlog"
+
     def _prioritize(self, discoveries: list[Discovery]) -> list[Discovery]:
         """Sort discoveries by type priority, then by urgency string.
+
+        Filters out any discovery whose title already appears in the
+        night-agent backlog (i.e. it failed on a previous run and was
+        pushed to the todo list for the user to review).
 
         Returns at most MAX_TASKS_PER_NIGHT items.
         """
         if not discoveries:
             return []
+
+        # Load backlog titles so we don't re-attempt known failures.
+        backlog_titles = self._load_backlog_titles()
 
         def sort_key(d: Discovery) -> tuple[int, int]:
             type_order = PRIORITY_ORDER.get(d.discovery_type, 99)
@@ -529,7 +545,48 @@ class SelfImprovementService:
             return (type_order, string_order)
 
         sorted_discoveries = sorted(discoveries, key=sort_key)
-        return sorted_discoveries[: self.MAX_TASKS_PER_NIGHT]
+        filtered = [d for d in sorted_discoveries if d.title not in backlog_titles]
+        return filtered[: self.MAX_TASKS_PER_NIGHT]
+
+    def _load_backlog_titles(self) -> set[str]:
+        """Return titles of open night-agent-backlog todo items."""
+        if not self._todo_service:
+            return set()
+        try:
+            items = self._todo_service.list(tag=self.BACKLOG_TAG)
+            return {
+                item.title
+                for item in items
+                if item.status != TaskStatus.DONE
+            }
+        except Exception:
+            return set()
+
+    def _push_to_backlog(self, discovery: Discovery, error_message: str) -> None:
+        """Create a todo item for a failed night-agent task."""
+        if not self._todo_service:
+            return
+        try:
+            self._todo_service.create(
+                title=discovery.title,
+                description=(
+                    f"{discovery.description}\n\n"
+                    f"Night agent error: {error_message}"
+                ),
+                priority=discovery.priority,
+                tags=[self.BACKLOG_TAG, discovery.discovery_type.value],
+            )
+            self._logger.log(
+                "INFO",
+                "Pushed to backlog",
+                discovery.title,
+            )
+        except Exception as exc:
+            self._logger.log(
+                "WARNING",
+                "Failed to push to backlog",
+                f"{discovery.title}: {exc}",
+            )
 
     # ------------------------------------------------------------------
     # Size estimation
@@ -573,6 +630,10 @@ class SelfImprovementService:
                 discovery.description,
                 discovery.relevant_files,
                 worktree_path,
+                discovery_type=discovery.discovery_type.value
+                if hasattr(discovery.discovery_type, "value")
+                else str(discovery.discovery_type),
+                confidence=getattr(discovery, "confidence", "medium"),
             )
 
             if not exec_result.success:
@@ -605,8 +666,11 @@ class SelfImprovementService:
                     branch_name=branch_name,
                 )
 
-            # --- PR flow vs legacy merge ---
-            if self._use_prs:
+            # --- Confidence-based routing ---
+            # use_prs=True forces PRs for everything (backwards compat).
+            # Otherwise: low confidence -> PR, high/medium -> auto-merge.
+            confidence = getattr(discovery, "confidence", "medium")
+            if self._use_prs or confidence == "low":
                 return await self._finish_with_pr(
                     discovery, exec_result, worktree_path, branch_name, task_start
                 )

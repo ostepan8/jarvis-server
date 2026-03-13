@@ -17,6 +17,7 @@ aider-env/
 !.env.example
 *.db
 *.sqlite3
+credentials/
 
 # Logs & caches
 *.log
@@ -59,6 +60,7 @@ PRE_PUSH_CHECKLIST.md
 jarvis/protocols/recorded/
 jarvis/agents/health_agent/reports/
 .claude/worktrees/
+.claude/INIT.md
 
 # personal-scheduler build artifacts
 personal-scheduler/**/*.o

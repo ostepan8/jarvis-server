@@ -29,14 +29,18 @@ from server.routers.self_improvement import router as self_improvement_router
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(title="Jarvis API")
-    origins = [
-        "http://localhost:3000",  # React default
-        "http://localhost:3001",  # Alternative React port
-        "http://localhost:5173",  # Vite default
-        "http://localhost:8080",  # Alternative frontend
-        "http://127.0.0.1:3000",  # Alternative localhost format
-        "http://127.0.0.1:5173",  # Alternative Vite format
-    ]
+    cors_env = os.getenv("CORS_ORIGINS")
+    if cors_env:
+        origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    else:
+        origins = [
+            "http://localhost:3000",  # React default
+            "http://localhost:3001",  # Alternative React port
+            "http://localhost:5173",  # Vite default
+            "http://localhost:8080",  # Alternative frontend
+            "http://127.0.0.1:3000",  # Alternative localhost format
+            "http://127.0.0.1:5173",  # Alternative Vite format
+        ]
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,

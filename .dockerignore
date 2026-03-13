@@ -1,0 +1,83 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.so
+*.egg-info
+*.egg
+dist/
+build/
+
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+aider-env/
+
+# Environment & secrets
+.env
+credentials/
+
+# Databases (volumes handle persistence)
+*.db
+*.sqlite3
+
+# Logs & caches
+*.log
+jarvis_log*
+*.pot
+*.cache/
+.cache/
+.pytest_cache/
+coverage.*
+htmlcov/
+perf_logs*
+
+# ChromaDB data (volume-mounted at runtime)
+chroma*/
+
+# Tests
+tests/
+
+# Documentation
+*.md
+LICENSE
+
+# IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Models (too large for image)
+models/
+
+# Docker files (no recursion)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github/
+
+# Claude Code
+.claude/
+
+# Aider
+.aider*
+
+# Misc
+personal-scheduler/
+COMMIT_MESSAGE.md
+PRE_PUSH_CHECKLIST.md
+Makefile

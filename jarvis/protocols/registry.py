@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Dict, Iterable, Optional, List
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
@@ -17,8 +18,10 @@ class ProtocolRegistry(BaseRegistry[Protocol]):
     """Stores and retrieves Protocol definitions using SQLite."""
 
     def __init__(
-        self, db_path: str = "protocols.db", logger: JarvisLogger | None = None
+        self, db_path: str | None = None, logger: JarvisLogger | None = None
     ) -> None:
+        if db_path is None:
+            db_path = os.getenv("PROTOCOLS_DB_PATH", "protocols.db")
         self.db_path = Path(db_path)
         self.logger = logger or JarvisLogger()
         self.conn: sqlite3.Connection = sqlite3.connect(self.db_path)

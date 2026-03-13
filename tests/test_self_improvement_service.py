@@ -29,6 +29,10 @@ class FakeDiscoveryType(str, Enum):
     LOG_ERROR = "log_error"
     MANUAL_TODO = "manual_todo"
     CODE_QUALITY = "code_quality"
+    UNUSED_IMPORT = "unused_import"
+    EXCEPTION_ANTIPATTERN = "exception_antipattern"
+    COMPLEXITY_HOTSPOT = "complexity_hotspot"
+    MISSING_TESTS = "missing_tests"
 
 
 class FakeDiscovery:
@@ -43,6 +47,7 @@ class FakeDiscovery:
         relevant_files=None,
         source_detail="",
         todo_id=None,
+        confidence="medium",
     ):
         self.discovery_type = discovery_type
         self.title = title
@@ -51,6 +56,21 @@ class FakeDiscovery:
         self.relevant_files = relevant_files or []
         self.source_detail = source_detail
         self.todo_id = todo_id
+        self.confidence = confidence
+
+    def to_dict(self) -> dict:
+        return {
+            "discovery_type": self.discovery_type.value
+            if hasattr(self.discovery_type, "value")
+            else str(self.discovery_type),
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "relevant_files": list(self.relevant_files),
+            "source_detail": self.source_detail,
+            "todo_id": self.todo_id,
+            "confidence": self.confidence,
+        }
 
 
 class FakeExecutionResult:
@@ -1178,3 +1198,155 @@ class TestNightReportPRFields:
         assert loaded is not None
         assert loaded.results[0].pr_url == "https://github.com/user/repo/pull/42"
         assert loaded.results[0].branch_name == "worktree-night-fix-test"
+
+
+# ---------------------------------------------------------------------------
+# TestConfidenceBasedRouting
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceBasedRouting:
+    """Verify confidence-driven merge vs PR routing."""
+
+    @pytest.mark.asyncio
+    async def test_high_confidence_auto_merges(self, tmp_path):
+        """High confidence discovery should merge directly when use_prs=False."""
+        svc = _make_service(tmp_path, use_prs=False)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-high", "branch-high")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.merge_to_main = AsyncMock(return_value=True)
+        svc._runner.push_branch = AsyncMock()
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.UNUSED_IMPORT,
+            "Remove unused os import",
+            "Remove unused import os in foo.py",
+            "medium",
+            relevant_files=["foo.py"],
+            confidence="high",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.merged is True
+        svc._runner.merge_to_main.assert_awaited_once()
+        svc._runner.push_branch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_medium_confidence_auto_merges(self, tmp_path):
+        """Medium confidence discovery should also merge directly."""
+        svc = _make_service(tmp_path, use_prs=False)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-med", "branch-med")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.merge_to_main = AsyncMock(return_value=True)
+        svc._runner.push_branch = AsyncMock()
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.LOG_ERROR,
+            "Fix log error",
+            "Fix the timeout error",
+            "high",
+            confidence="medium",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.merged is True
+        svc._runner.merge_to_main.assert_awaited_once()
+        svc._runner.push_branch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_low_confidence_creates_pr(self, tmp_path):
+        """Low confidence discovery should create a PR instead of merging."""
+        svc = _make_service(tmp_path, use_prs=False)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-low", "branch-low")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.merge_to_main = AsyncMock()
+        svc._runner.push_branch = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.create_pull_request = AsyncMock(
+            return_value=FakeExecutionResult(
+                success=True,
+                stdout="https://github.com/user/repo/pull/99\n",
+            )
+        )
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.COMPLEXITY_HOTSPOT,
+            "Refactor long function",
+            "Split mega_function into helpers",
+            "low",
+            confidence="low",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.merged is False
+        assert result.pr_url == "https://github.com/user/repo/pull/99"
+        svc._runner.merge_to_main.assert_not_awaited()
+        svc._runner.push_branch.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_use_prs_true_forces_pr_even_high_confidence(self, tmp_path):
+        """use_prs=True should force PR creation even for high confidence."""
+        svc = _make_service(tmp_path, use_prs=True)
+        svc._runner.create_worktree = AsyncMock(
+            return_value=("/tmp/wt-force-pr", "branch-force-pr")
+        )
+        svc._runner.execute_task = AsyncMock(
+            return_value=FakeExecutionResult(success=True, files_changed=1)
+        )
+        svc._runner.run_tests = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.merge_to_main = AsyncMock()
+        svc._runner.push_branch = AsyncMock(
+            return_value=FakeExecutionResult(success=True)
+        )
+        svc._runner.create_pull_request = AsyncMock(
+            return_value=FakeExecutionResult(
+                success=True,
+                stdout="https://github.com/user/repo/pull/77\n",
+            )
+        )
+        svc._runner.cleanup_worktree = AsyncMock()
+
+        discovery = FakeDiscovery(
+            FakeDiscoveryType.UNUSED_IMPORT,
+            "Remove unused import",
+            "desc",
+            "medium",
+            confidence="high",
+        )
+
+        result = await svc._execute_task(discovery)
+        assert result.success is True
+        assert result.merged is False
+        assert result.pr_url == "https://github.com/user/repo/pull/77"
+        svc._runner.merge_to_main.assert_not_awaited()
+        svc._runner.push_branch.assert_awaited_once()

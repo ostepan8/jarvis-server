@@ -8,7 +8,9 @@ limits.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
+import re
 import time
 from dataclasses import dataclass
 from fnmatch import fnmatch
@@ -17,6 +19,10 @@ from typing import Optional
 
 from ..core.errors import SafetyViolationError, WorktreeError
 from ..logging import JarvisLogger
+
+INIT_MD_PATH = ".claude/INIT.md"
+_MAX_LOG_ENTRIES = 20
+_MAX_DIFF_STAT_COMMITS = 5
 
 
 @dataclass
@@ -77,6 +83,24 @@ class ClaudeCodeRunner:
         except Exception:
             return False
 
+    @staticmethod
+    def _slugify(name: str, max_length: int = 60) -> str:
+        """Convert an arbitrary string into a git-safe, unique branch name slug.
+
+        Appends a short hash suffix so that different inputs which share a
+        long common prefix (e.g. multiple test failures from the same file)
+        still produce distinct slugs.
+        """
+        suffix = hashlib.sha1(name.encode()).hexdigest()[:8]
+        slug = name.lower()
+        slug = re.sub(r"[^a-z0-9]+", "-", slug)
+        slug = slug.strip("-")
+        # Reserve room for the dash + 8-char hash suffix
+        cap = max_length - 9
+        if len(slug) > cap:
+            slug = slug[:cap].rstrip("-")
+        return f"{slug}-{suffix}" if slug else f"unnamed-{suffix}"
+
     async def create_worktree(self, task_name: str) -> tuple[str, str]:
         """Create an isolated git worktree for *task_name*.
 
@@ -86,10 +110,11 @@ class ClaudeCodeRunner:
         Raises:
             WorktreeError: If the git command fails.
         """
+        safe_name = self._slugify(task_name)
         worktree_path = str(
-            Path(self.project_root) / ".claude" / "worktrees" / f"night-{task_name}"
+            Path(self.project_root) / ".claude" / "worktrees" / f"night-{safe_name}"
         )
-        branch_name = f"worktree-night-{task_name}"
+        branch_name = f"worktree-night-{safe_name}"
 
         if self.logger:
             self.logger.log(
@@ -121,6 +146,8 @@ class ClaudeCodeRunner:
         task_description: str,
         relevant_files: list[str],
         worktree_path: str,
+        discovery_type: str = "",
+        confidence: str = "medium",
     ) -> ExecutionResult:
         """Run a Claude Code task inside *worktree_path*.
 
@@ -128,7 +155,10 @@ class ClaudeCodeRunner:
             SafetyViolationError: If denied paths are touched or too many
                 files are changed.
         """
-        prompt = self._build_prompt(task_description, relevant_files)
+        prompt = self._build_prompt(
+            task_description, relevant_files,
+            discovery_type=discovery_type, confidence=confidence,
+        )
 
         if self.logger:
             self.logger.log("INFO", "Executing Claude Code task", worktree_path)
@@ -235,6 +265,8 @@ class ClaudeCodeRunner:
             )
             return False
 
+        # Keep the implementation briefing current after every merge.
+        await self.update_init_md()
         return True
 
     async def check_gh_available(self) -> bool:
@@ -317,25 +349,146 @@ class ClaudeCodeRunner:
                 )
 
     # ------------------------------------------------------------------
+    # INIT.md — implementation briefing for future sessions
+    # ------------------------------------------------------------------
+
+    async def update_init_md(self) -> None:
+        """Regenerate ``.claude/INIT.md`` from current git state.
+
+        Called after every successful merge so that future Claude sessions
+        inherit context about what has been built, changed, and is in
+        progress.  The file is kept concise — recent history plus active
+        worktrees — so it stays useful without becoming noise.
+        """
+        sections: list[str] = [
+            "# INIT.md — Implementation Briefing",
+            "",
+            "*Auto-generated after each merge. Do not edit by hand.*",
+            "",
+        ]
+
+        # --- Recent commits (what happened) ---
+        log_result = await self._run_subprocess(
+            [
+                "git", "log", f"--max-count={_MAX_LOG_ENTRIES}",
+                "--format=%h %s (%ar)",
+            ],
+            cwd=self.project_root,
+            timeout=10,
+        )
+        if log_result.success and log_result.stdout.strip():
+            sections.append("## Recent Commits")
+            sections.append("")
+            for line in log_result.stdout.strip().splitlines():
+                sections.append(f"- {line}")
+            sections.append("")
+
+        # --- Files changed recently (what's fresh) ---
+        stat_result = await self._run_subprocess(
+            [
+                "git", "diff", "--stat",
+                f"HEAD~{_MAX_DIFF_STAT_COMMITS}..HEAD",
+            ],
+            cwd=self.project_root,
+            timeout=10,
+        )
+        if stat_result.success and stat_result.stdout.strip():
+            sections.append("## Recently Changed Files")
+            sections.append("")
+            sections.append("```")
+            sections.append(stat_result.stdout.strip())
+            sections.append("```")
+            sections.append("")
+
+        # --- Active worktrees (what's in flight) ---
+        wt_result = await self._run_subprocess(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=self.project_root,
+            timeout=10,
+        )
+        if wt_result.success and wt_result.stdout.strip():
+            worktrees: list[str] = []
+            current_path = ""
+            current_branch = ""
+            for line in wt_result.stdout.strip().splitlines():
+                if line.startswith("worktree "):
+                    current_path = line.removeprefix("worktree ").strip()
+                elif line.startswith("branch "):
+                    current_branch = line.removeprefix("branch ").strip()
+                    current_branch = current_branch.removeprefix("refs/heads/")
+                elif line == "":
+                    if current_path and current_branch and current_branch != "main":
+                        worktrees.append(
+                            f"- `{current_branch}` → `{current_path}`"
+                        )
+                    current_path = ""
+                    current_branch = ""
+            # Flush last entry (porcelain output may not end with blank line)
+            if current_path and current_branch and current_branch != "main":
+                worktrees.append(f"- `{current_branch}` → `{current_path}`")
+
+            if worktrees:
+                sections.append("## Active Worktrees")
+                sections.append("")
+                sections.extend(worktrees)
+                sections.append("")
+
+        init_path = Path(self.project_root) / INIT_MD_PATH
+        init_path.parent.mkdir(parents=True, exist_ok=True)
+        init_path.write_text("\n".join(sections) + "\n")
+
+        if self.logger:
+            self.logger.log("INFO", "Updated INIT.md", str(init_path))
+
+    # ------------------------------------------------------------------
     # Prompt construction
     # ------------------------------------------------------------------
 
     def _build_prompt(
-        self, task_description: str, relevant_files: list[str]
+        self,
+        task_description: str,
+        relevant_files: list[str],
+        discovery_type: str = "",
+        confidence: str = "medium",
     ) -> str:
-        """Build the structured prompt sent to Claude Code."""
+        """Build the structured prompt sent to Claude Code.
+
+        Includes discovery-type-specific instructions when *discovery_type*
+        is provided, and communicates the *confidence* level so the agent
+        can calibrate the scope of its changes.
+        """
         if relevant_files:
             files_section = "\n".join(f"- {f}" for f in relevant_files)
         else:
             files_section = "No specific files identified. Explore as needed."
 
+        # Discovery-type-specific guidance
+        type_instructions = self._type_specific_instructions(discovery_type)
+
+        # Inject INIT.md context so spawned sessions know what's been built
+        init_context = ""
+        init_path = Path(self.project_root) / INIT_MD_PATH
+        if init_path.exists():
+            try:
+                init_context = init_path.read_text().strip()
+            except OSError:
+                pass
+
         return (
             "You are an autonomous code improvement agent for the Jarvis Server project.\n"
+            "\n"
+            + (
+                "IMPLEMENTATION CONTEXT (from .claude/INIT.md):\n"
+                f"{init_context}\n\n"
+                if init_context else ""
+            )
+            + f"FIX CONFIDENCE: {confidence}\n"
             "\n"
             "YOUR TASK:\n"
             f"{task_description}\n"
             "\n"
-            "IMPORTANT CONSTRAINTS:\n"
+            + (f"TYPE-SPECIFIC GUIDANCE:\n{type_instructions}\n\n" if type_instructions else "")
+            + "IMPORTANT CONSTRAINTS:\n"
             "- Make the MINIMUM changes necessary to fix the issue\n"
             "- NEVER modify these files: jarvis/core/system.py, jarvis/agents/factory.py, "
             "jarvis/core/config.py, jarvis/agents/nlu_agent/__init__.py\n"
@@ -366,6 +519,37 @@ class ClaudeCodeRunner:
             "- GET /self-improvement/discoveries — see discovered issues\n"
             "Use curl to call these. ALWAYS run tests after changes.\n"
         )
+
+    @staticmethod
+    def _type_specific_instructions(discovery_type: str) -> str:
+        """Return targeted fix instructions based on discovery type."""
+        instructions = {
+            "unused_import": (
+                "Remove the unused import(s). Do not add any other changes."
+            ),
+            "exception_antipattern": (
+                "Replace the bare except / swallowed exception with proper error handling. "
+                "Log or re-raise as appropriate. Do not silence errors with pass."
+            ),
+            "test_failure": (
+                "Fix the failing test(s). If the test output is included above, "
+                "use it to diagnose the root cause. Prefer fixing the source code "
+                "over modifying the test, unless the test expectation is wrong."
+            ),
+            "log_error": (
+                "Investigate the stack trace details included above. "
+                "Fix the root cause of the error, not just the symptom."
+            ),
+            "complexity_hotspot": (
+                "Refactor the complex function into smaller, well-named helpers. "
+                "Preserve all existing behavior and tests."
+            ),
+            "missing_tests": (
+                "Create a test file for the untested module. Cover the main "
+                "public API methods with at least happy-path and one error case."
+            ),
+        }
+        return instructions.get(discovery_type, "")
 
     # ------------------------------------------------------------------
     # Safety helpers

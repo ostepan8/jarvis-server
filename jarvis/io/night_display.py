@@ -32,6 +32,14 @@ class NightModePrinter:
             line += f" PR: {data['pr_url']}"
 
         sys.stdout.write(line + "\n")
+
+        # Note when a failed task gets pushed to the backlog
+        if event_type == "task_failure":
+            sys.stdout.write(
+                f"{self.PREFIX}           "
+                f"{Fore.YELLOW}Pushed to backlog — will skip on future runs.{Style.RESET_ALL}\n"
+            )
+
         sys.stdout.flush()
 
     def print_entering(self) -> None:

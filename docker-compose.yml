@@ -1,0 +1,48 @@
+services:
+  jarvis:
+    build: .
+    container_name: jarvis
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - AUTH_DB_PATH=/app/data/auth.db
+      - LOG_DB_PATH=/app/data/jarvis_logs.db
+      - PROTOCOLS_DB_PATH=/app/data/protocols.db
+      - PERF_LOG_PATH=/app/data/perf_logs.jsonl
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/}
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - jarvis_data:/app/data
+      - jarvis_chroma:/app/chroma
+      - jarvis_home:/home/jarvis/.jarvis
+      - jarvis_protocols:/app/jarvis/protocols/recorded
+    # Uncomment for smart home LAN access (Hue/Roku/Yeelight):
+    # network_mode: host  # Note: no-op on Docker Desktop for macOS
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    depends_on:
+      mongo:
+        condition: service_started
+        required: false
+
+  mongo:
+    image: mongo:7
+    container_name: jarvis-mongo
+    restart: unless-stopped
+    profiles: [mongo]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  jarvis_data:
+  jarvis_chroma:
+  jarvis_home:
+  jarvis_protocols:
+  mongo_data:

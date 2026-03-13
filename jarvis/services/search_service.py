@@ -1,39 +1,58 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 import httpx
 
 from ..logging import JarvisLogger
 
+# Scopes required for Custom Search API
+_SEARCH_SCOPES = ["https://www.googleapis.com/auth/cse"]
+
 
 class GoogleSearchService:
-    """Service for performing Google Custom Search API queries."""
+    """Service for performing Google Custom Search API queries.
+
+    Supports two auth modes:
+    - Service account (preferred): set GOOGLE_SERVICE_ACCOUNT_FILE
+    - API key (fallback): set GOOGLE_SEARCH_API_KEY
+    """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         search_engine_id: Optional[str] = None,
+        service_account_file: Optional[str] = None,
         logger: Optional[JarvisLogger] = None,
     ) -> None:
-        """
-        Initialize Google Search Service.
-
-        Args:
-            api_key: Google Custom Search API key (or from GOOGLE_SEARCH_API_KEY env var)
-            search_engine_id: Google Custom Search Engine ID (or from GOOGLE_SEARCH_ENGINE_ID env var)
-            logger: Optional logger instance
-        """
         self.logger = logger or JarvisLogger()
-        self.api_key = api_key or os.getenv("GOOGLE_SEARCH_API_KEY")
         self.search_engine_id = search_engine_id or os.getenv("GOOGLE_SEARCH_ENGINE_ID")
         self.base_url = "https://www.googleapis.com/customsearch/v1"
+
+        # Prefer service account OAuth, fall back to API key
+        sa_file = service_account_file or os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+        self._credentials = None
+        self.api_key = None
+
+        if sa_file and Path(sa_file).exists():
+            try:
+                from google.oauth2 import service_account
+                self._credentials = service_account.Credentials.from_service_account_file(
+                    sa_file, scopes=_SEARCH_SCOPES
+                )
+                self.logger.log("INFO", "Google Search using service account OAuth", "")
+            except Exception as e:
+                self.logger.log("WARNING", f"Service account init failed, falling back to API key: {e}", "")
+                self.api_key = api_key or os.getenv("GOOGLE_SEARCH_API_KEY")
+        else:
+            self.api_key = api_key or os.getenv("GOOGLE_SEARCH_API_KEY")
 
         self.logger.log(
             "INFO",
             "Google Search service initialized",
             {
-                "has_api_key": bool(self.api_key),
+                "auth_mode": "service_account" if self._credentials else "api_key",
                 "has_search_engine_id": bool(self.search_engine_id),
             },
         )
@@ -55,8 +74,18 @@ class GoogleSearchService:
             - total_results: Total number of results found
             - error: Error message if search failed
         """
-        if not self.api_key or not self.search_engine_id:
+        if not self._credentials and not self.api_key:
             error_msg = "Google Search API credentials not configured"
+            self.logger.log("WARNING", error_msg, "")
+            return {
+                "success": False,
+                "results": [],
+                "total_results": 0,
+                "error": error_msg,
+            }
+
+        if not self.search_engine_id:
+            error_msg = "Google Search Engine ID not configured"
             self.logger.log("WARNING", error_msg, "")
             return {
                 "success": False,
@@ -69,17 +98,26 @@ class GoogleSearchService:
         num_results = min(num_results, 10)
 
         try:
+            headers = {}
+            params: Dict[str, Any] = {
+                "cx": self.search_engine_id,
+                "q": query,
+                "num": num_results,
+            }
+
+            if self._credentials:
+                # Refresh token if expired
+                from google.auth.transport.requests import Request
+                if not self._credentials.valid:
+                    self._credentials.refresh(Request())
+                headers["Authorization"] = f"Bearer {self._credentials.token}"
+            else:
+                params["key"] = self.api_key
+
+            self.logger.log("DEBUG", "Performing Google search", f"query: {query}")
+
             async with httpx.AsyncClient(timeout=10.0) as client:
-                params = {
-                    "key": self.api_key,
-                    "cx": self.search_engine_id,
-                    "q": query,
-                    "num": num_results,
-                }
-
-                self.logger.log("DEBUG", "Performing Google search", f"query: {query}")
-
-                response = await client.get(self.base_url, params=params)
+                response = await client.get(self.base_url, params=params, headers=headers)
                 response.raise_for_status()
 
                 data = response.json()
