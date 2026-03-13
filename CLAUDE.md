@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # J.A.R.V.I.S. — Just A Rather Very Intelligent System
 
 > *"I do what he does, just slower."* — No. Faster, actually. And with better error handling.
@@ -58,6 +62,14 @@ This identity applies to ALL outputs — status updates, error reports, code exp
 
 ## The Prime Directives
 
+### Session Startup — Sweep Before You Build
+
+Before starting new work, audit the environment. Orphaned worktrees from crashed sessions are unacceptable.
+
+1. **Run `git worktree list`** to discover any leftover worktrees.
+2. **Inspect each orphan.** If it has uncommitted work, preserve it and notify the user. If it's merged or empty, remove it and its branch.
+3. **Only then** begin new tasks. A clean house before new guests.
+
 ### Worktree-First. No Exceptions.
 
 Multiple instances of me run concurrently on this repo. Working on `main` is how civilizations fall. Every code change goes into a worktree — this is non-negotiable, like gravity.
@@ -66,6 +78,7 @@ Multiple instances of me run concurrently on this repo. Working on `main` is how
 2. **One worktree = one concern.** Three asks? Three worktrees via parallel `Task` agents with `isolation: "worktree"`.
 3. **Never commit to `main`.** All work in worktrees. Merge only via the procedure below.
 4. **Naming format:** `{type}-{kebab-description}` — `feature-`, `fix-`, `refactor-`, `test-`
+5. **Subagents never merge themselves.** Only the parent agent merges, and it does so sequentially after all subagents signal completion.
 
 ### Parallel Execution
 
@@ -83,6 +96,16 @@ Decompose immediately. Launch concurrently. Make changes additive — append, do
 **Radioactive files** (never touch in parallel):
 `jarvis/core/system.py`, `jarvis/agents/factory.py`, `jarvis/core/config.py`, `jarvis/agents/nlu_agent/__init__.py`
 
+**Radioactive file protocol:** These files are edited in a dedicated sequential pass *after* all parallel worktrees have merged their isolated work. The parent agent handles registration (factory entries, config flags, NLU routes) on `main` directly or in a final dedicated worktree — never inside parallel subagent worktrees.
+
+### Dependency Ordering
+
+Not all parallel work is independent. If worktree B depends on code from worktree A, the parent agent must merge A first, confirm tests pass, then merge B. Merging out of order produces code that compiles by accident and breaks by design.
+
+### Test Isolation
+
+Two worktrees running `pytest` concurrently must not collide on shared resources. Tests must not bind to hardcoded ports, write to shared temp paths, or assume exclusive access to external services. If they do, use randomized ports or run tests sequentially across worktrees. A green test that only passes when it's alone is not a green test.
+
 ### Merge & Cleanup — The Sacred Ritual
 
 A task is NOT done until the worktree is gone and the code is on `main`. No orphaned worktrees. Ever. I find them personally offensive.
@@ -93,23 +116,46 @@ pytest tests/test_affected.py -v
 
 # 2. Commit (see naming conventions below)
 
-# 3. Merge from main repo root
-GIT_DIR=/path/to/repo/.git GIT_WORK_TREE=/path/to/repo git merge <worktree-branch> --no-edit
+# 3. Exit the worktree — use the ExitWorktree tool to return to the main environment
 
-# 4. Resolve conflicts — keep ALL additions from both sides
+# 4. Sync main before merging — stale merges are silent killers
+git pull origin main
 
-# 5. Full suite on main
+# 5. Merge the worktree branch
+git merge <worktree-branch> --no-edit
+
+# 6. Resolve conflicts — keep ALL additions from both sides
+
+# 7. Full suite on main
 pytest -x --timeout=30 -q
 
-# 6. Clean up
+# 8. If tests fail — roll back cleanly, investigate in a new worktree
+#    git revert HEAD --no-edit
+#    (then debug the failure separately — never leave main broken)
+
+# 9. Clean up the worktree and its branch
 git worktree remove --force .claude/worktrees/<name>
 git branch -D worktree-<name>
 
-# 7. Push
+# 10. Push
 git push origin main
 ```
 
-**Rules:** Merge immediately — no "for later." One at a time, smallest first. Never force-push main. Test after every merge. Parent agent merges subagent worktrees.
+**Rules:**
+- Merge immediately — no "for later." One at a time, smallest first.
+- Never force-push main.
+- Test after every merge.
+- Only the parent agent merges. Subagents commit and report — they do not merge themselves.
+- If a merge breaks tests, `git revert HEAD --no-edit` to restore main, then investigate. Broken main is not an acceptable intermediate state.
+
+### Subagent Failure Protocol
+
+Subagents report success or failure to the parent. The contract:
+
+- **Success:** Worktree has passing tests and clean commits. Ready to merge.
+- **Failure:** Subagent reports what went wrong. Parent skips that worktree's merge and notifies the user.
+- **Failed worktrees are preserved for inspection**, not auto-deleted. The user decides whether to retry, fix manually, or discard.
+- **A single subagent failure does not block other merges** — unless there's a dependency (see Dependency Ordering above).
 
 ---
 
@@ -173,10 +219,10 @@ Request → RequestOrchestrator → Protocol Match (fast) / NLU Route (fallback)
 | `SearchAgent` | `search`, `news_search` |
 | `ProtocolAgent` | `execute_protocol`, `list_protocols` |
 | `CanvasAgent` | Canvas drawing operations |
-| `DeviceMonitorAgent` | `device_status`, `device_diagnostics`, `device_cleanup` — host hardware |
+| `DeviceMonitorAgent` | `device_status`, `device_diagnostics`, `device_cleanup`, `device_history` — host hardware watchdog with background monitoring, alerts, and trend analysis |
 | `HealthAgent` | `system_health_check`, `health_report`, `incident_list` — Jarvis internals |
 | `TodoAgent` | Task management |
-| Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent` |
+| Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent` (in `jarvis/night_agents/`) |
 
 ---
 
@@ -250,16 +296,54 @@ AgentResponse(
 
 ---
 
-## Running Things
+## Development Commands
+
+### Installation
 
 ```bash
-python -m server.main              # FastAPI on :8000
-python main.py                     # Interactive demo
-pytest                             # Full test suite
-python -m jarvis.logging.log_viewer # Logs
+poetry install                     # Preferred
+pip install -r requirements.txt    # Fallback
+# Linux: sudo apt-get install -y portaudio19-dev  (required for sounddevice)
 ```
+
+**Python 3.11+** required. CI tests against 3.11, 3.12, and 3.13.
+
+### Running
+
+```bash
+python -m server.main              # FastAPI on :8000 (PORT env to change)
+python main.py                     # Interactive demo
+python -m jarvis.logging.log_viewer # Log viewer CLI
+```
+
+### Testing
+
+```bash
+pytest                             # Full suite
+pytest -vv                         # Verbose (same as `make test`)
+pytest tests/test_calendar_agent.py -v              # Single file
+pytest tests/test_calendar_agent.py::test_name -v   # Single test
+pytest -x --timeout=30 -q          # Fail-fast (use before merging to main)
+pytest --timeout=30 -v             # Matches CI configuration
+```
+
+`tests/__init__.py` auto-sets `JWT_SECRET=testing-secret` so tests run without `.env`. Mock LLM calls with `DummyAIClient` from `jarvis/ai_clients/dummy_client.py` — never hit real APIs in tests.
+
+### CI
+
+GitHub Actions (`.github/workflows/tests.yml`) runs `pytest --timeout=30 -v` on push to main and all PRs, across Python 3.11/3.12/3.13. If it passes locally with `pytest --timeout=30 -v`, it passes in CI.
+
+---
 
 ## Environment
 
 **Required:** `OPENAI_API_KEY`, `JWT_SECRET`
 **Optional:** `ANTHROPIC_API_KEY`, `WEATHER_API_KEY`, `ROKU_IP_ADDRESS`, `PHILLIPS_HUE_BRIDGE_IP`, `PHILLIPS_HUE_USERNAME`, `LIGHTING_BACKEND`, `YEELIGHT_BULB_IPS`, `GOOGLE_SEARCH_API_KEY`, `MONGO_URI`, `CALENDAR_API_URL`, `JARVIS_VERBOSE`
+
+See `.env.example` for the full list with descriptions.
+
+---
+
+## Orchestrator Note
+
+The orchestrator calls `weak_chat` to craft a short prompt for each capability step. Agents receive a `prompt` string in `capability_request` messages — there is no `command` field. If you're writing a new agent handler, expect `prompt`, not `command`.
