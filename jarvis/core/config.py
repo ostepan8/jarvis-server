@@ -21,7 +21,7 @@ class FeatureFlags:
     enable_device_monitor: bool = True
     enable_self_improvement: bool = True
     enable_feedback: bool = True
-    enable_server_manager: bool = False
+    enable_server_manager: bool = True
 
 
 @dataclass
