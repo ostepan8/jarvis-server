@@ -6,9 +6,14 @@ Only things that leave the machine are mocked: HTTP APIs, MongoDB, vector DBs.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 from unittest.mock import AsyncMock, MagicMock, patch
+
+load_dotenv()
 
 from jarvis.core.config import JarvisConfig, FeatureFlags
 from jarvis.core.builder import JarvisBuilder
@@ -216,6 +221,115 @@ async def jarvis_system_search_fail(tmp_path):
     _start_mongo_patches()
     try:
         config = _make_e2e_config(tmp_path)
+        builder = (
+            JarvisBuilder(config)
+            .memory(True)
+            .nlu(True)
+            .calendar(True)
+            .chat(True)
+            .search(True)
+            .todo(True)
+            .lights(False)
+            .roku(False)
+            .health(False)
+            .canvas(False)
+            .night_agents(False)
+            .self_improvement(False)
+            .protocols(True)
+            .protocol_directory(False)
+        )
+
+        system = await builder.build()
+        _mock_search_service(system, fail=True)
+        _mock_calendar_service(system)
+
+        yield system
+
+        await system.shutdown()
+    finally:
+        _stop_mongo_patches()
+
+
+# ---------------------------------------------------------------------------
+# Real-LLM fixture — actual OpenAI calls, no faked AI
+# ---------------------------------------------------------------------------
+def _make_real_llm_config(tmp_path) -> JarvisConfig:
+    """Config for real-LLM E2E tests. Uses gpt-4o-mini for speed and cost."""
+    return JarvisConfig(
+        ai_provider="openai",
+        api_key=os.environ["OPENAI_API_KEY"],
+        strong_model="gpt-4o-mini",
+        weak_model="gpt-4o-mini",
+        google_search_api_key="fake-google-key",
+        google_search_engine_id="fake-engine-id",
+        calendar_api_url="http://localhost:9999",
+        response_timeout=30.0,
+        intent_timeout=10.0,
+        use_fast_classifier=False,
+        classification_cache_ttl=0.0,
+        memory_vault_dir=str(tmp_path / "memory_vault"),
+        feedback_dir=str(tmp_path / "feedback"),
+        flags=FeatureFlags(
+            enable_lights=False,
+            enable_canvas=False,
+            enable_night_mode=False,
+            enable_roku=False,
+            enable_coordinator=False,
+            enable_health=False,
+            enable_device_monitor=False,
+            enable_self_improvement=False,
+            enable_feedback=False,
+            enable_todo=True,
+        ),
+    )
+
+
+@pytest_asyncio.fixture
+async def real_jarvis_system(tmp_path):
+    """Boot a real Jarvis system with actual OpenAI calls.
+
+    LLM classification and agent responses are real.
+    Only HTTP services (search API, calendar API, MongoDB) are mocked.
+    """
+    _start_mongo_patches()
+    try:
+        config = _make_real_llm_config(tmp_path)
+        builder = (
+            JarvisBuilder(config)
+            .memory(True)
+            .nlu(True)
+            .calendar(True)
+            .chat(True)
+            .search(True)
+            .todo(True)
+            .lights(False)
+            .roku(False)
+            .health(False)
+            .canvas(False)
+            .night_agents(False)
+            .self_improvement(False)
+            .protocols(True)
+            .protocol_directory(False)
+        )
+
+        system = await builder.build()
+
+        _mock_search_service(system)
+        _mock_calendar_service(system)
+
+        yield system
+
+        await system.shutdown()
+    finally:
+        _stop_mongo_patches()
+
+
+@pytest_asyncio.fixture
+async def real_jarvis_system_search_fail(tmp_path):
+    """Real LLM system where search service returns errors."""
+    _start_mongo_patches()
+    try:
+        config = _make_real_llm_config(tmp_path)
         builder = (
             JarvisBuilder(config)
             .memory(True)
