@@ -7,7 +7,7 @@ Each device gets a lazily-initialised RokuService keyed by serial number.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Set
 import asyncio
 import functools
 

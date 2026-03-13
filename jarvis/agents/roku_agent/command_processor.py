@@ -138,6 +138,7 @@ DEVICE ROUTING:
         actions_taken = []
         iterations = 0
         max_iterations = 5
+        message = None
 
         while iterations < max_iterations:
             if self.logger:
@@ -196,7 +197,7 @@ DEVICE ROUTING:
             iterations += 1
 
         final_response = (
-            message.content if hasattr(message, "content") else str(message)
+            message.content if message and hasattr(message, "content") else str(message or "")
         )
 
         if self.logger:

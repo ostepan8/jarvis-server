@@ -12,6 +12,8 @@ Covers:
 - Power operations through service
 """
 
+from typing import Optional
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -54,7 +56,7 @@ def _make_device(
     )
 
 
-def _make_registry(*devices: RokuDeviceInfo, default_serial: str = None) -> RokuDeviceRegistry:
+def _make_registry(*devices: RokuDeviceInfo, default_serial: Optional[str] = None) -> RokuDeviceRegistry:
     """Build a registry with the given devices, stubbing save() to avoid disk I/O."""
     registry = RokuDeviceRegistry()
     registry.save = MagicMock()  # No disk I/O in tests
