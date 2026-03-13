@@ -79,6 +79,9 @@ class AgentFactory:
         if self.config.flags.enable_device_monitor:
             refs.update(self._build_device_monitor(network))
 
+        if self.config.flags.enable_server_manager:
+            refs.update(self._build_server_manager(network))
+
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -133,6 +136,8 @@ class AgentFactory:
             refs.update(self._build_health(network))
         if self.config.flags.enable_device_monitor:
             refs.update(self._build_device_monitor(network))
+        if self.config.flags.enable_server_manager:
+            refs.update(self._build_server_manager(network))
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -492,6 +497,31 @@ class AgentFactory:
             }
         except Exception as exc:
             self.logger.log("WARNING", "DeviceMonitorAgent init failed", str(exc))
+            return {}
+
+    def _build_server_manager(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register ServerManagerAgent for server lifecycle management."""
+        try:
+            from ..agents.server_manager_agent import ServerManagerAgent
+            from ..services.server_manager_service import ServerManagerService
+
+            server_service = ServerManagerService(
+                registry_path=self.config.server_registry_path,
+                logger=self.logger,
+            )
+            server_service.load_registry()
+            server_agent = ServerManagerAgent(
+                server_service=server_service,
+                logger=self.logger,
+                monitor_interval=self.config.server_monitor_interval,
+            )
+            network.register_agent(server_agent)
+            return {
+                "server_service": server_service,
+                "server_manager_agent": server_agent,
+            }
+        except Exception as exc:
+            self.logger.log("WARNING", "ServerManagerAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(

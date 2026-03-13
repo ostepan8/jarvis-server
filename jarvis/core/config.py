@@ -21,6 +21,7 @@ class FeatureFlags:
     enable_device_monitor: bool = True
     enable_self_improvement: bool = True
     enable_feedback: bool = True
+    enable_server_manager: bool = False
 
 
 @dataclass
@@ -110,6 +111,10 @@ class JarvisConfig:
 
     # Device monitoring
     device_monitor_probe_interval: float = 30.0
+
+    # Server management
+    server_registry_path: Optional[str] = None  # defaults to ~/.jarvis/servers.json
+    server_monitor_interval: float = 15.0
 
     flags: FeatureFlags = field(default_factory=FeatureFlags)
 
