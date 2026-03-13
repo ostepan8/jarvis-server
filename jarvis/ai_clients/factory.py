@@ -6,6 +6,7 @@ from .base import BaseAIClient
 from .openai_client import OpenAIClient
 from .anthropic_client import AnthropicClient
 from .dummy_client import DummyAIClient
+from .scripted_client import ScriptedAIClient
 
 
 class AIClientFactory:
@@ -35,4 +36,6 @@ class AIClientFactory:
             return AnthropicClient(**a_kwargs)
         if provider in {"dummy", "mock"}:
             return DummyAIClient()
+        if provider == "scripted":
+            return ScriptedAIClient()
         raise ValueError(f"Unsupported AI provider: {provider}")
