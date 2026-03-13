@@ -173,6 +173,10 @@ Request → RequestOrchestrator → Protocol Match (fast) / NLU Route (fallback)
 | `SearchAgent` | `search`, `news_search` |
 | `ProtocolAgent` | `execute_protocol`, `list_protocols` |
 | `CanvasAgent` | Canvas drawing operations |
+| `DeviceMonitorAgent` | `device_status`, `device_diagnostics`, `device_cleanup` — host hardware |
+| `HealthAgent` | `system_health_check`, `health_report`, `incident_list` — Jarvis internals |
+| `TodoAgent` | Task management |
+| Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent` |
 
 ---
 
