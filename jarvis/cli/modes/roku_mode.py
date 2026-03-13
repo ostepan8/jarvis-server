@@ -17,6 +17,7 @@ class RokuMode(BaseMode):
     def __init__(self, jarvis: JarvisSystem) -> None:
         self._jarvis = jarvis
         self._roku_service: Optional[RokuService] = None
+        self._active_serial: Optional[str] = None
 
     @property
     def name(self) -> str:
@@ -66,21 +67,51 @@ class RokuMode(BaseMode):
             ModeKeybind("i", "Device Info", "device_info", "info"),
             ModeKeybind("/", "Search", "search", "info"),
             # System
+            ModeKeybind("d", "Switch Device", "cycle_device", "system"),
             ModeKeybind("?", "Show Help", "help", "system"),
             ModeKeybind("q", "Exit Mode", "exit", "system"),
             ModeKeybind("ESC", "Exit Mode", "exit", "system"),
         ]
 
-    def _get_roku_service(self) -> Optional[RokuService]:
-        """Get the RokuService from the agent network."""
+    def _get_roku_agent(self):
+        """Get the RokuAgent from the agent network."""
         agents = self._jarvis.network.agents
         roku_agent = agents.get("RokuAgent")
-        if roku_agent and hasattr(roku_agent, "roku_service"):
-            return roku_agent.roku_service
+        return roku_agent
+
+    def _get_roku_service(self) -> Optional[RokuService]:
+        """Resolve the active device's RokuService."""
+        agent = self._get_roku_agent()
+        if not agent:
+            return None
+        if self._active_serial and hasattr(agent, 'get_service'):
+            info = agent.device_registry.get_device_by_serial(self._active_serial)
+            if info:
+                return agent._ensure_service(info.serial_number, info.ip_address)
+        # Fallback: backwards compat — single device
+        if hasattr(agent, "roku_service"):
+            return agent.roku_service
         return None
 
     async def on_enter(self) -> bool:
         """Connect to the Roku device."""
+        agent = self._get_roku_agent()
+        if not agent:
+            raise ConnectionError(
+                "RokuAgent not found in agent network. "
+                "Is Roku enabled in /config?"
+            )
+
+        # Set active serial to default device
+        if hasattr(agent, 'device_registry'):
+            registry = agent.device_registry
+            if registry.default_serial:
+                self._active_serial = registry.default_serial
+            else:
+                online = registry.get_online_devices()
+                if online:
+                    self._active_serial = online[0].serial_number
+
         self._roku_service = self._get_roku_service()
         if not self._roku_service:
             raise ConnectionError(
@@ -98,6 +129,7 @@ class RokuMode(BaseMode):
     async def on_exit(self) -> None:
         """Cleanup — nothing to do, service is owned by the agent."""
         self._roku_service = None
+        self._active_serial = None
 
     async def handle_key(self, key: str) -> Optional[str]:
         """Dispatch a keypress to the Roku service."""
@@ -132,6 +164,7 @@ class RokuMode(BaseMode):
             "power_on": svc.power_on,
             "device_info": self._get_device_info,
             "search": self._open_search,
+            "cycle_device": self._cycle_device,
         }
 
         handler = handlers.get(action)
@@ -146,6 +179,9 @@ class RokuMode(BaseMode):
         if action == "search":
             return result
 
+        if action == "cycle_device":
+            return result
+
         # Standard result dict from RokuService
         if isinstance(result, dict):
             if result.get("success"):
@@ -158,6 +194,27 @@ class RokuMode(BaseMode):
 
         return str(result)
 
+    async def _cycle_device(self) -> str:
+        """Cycle through online Roku devices."""
+        agent = self._get_roku_agent()
+        if not agent or not hasattr(agent, 'device_registry'):
+            return "Multi-device not available"
+
+        online = agent.device_registry.get_online_devices()
+        if len(online) <= 1:
+            return "Only one device available"
+
+        serials = [d.serial_number for d in online]
+        current_idx = serials.index(self._active_serial) if self._active_serial in serials else -1
+        next_idx = (current_idx + 1) % len(serials)
+
+        self._active_serial = serials[next_idx]
+        self._roku_service = self._get_roku_service()
+
+        device = online[next_idx]
+        name = device.friendly_name or device.device_name or device.serial_number
+        return f"Switched to: {name}"
+
     async def _get_device_info(self) -> str:
         """Get formatted device info string."""
         assert self._roku_service is not None
@@ -168,12 +225,25 @@ class RokuMode(BaseMode):
         active = await self._roku_service.get_active_app()
         app_name = active.get("app_name", "Unknown") if active.get("success") else "Unknown"
 
-        return (
+        # Show device count if multi-device
+        device_info = (
             f"{result.get('device_name', 'Roku')} | "
             f"{result.get('model', '?')} | "
             f"App: {app_name} | "
             f"Power: {result.get('power_mode', '?')}"
         )
+
+        agent = self._get_roku_agent()
+        if agent and hasattr(agent, 'device_registry'):
+            online = agent.device_registry.get_online_devices()
+            total = len(agent.device_registry.get_all_devices())
+            device = agent.device_registry.get_device_by_serial(self._active_serial) if self._active_serial else None
+            name = device.friendly_name if device and device.friendly_name else ""
+            if name:
+                device_info = f"[{name}] {device_info}"
+            device_info += f" | Devices: {len(online)}/{total}"
+
+        return device_info
 
     async def _open_search(self) -> str:
         """Open the Roku search screen."""
