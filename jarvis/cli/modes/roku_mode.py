@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from .base import BaseMode, ModeKeybind, mode_registry
 
 if TYPE_CHECKING:
+    from jarvis.agents.roku_agent import RokuAgent
     from jarvis.core.system import JarvisSystem
     from jarvis.services.roku_service import RokuService
 
@@ -73,24 +74,32 @@ class RokuMode(BaseMode):
             ModeKeybind("ESC", "Exit Mode", "exit", "system"),
         ]
 
-    def _get_roku_agent(self):
+    def _get_roku_agent(self) -> Optional[RokuAgent]:
         """Get the RokuAgent from the agent network."""
-        agents = self._jarvis.network.agents
-        roku_agent = agents.get("RokuAgent")
-        return roku_agent
+        from jarvis.agents.roku_agent import RokuAgent
+
+        agent = self._jarvis.network.agents.get("RokuAgent")
+        if isinstance(agent, RokuAgent):
+            return agent
+        return None
 
     def _get_roku_service(self) -> Optional[RokuService]:
         """Resolve the active device's RokuService."""
         agent = self._get_roku_agent()
         if not agent:
             return None
-        if self._active_serial and hasattr(agent, 'get_service'):
-            info = agent.device_registry.get_device_by_serial(self._active_serial)
+        # Multi-device path (Phase 2 adds device_registry + _ensure_service)
+        if self._active_serial and hasattr(agent, "device_registry"):
+            info = agent.device_registry.get_device_by_serial(  # type: ignore[attr-defined]
+                self._active_serial
+            )
             if info:
-                return agent._ensure_service(info.serial_number, info.ip_address)
-        # Fallback: backwards compat — single device
+                return agent._ensure_service(  # type: ignore[attr-defined]
+                    info.serial_number, info.ip_address
+                )
+        # Fallback: single-device backwards compat
         if hasattr(agent, "roku_service"):
-            return agent.roku_service
+            return agent.roku_service  # type: ignore[attr-defined]
         return None
 
     async def on_enter(self) -> bool:
@@ -103,8 +112,8 @@ class RokuMode(BaseMode):
             )
 
         # Set active serial to default device
-        if hasattr(agent, 'device_registry'):
-            registry = agent.device_registry
+        if hasattr(agent, "device_registry"):
+            registry = agent.device_registry  # type: ignore[attr-defined]
             if registry.default_serial:
                 self._active_serial = registry.default_serial
             else:
@@ -197,10 +206,10 @@ class RokuMode(BaseMode):
     async def _cycle_device(self) -> str:
         """Cycle through online Roku devices."""
         agent = self._get_roku_agent()
-        if not agent or not hasattr(agent, 'device_registry'):
+        if not agent or not hasattr(agent, "device_registry"):
             return "Multi-device not available"
 
-        online = agent.device_registry.get_online_devices()
+        online = agent.device_registry.get_online_devices()  # type: ignore[attr-defined]
         if len(online) <= 1:
             return "Only one device available"
 
@@ -234,10 +243,11 @@ class RokuMode(BaseMode):
         )
 
         agent = self._get_roku_agent()
-        if agent and hasattr(agent, 'device_registry'):
-            online = agent.device_registry.get_online_devices()
-            total = len(agent.device_registry.get_all_devices())
-            device = agent.device_registry.get_device_by_serial(self._active_serial) if self._active_serial else None
+        if agent and hasattr(agent, "device_registry"):
+            reg = agent.device_registry  # type: ignore[attr-defined]
+            online = reg.get_online_devices()
+            total = len(reg.get_all_devices())
+            device = reg.get_device_by_serial(self._active_serial) if self._active_serial else None
             name = device.friendly_name if device and device.friendly_name else ""
             if name:
                 device_info = f"[{name}] {device_info}"
