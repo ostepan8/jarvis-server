@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import os
 import sqlite3
@@ -645,3 +646,153 @@ class TestFullAnalysis:
 
         # Log analysis should still produce results
         assert any(d.title == "Log error: still_found" for d in results)
+
+
+# =====================================================================
+# Context enrichment
+# =====================================================================
+
+
+class TestContextEnrichment:
+    """Test code_context and function_scope population."""
+
+    @pytest.mark.asyncio
+    async def test_unused_import_has_code_context(self, tmp_path):
+        """Unused import discoveries should include surrounding code."""
+        services_dir = tmp_path / "jarvis" / "services"
+        services_dir.mkdir(parents=True)
+
+        bad_file = services_dir / "ctx_service.py"
+        bad_file.write_text(
+            'import os\n'
+            'import sys\n'
+            '\n'
+            'def hello():\n'
+            '    return sys.platform\n'
+        )
+
+        analyzer = _make_analyzer(tmp_path)
+        results = await analyzer.analyze_unused_imports()
+
+        assert len(results) == 1
+        assert results[0].code_context != ""
+        assert "import os" in results[0].code_context
+
+    @pytest.mark.asyncio
+    async def test_exception_antipattern_has_function_scope(self, tmp_path):
+        """Exception antipattern in a function should report enclosing scope."""
+        services_dir = tmp_path / "jarvis" / "services"
+        services_dir.mkdir(parents=True)
+
+        bad_file = services_dir / "scoped.py"
+        bad_file.write_text(
+            'class MyService:\n'
+            '    def risky_method(self):\n'
+            '        try:\n'
+            '            do_thing()\n'
+            '        except:\n'
+            '            pass\n'
+        )
+
+        analyzer = _make_analyzer(tmp_path)
+        results = await analyzer.analyze_exception_antipatterns()
+
+        assert len(results) == 1
+        assert results[0].function_scope == "risky_method"
+        assert results[0].code_context != ""
+
+    @pytest.mark.asyncio
+    async def test_to_dict_from_dict_roundtrip_new_fields(self):
+        """New fields should survive serialization round-trip."""
+        d = Discovery(
+            discovery_type=DiscoveryType.UNUSED_IMPORT,
+            title="Test",
+            description="Test desc",
+            priority="medium",
+            code_context=">>> 1 | import os",
+            function_scope="my_func",
+        )
+        data = d.to_dict()
+        assert data["code_context"] == ">>> 1 | import os"
+        assert data["function_scope"] == "my_func"
+
+        restored = Discovery.from_dict(data)
+        assert restored.code_context == ">>> 1 | import os"
+        assert restored.function_scope == "my_func"
+
+    @pytest.mark.asyncio
+    async def test_from_dict_backward_compatible(self):
+        """from_dict should handle missing new fields (old data)."""
+        old_data = {
+            "discovery_type": "unused_import",
+            "title": "Old discovery",
+            "description": "From before the upgrade",
+            "priority": "medium",
+        }
+        d = Discovery.from_dict(old_data)
+        assert d.code_context == ""
+        assert d.function_scope == ""
+
+    @pytest.mark.asyncio
+    async def test_log_analyzer_leaves_context_empty(self, tmp_path):
+        """Non-code analyzers should leave code_context and function_scope empty."""
+        db_path = str(tmp_path / "logs.db")
+        conn = _create_log_db(db_path)
+        _insert_log(conn, "ERROR", "test_action", "details")
+        conn.close()
+
+        analyzer = SystemAnalyzer(
+            project_root=str(tmp_path),
+            log_db_path=db_path,
+        )
+        results = await analyzer.analyze_logs()
+
+        assert len(results) == 1
+        assert results[0].code_context == ""
+        assert results[0].function_scope == ""
+
+
+class TestExtractContext:
+    """Test the _extract_context static helper."""
+
+    def test_basic_context(self):
+        source = "\n".join(f"line {i}" for i in range(1, 21))
+        ctx = SystemAnalyzer._extract_context(source, 10, radius=3)
+        assert ">>> " in ctx  # marker on target line
+        assert "line 10" in ctx
+        assert "line 7" in ctx
+        assert "line 13" in ctx
+
+    def test_near_start(self):
+        source = "\n".join(f"line {i}" for i in range(1, 6))
+        ctx = SystemAnalyzer._extract_context(source, 1, radius=3)
+        assert "line 1" in ctx
+
+    def test_near_end(self):
+        source = "\n".join(f"line {i}" for i in range(1, 6))
+        ctx = SystemAnalyzer._extract_context(source, 5, radius=3)
+        assert "line 5" in ctx
+
+
+class TestFindEnclosingScope:
+    """Test the _find_enclosing_scope static helper."""
+
+    def test_finds_function(self):
+        source = "def foo():\n    x = 1\n    y = 2\n"
+        tree = ast.parse(source)
+        assert SystemAnalyzer._find_enclosing_scope(tree, 2) == "foo"
+
+    def test_finds_class(self):
+        source = "class Bar:\n    x = 1\n"
+        tree = ast.parse(source)
+        assert SystemAnalyzer._find_enclosing_scope(tree, 2) == "Bar"
+
+    def test_finds_inner_function(self):
+        source = "class Bar:\n    def baz(self):\n        x = 1\n"
+        tree = ast.parse(source)
+        assert SystemAnalyzer._find_enclosing_scope(tree, 3) == "baz"
+
+    def test_top_level_returns_empty(self):
+        source = "x = 1\ny = 2\n"
+        tree = ast.parse(source)
+        assert SystemAnalyzer._find_enclosing_scope(tree, 1) == ""
