@@ -1,74 +1,193 @@
 # jarvis/agents/roku_agent/function_registry.py
 """
-Function registry for Roku agent - maps capabilities to service methods
+Function registry for Roku agent - maps capabilities to device-routed service methods.
+
+Every function delegates through the agent's execute_on_device / execute_on_all
+methods so that device resolution and failover happen transparently.
 """
-from typing import Set, Callable, Any, Optional
-from ...services.roku_service import RokuService
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set
+
+if TYPE_CHECKING:
+    from .agent import RokuAgent
 
 
 class RokuFunctionRegistry:
-    """Maps capability names to RokuService methods and manages function lookup."""
+    """Maps capability names to agent-routed device methods and manages function lookup."""
 
-    def __init__(self, roku_service: RokuService):
-        self.roku_service = roku_service
+    def __init__(self, agent: "RokuAgent"):
+        self.agent = agent
         self._build_registry()
 
-    def _build_registry(self):
-        """Build the mapping of function names to service methods."""
-        self.function_map = {
-            # Device information
-            "get_device_info": self.roku_service.get_device_info,
-            "get_active_app": self.roku_service.get_active_app,
-            "list_apps": self.roku_service.list_apps,
-            "get_player_info": self.roku_service.get_player_info,
-            # App control
-            "launch_app_by_name": self.roku_service.launch_app_by_name,
-            # Playback control
-            "play": self.roku_service.play,
-            "pause": self.roku_service.pause,
-            "rewind": self.roku_service.rewind,
-            "fast_forward": self.roku_service.fast_forward,
-            "instant_replay": self.roku_service.instant_replay,
-            # Navigation
-            "home": self.roku_service.home,
-            "back": self.roku_service.back,
-            "select": self.roku_service.select,
-            "navigate": self._navigate_multiple,
-            # Volume and power
-            "volume_up": self._volume_up_multiple,
-            "volume_down": self._volume_down_multiple,
-            "volume_mute": self.roku_service.volume_mute,
-            "power_off": self.roku_service.power_off,
-            "power_on": self.roku_service.power_on,
-            # Input switching
-            "switch_input": self.roku_service.switch_input,
-            # Search
-            "search": self.roku_service.search,
-        }
+    def _build_registry(self) -> None:
+        """Build the mapping — each function delegates to the agent for device routing."""
+        self.function_map: Dict[str, Callable[..., Any]] = {}
 
-    async def _navigate_multiple(self, direction: str, count: int = 1) -> Any:
+        # Wrap all standard service methods
+        service_methods = [
+            "get_device_info",
+            "get_active_app",
+            "list_apps",
+            "get_player_info",
+            "launch_app_by_name",
+            "play",
+            "pause",
+            "rewind",
+            "fast_forward",
+            "instant_replay",
+            "home",
+            "back",
+            "select",
+            "volume_mute",
+            "power_off",
+            "power_on",
+            "switch_input",
+            "search",
+        ]
+        for method_name in service_methods:
+            self.function_map[method_name] = self._make_device_wrapper(method_name)
+
+        # Custom wrappers for multi-press
+        self.function_map["navigate"] = self._navigate_multiple
+        self.function_map["volume_up"] = self._volume_up_multiple
+        self.function_map["volume_down"] = self._volume_down_multiple
+
+        # Device management functions
+        self.function_map["list_devices"] = self._list_devices
+        self.function_map["name_device"] = self._name_device
+        self.function_map["set_default_device"] = self._set_default_device
+        self.function_map["discover_devices"] = self._discover_devices
+
+    # ------------------------------------------------------------------
+    # Generic device wrapper
+    # ------------------------------------------------------------------
+
+    def _make_device_wrapper(self, method_name: str) -> Callable[..., Any]:
+        """Create an async wrapper that routes a service method through the agent."""
+
+        async def wrapper(device: str = "", **kwargs: Any) -> Any:
+            if device and device.lower() == "all":
+                return await self.agent.execute_on_all(method_name, **kwargs)
+            serial = ""
+            if device:
+                info = self.agent.device_registry.resolve_device(name_hint=device)
+                serial = info.serial_number if info else ""
+            return await self.agent.execute_on_device(serial, method_name, **kwargs)
+
+        return wrapper
+
+    # ------------------------------------------------------------------
+    # Multi-press wrappers
+    # ------------------------------------------------------------------
+
+    async def _navigate_multiple(
+        self, direction: str, count: int = 1, device: str = ""
+    ) -> Any:
         """Navigate in a direction multiple times."""
+        if device and device.lower() == "all":
+            results = []
+            for _ in range(count):
+                results.append(
+                    await self.agent.execute_on_all("navigate", direction=direction)
+                )
+            return results[-1] if results else {"success": True}
+
+        serial = ""
+        if device:
+            info = self.agent.device_registry.resolve_device(name_hint=device)
+            serial = info.serial_number if info else ""
+
         for _ in range(count):
-            result = await self.roku_service.navigate(direction)
+            result = await self.agent.execute_on_device(
+                serial, "navigate", direction=direction
+            )
             if not result.get("success"):
                 return result
         return {"success": True, "message": f"Navigated {direction} {count} times"}
 
-    async def _volume_up_multiple(self, count: int = 1) -> Any:
+    async def _volume_up_multiple(self, count: int = 1, device: str = "") -> Any:
         """Increase volume multiple times."""
+        if device and device.lower() == "all":
+            results = []
+            for _ in range(count):
+                results.append(await self.agent.execute_on_all("volume_up"))
+            return results[-1] if results else {"success": True}
+
+        serial = ""
+        if device:
+            info = self.agent.device_registry.resolve_device(name_hint=device)
+            serial = info.serial_number if info else ""
+
         for _ in range(count):
-            result = await self.roku_service.volume_up()
+            result = await self.agent.execute_on_device(serial, "volume_up")
             if not result.get("success"):
                 return result
         return {"success": True, "message": f"Increased volume {count} times"}
 
-    async def _volume_down_multiple(self, count: int = 1) -> Any:
+    async def _volume_down_multiple(self, count: int = 1, device: str = "") -> Any:
         """Decrease volume multiple times."""
+        if device and device.lower() == "all":
+            results = []
+            for _ in range(count):
+                results.append(await self.agent.execute_on_all("volume_down"))
+            return results[-1] if results else {"success": True}
+
+        serial = ""
+        if device:
+            info = self.agent.device_registry.resolve_device(name_hint=device)
+            serial = info.serial_number if info else ""
+
         for _ in range(count):
-            result = await self.roku_service.volume_down()
+            result = await self.agent.execute_on_device(serial, "volume_down")
             if not result.get("success"):
                 return result
         return {"success": True, "message": f"Decreased volume {count} times"}
+
+    # ------------------------------------------------------------------
+    # Device management functions
+    # ------------------------------------------------------------------
+
+    async def _list_devices(self) -> Dict[str, Any]:
+        """List all registered Roku devices."""
+        devices = self.agent.device_registry.get_all_devices()
+        device_list = []
+        for d in devices:
+            device_list.append(
+                {
+                    "serial": d.serial_number,
+                    "name": d.friendly_name or d.device_name or d.serial_number,
+                    "ip": d.ip_address,
+                    "model": d.model,
+                    "online": d.is_online,
+                    "is_default": d.serial_number
+                    == self.agent.device_registry.default_serial,
+                }
+            )
+        return {"success": True, "devices": device_list, "count": len(device_list)}
+
+    async def _name_device(self, serial: str, name: str) -> Dict[str, Any]:
+        """Assign a friendly name to a device."""
+        self.agent.device_registry.set_friendly_name(serial, name)
+        return {"success": True, "message": f"Device {serial} named '{name}'"}
+
+    async def _set_default_device(self, serial: str) -> Dict[str, Any]:
+        """Set a device as the default."""
+        self.agent.device_registry.set_default(serial)
+        return {"success": True, "message": f"Device {serial} set as default"}
+
+    async def _discover_devices(self) -> Dict[str, Any]:
+        """Trigger SSDP discovery for new Roku devices."""
+        newly = await self.agent.discover_devices()
+        return {
+            "success": True,
+            "discovered": len(newly),
+            "message": f"Found {len(newly)} new device(s)",
+        }
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
 
     @property
     def capabilities(self) -> Set[str]:
@@ -104,6 +223,11 @@ class RokuFunctionRegistry:
             "roku_switch_input",
             # Search capabilities
             "roku_search",
+            # Device management capabilities
+            "roku_list_devices",
+            "roku_name_device",
+            "roku_set_default",
+            "roku_discover_devices",
         }
 
     def get_function(self, function_name: str) -> Optional[Callable]:

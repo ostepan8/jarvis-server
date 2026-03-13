@@ -1,7 +1,17 @@
 # jarvis/agents/roku_agent/tools/tools.py
 """
-Tool definitions for Roku agent - defines all functions available to the AI
+Tool definitions for Roku agent - defines all functions available to the AI.
+
+Every tool accepts an optional ``device`` parameter for multi-device routing.
 """
+
+# Shared device parameter — injected into every tool that targets a specific device
+_DEVICE_PARAM = {
+    "device": {
+        "type": "string",
+        "description": "Target device name or 'all'. Leave empty for default.",
+    }
+}
 
 tools = [
     # ==================== DEVICE INFORMATION ====================
@@ -10,7 +20,11 @@ tools = [
         "function": {
             "name": "get_device_info",
             "description": "Get comprehensive information about the Roku device including model, software version, and network details",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -18,7 +32,11 @@ tools = [
         "function": {
             "name": "get_active_app",
             "description": "Get the currently active app or channel on the Roku device",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -26,7 +44,11 @@ tools = [
         "function": {
             "name": "list_apps",
             "description": "List all installed apps and channels on the Roku device",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -34,7 +56,11 @@ tools = [
         "function": {
             "name": "get_player_info",
             "description": "Get current media player state including playback position, duration, and status",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     # ==================== APP/CHANNEL CONTROL ====================
@@ -49,7 +75,8 @@ tools = [
                     "app_name": {
                         "type": "string",
                         "description": "The name of the app to launch (e.g., 'Netflix', 'YouTube', 'Hulu')",
-                    }
+                    },
+                    **_DEVICE_PARAM,
                 },
                 "required": ["app_name"],
             },
@@ -61,7 +88,11 @@ tools = [
         "function": {
             "name": "play",
             "description": "Resume or play the current media",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -69,7 +100,11 @@ tools = [
         "function": {
             "name": "pause",
             "description": "Pause the current media playback",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -77,7 +112,11 @@ tools = [
         "function": {
             "name": "rewind",
             "description": "Rewind the current media",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -85,7 +124,11 @@ tools = [
         "function": {
             "name": "fast_forward",
             "description": "Fast forward the current media",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -93,7 +136,11 @@ tools = [
         "function": {
             "name": "instant_replay",
             "description": "Jump back a few seconds in the current media",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     # ==================== NAVIGATION ====================
@@ -102,7 +149,11 @@ tools = [
         "function": {
             "name": "home",
             "description": "Go to the Roku home screen",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -110,7 +161,11 @@ tools = [
         "function": {
             "name": "back",
             "description": "Go back to the previous screen",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -118,7 +173,11 @@ tools = [
         "function": {
             "name": "select",
             "description": "Press the select/OK button",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -139,6 +198,7 @@ tools = [
                         "description": "Number of times to press the direction (default: 1)",
                         "default": 1,
                     },
+                    **_DEVICE_PARAM,
                 },
                 "required": ["direction"],
             },
@@ -157,7 +217,8 @@ tools = [
                         "type": "integer",
                         "description": "Number of times to increase volume (default: 1)",
                         "default": 1,
-                    }
+                    },
+                    **_DEVICE_PARAM,
                 },
                 "required": [],
             },
@@ -175,7 +236,8 @@ tools = [
                         "type": "integer",
                         "description": "Number of times to decrease volume (default: 1)",
                         "default": 1,
-                    }
+                    },
+                    **_DEVICE_PARAM,
                 },
                 "required": [],
             },
@@ -186,7 +248,11 @@ tools = [
         "function": {
             "name": "volume_mute",
             "description": "Mute or unmute the volume",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -194,7 +260,11 @@ tools = [
         "function": {
             "name": "power_off",
             "description": "Turn off the Roku device",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     {
@@ -202,7 +272,11 @@ tools = [
         "function": {
             "name": "power_on",
             "description": "Turn on the Roku device",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {**_DEVICE_PARAM},
+                "required": [],
+            },
         },
     },
     # ==================== INPUT SWITCHING ====================
@@ -218,7 +292,8 @@ tools = [
                         "type": "string",
                         "enum": ["Tuner", "HDMI1", "HDMI2", "HDMI3", "HDMI4", "AV1"],
                         "description": "The input to switch to",
-                    }
+                    },
+                    **_DEVICE_PARAM,
                 },
                 "required": ["input_name"],
             },
@@ -233,10 +308,66 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The search query"}
+                    "query": {"type": "string", "description": "The search query"},
+                    **_DEVICE_PARAM,
                 },
                 "required": ["query"],
             },
+        },
+    },
+    # ==================== DEVICE MANAGEMENT ====================
+    {
+        "type": "function",
+        "function": {
+            "name": "list_devices",
+            "description": "List all registered Roku devices with their names, models, and online status",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "name_device",
+            "description": "Assign a friendly name to a Roku device (e.g., 'Bedroom TV', 'Living Room')",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "serial": {
+                        "type": "string",
+                        "description": "The serial number of the device to name",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "The friendly name to assign",
+                    },
+                },
+                "required": ["serial", "name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_default_device",
+            "description": "Set a Roku device as the default for commands that don't specify a device",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "serial": {
+                        "type": "string",
+                        "description": "The serial number of the device to set as default",
+                    },
+                },
+                "required": ["serial"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "discover_devices",
+            "description": "Scan the local network for Roku devices using SSDP discovery",
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
 ]
