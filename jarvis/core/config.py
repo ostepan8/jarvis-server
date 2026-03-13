@@ -22,6 +22,7 @@ class FeatureFlags:
     enable_self_improvement: bool = True
     enable_feedback: bool = True
     enable_server_manager: bool = True
+    enable_scheduler: bool = True
 
 
 @dataclass
@@ -115,6 +116,9 @@ class JarvisConfig:
     # Server management
     server_registry_path: Optional[str] = None  # defaults to ~/.jarvis/servers.json
     server_monitor_interval: float = 15.0
+
+    # Scheduler
+    scheduler_tick_interval: float = 15.0
 
     flags: FeatureFlags = field(default_factory=FeatureFlags)
 

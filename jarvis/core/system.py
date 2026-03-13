@@ -155,6 +155,11 @@ class JarvisSystem:
             feedback_collector=feedback_collector,
         )
 
+        # Wire scheduler agent to orchestrator
+        scheduler_agent = refs.get("scheduler_agent")
+        if scheduler_agent:
+            scheduler_agent.set_orchestrator(self._orchestrator)
+
         loaded = (
             len(self.protocol_runtime.registry.protocols)
             if self.protocol_runtime
@@ -317,6 +322,12 @@ class JarvisSystem:
 
     async def shutdown(self):
         """Shutdown the system and cleanup resources."""
+        # Stop scheduler agent
+        if hasattr(self, "_agent_refs"):
+            scheduler_agent = self._agent_refs.get("scheduler_agent")
+            if scheduler_agent and hasattr(scheduler_agent, "stop"):
+                await scheduler_agent.stop()
+
         await self.network.stop()
 
         # Close services through agent refs

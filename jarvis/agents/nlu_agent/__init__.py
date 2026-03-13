@@ -1022,6 +1022,13 @@ Special cases:
 - "Restart grafana" → {{"dag": {{"restart_server": []}}}}
 - "Is the calendar server running?" → {{"dag": {{"server_status": []}}}}
 - "Show all servers" → {{"dag": {{"list_servers": []}}}}
+- "Wake me up at 7am" → {{"dag": {{"schedule_task": []}}}}
+- "Every morning give me the weather" → {{"dag": {{"schedule_task": []}}}}
+- "Check health every 30 minutes" → {{"dag": {{"schedule_task": []}}}}
+- "Show my schedules" → {{"dag": {{"list_schedules": []}}}}
+- "Cancel the morning alarm" → {{"dag": {{"cancel_schedule": []}}}}
+- "Pause the weather check" → {{"dag": {{"pause_schedule": []}}}}
+- "Resume my alarms" → {{"dag": {{"resume_schedule": []}}}}
 
 Return ONLY the JSON."""
         return prompt

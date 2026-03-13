@@ -17,6 +17,8 @@ from ..agents.search_agent import SearchAgent
 from ..agents.canvas import CanvasAgent
 from ..agents.roku_agent import RokuAgent
 from ..agents.todo_agent import TodoAgent
+from ..agents.scheduler_agent import SchedulerAgent
+from ..services.scheduler_service import SchedulerService
 from ..services.vector_memory import VectorMemoryService
 from ..services.fact_memory import FactMemoryService
 from ..services.calendar_service import CalendarService
@@ -72,6 +74,9 @@ class AgentFactory:
 
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
+
+        if self.config.flags.enable_scheduler:
+            refs.update(self._build_scheduler(network, ai_client))
 
         if self.config.flags.enable_health:
             refs.update(self._build_health(network))
@@ -132,6 +137,8 @@ class AgentFactory:
             refs.update(self._build_roku(network, ai_client))
         if self.config.flags.enable_todo:
             refs.update(self._build_todo(network, ai_client))
+        if self.config.flags.enable_scheduler:
+            refs.update(self._build_scheduler(network, ai_client))
         if self.config.flags.enable_health:
             refs.update(self._build_health(network))
         if self.config.flags.enable_device_monitor:
@@ -454,6 +461,24 @@ class AgentFactory:
             return {"todo_service": todo_service, "todo_agent": todo_agent}
         except Exception as exc:
             self.logger.log("WARNING", "TodoAgent init failed", str(exc))
+            return {}
+
+    def _build_scheduler(
+        self, network: AgentNetwork, ai_client: BaseAIClient
+    ) -> Dict[str, Any]:
+        """Build and register SchedulerAgent with SQLite-backed SchedulerService."""
+        try:
+            scheduler_service = SchedulerService(logger=self.logger)
+            scheduler_agent = SchedulerAgent(
+                ai_client=ai_client,
+                scheduler_service=scheduler_service,
+                logger=self.logger,
+                tick_interval=self.config.scheduler_tick_interval,
+            )
+            network.register_agent(scheduler_agent)
+            return {"scheduler_service": scheduler_service, "scheduler_agent": scheduler_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "SchedulerAgent init failed", str(exc))
             return {}
 
     def _build_health(self, network: AgentNetwork) -> Dict[str, Any]:

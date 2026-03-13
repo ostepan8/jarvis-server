@@ -60,6 +60,7 @@ class TestBuilderOptions:
             with_todo=False,
             with_night_agents=False,
             with_self_improvement=False,
+            with_scheduler=False,
         )
         for field_name in BuilderOptions.__dataclass_fields__:
             assert getattr(opts, field_name) is False

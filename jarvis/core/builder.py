@@ -31,6 +31,7 @@ class BuilderOptions:
     with_todo: bool = True
     with_night_agents: bool = True
     with_self_improvement: bool = True
+    with_scheduler: bool = True
 
 
 class JarvisBuilder:
@@ -109,6 +110,10 @@ class JarvisBuilder:
 
     def self_improvement(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_self_improvement = enabled
+        return self
+
+    def scheduler(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_scheduler = enabled
         return self
 
     # ------- Convenience creators --------
@@ -204,6 +209,8 @@ class JarvisBuilder:
             refs.update(factory._build_canvas(jarvis.network, ai_client))
         if self._opts.with_todo and jarvis.config.flags.enable_todo:
             refs.update(factory._build_todo(jarvis.network, ai_client))
+        if self._opts.with_scheduler and jarvis.config.flags.enable_scheduler:
+            refs.update(factory._build_scheduler(jarvis.network, ai_client))
 
         if self._opts.with_software:
             # Placeholder for future implementation
@@ -263,6 +270,11 @@ class JarvisBuilder:
             enable_coordinator=jarvis.config.flags.enable_coordinator,
             feedback_collector=feedback_collector,
         )
+
+        # Wire scheduler agent to orchestrator
+        scheduler_agent = refs.get("scheduler_agent")
+        if scheduler_agent:
+            scheduler_agent.set_orchestrator(jarvis._orchestrator)
 
         protocol_count = (
             len(jarvis.protocol_runtime.registry.protocols)
