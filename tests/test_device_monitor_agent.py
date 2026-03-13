@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import platform
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
@@ -16,17 +16,23 @@ from jarvis.services.device_monitor_service import (
     Severity,
     _severity,
 )
+from jarvis.services.metrics_store import MetricsStore
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_agent(device_service=None) -> DeviceMonitorAgent:
+def _make_agent(device_service=None, metrics_store=None, probe_interval=30.0) -> DeviceMonitorAgent:
     logger = MagicMock()
     logger.log = MagicMock()
     svc = device_service or DeviceMonitorService()
-    agent = DeviceMonitorAgent(device_service=svc, logger=logger)
+    agent = DeviceMonitorAgent(
+        device_service=svc,
+        metrics_store=metrics_store,
+        logger=logger,
+        probe_interval=probe_interval,
+    )
     return agent
 
 
@@ -173,7 +179,7 @@ class TestDeviceMonitorAgentProperties:
 
     def test_capabilities(self):
         agent = _make_agent()
-        assert agent.capabilities == {"device_status", "device_diagnostics", "device_cleanup"}
+        assert agent.capabilities == {"device_status", "device_diagnostics", "device_cleanup", "device_history"}
 
     def test_description(self):
         agent = _make_agent()
@@ -503,3 +509,242 @@ class TestMacOSSpecificMethods:
         with mock.patch("jarvis.services.device_monitor_service.platform") as mock_plat:
             mock_plat.system.return_value = "Linux"
             assert svc.get_hardware_info() is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — V2 Properties
+# ---------------------------------------------------------------------------
+
+class TestDeviceMonitorAgentV2Properties:
+    def test_capabilities_include_history(self):
+        agent = _make_agent()
+        assert "device_history" in agent.capabilities
+
+    def test_probe_interval_default(self):
+        agent = _make_agent()
+        assert agent._probe_interval == 30.0
+
+    def test_probe_interval_custom(self):
+        agent = _make_agent(probe_interval=10.0)
+        assert agent._probe_interval == 10.0
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Background monitor loop
+# ---------------------------------------------------------------------------
+
+class TestBackgroundMonitorLoop:
+    @pytest.mark.asyncio
+    async def test_set_network_starts_monitor(self):
+        agent = _make_agent()
+        network = MagicMock()
+        network.agents = {"DeviceMonitorAgent": agent}
+        agent.set_network(network)
+        assert agent._monitor_task is not None
+        assert not agent._monitor_task.done()
+        await agent.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_monitor(self):
+        agent = _make_agent()
+        network = MagicMock()
+        network.agents = {"DeviceMonitorAgent": agent}
+        agent.set_network(network)
+        assert agent._monitor_task is not None
+        await agent.stop()
+        assert agent._monitor_task.done()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Transition detection
+# ---------------------------------------------------------------------------
+
+class TestTransitionDetection:
+    @pytest.mark.asyncio
+    async def test_no_alert_on_first_probe(self):
+        agent = _make_agent()
+        snap = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 50.0, severity=Severity.OK, details={"core_count": 4})],
+        )
+        # Should not raise or broadcast on first probe
+        await agent._process_transitions(snap)
+        assert "cpu" in agent._component_statuses
+
+    @pytest.mark.asyncio
+    async def test_alert_on_degradation(self):
+        agent = _make_agent()
+        agent.network = MagicMock()
+        agent.network.agents = {"OtherAgent": MagicMock()}
+        agent.network.agents["OtherAgent"].receive_message = AsyncMock()
+
+        # First probe: OK
+        snap_ok = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 50.0, severity=Severity.OK, details={"core_count": 4})],
+        )
+        await agent._process_transitions(snap_ok)
+
+        # Second probe: CRITICAL
+        snap_crit = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 95.0, severity=Severity.CRITICAL, details={"core_count": 4})],
+        )
+        await agent._process_transitions(snap_crit)
+
+        # Should have broadcast an alert
+        agent.network.agents["OtherAgent"].receive_message.assert_called_once()
+        msg = agent.network.agents["OtherAgent"].receive_message.call_args[0][0]
+        assert msg.message_type == "health_alert"
+        assert msg.content["source"] == "device_monitor"
+        assert msg.content["new_status"] == "critical"
+
+    @pytest.mark.asyncio
+    async def test_no_alert_on_stable(self):
+        agent = _make_agent()
+        agent.network = MagicMock()
+        agent.network.agents = {}
+
+        snap = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 50.0, severity=Severity.OK, details={"core_count": 4})],
+        )
+        await agent._process_transitions(snap)
+        await agent._process_transitions(snap)  # Same severity, no alert
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Auto-corrective actions
+# ---------------------------------------------------------------------------
+
+class TestAutoCorrect:
+    @pytest.mark.asyncio
+    async def test_disk_critical_triggers_cleanup(self):
+        svc = DeviceMonitorService()
+        svc.clear_temp_files = MagicMock(return_value={"cleared": 5, "freed_mb": 100, "errors": 0, "tmp_dir": "/tmp"})
+        agent = _make_agent(device_service=svc)
+
+        snap = DeviceSnapshot(
+            disk=[Metric("/", 96.0, severity=Severity.CRITICAL, details={})],
+        )
+        await agent._auto_correct(snap)
+        svc.clear_temp_files.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_consecutive_high_cpu_tracking(self):
+        agent = _make_agent()
+        snap = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 95.0, severity=Severity.CRITICAL, details={"core_count": 4})],
+        )
+        await agent._auto_correct(snap)
+        assert agent._consecutive_high_cpu == 1
+        await agent._auto_correct(snap)
+        assert agent._consecutive_high_cpu == 2
+
+    @pytest.mark.asyncio
+    async def test_cpu_resets_on_recovery(self):
+        agent = _make_agent()
+        snap_high = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 95.0, severity=Severity.CRITICAL, details={"core_count": 4})],
+        )
+        snap_low = DeviceSnapshot(
+            cpu=[Metric("cpu_overall", 30.0, severity=Severity.OK, details={"core_count": 4})],
+        )
+        await agent._auto_correct(snap_high)
+        await agent._auto_correct(snap_high)
+        assert agent._consecutive_high_cpu == 2
+        await agent._auto_correct(snap_low)
+        assert agent._consecutive_high_cpu == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Metrics recording
+# ---------------------------------------------------------------------------
+
+class TestMetricsRecording:
+    def test_record_snapshot_with_store(self, tmp_path):
+        store = MetricsStore(db_path=str(tmp_path / "test.db"))
+        agent = _make_agent(metrics_store=store)
+
+        snap = DeviceSnapshot(
+            hostname="test",
+            cpu=[Metric("cpu_overall", 42.0, unit="%", severity=Severity.OK, details={"core_count": 4})],
+            memory=[Metric("ram", 60.0, unit="%", severity=Severity.OK)],
+            disk=[Metric("/", 50.0, unit="%", severity=Severity.OK)],
+        )
+        agent._record_snapshot(snap)
+
+        rows = store.query("cpu")
+        assert len(rows) == 1
+        assert rows[0]["value"] == 42.0
+
+        rows = store.query("memory")
+        assert len(rows) == 1
+        assert rows[0]["value"] == 60.0
+
+        store.close()
+
+    def test_record_snapshot_without_store(self):
+        agent = _make_agent(metrics_store=None)
+        snap = DeviceSnapshot()
+        # Should not raise
+        agent._record_snapshot(snap)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Device history capability
+# ---------------------------------------------------------------------------
+
+class TestDeviceHistory:
+    @pytest.mark.asyncio
+    async def test_history_without_store(self):
+        agent = _make_agent(metrics_store=None)
+        result = await agent._handle_device_history({})
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_history_with_data(self, tmp_path):
+        store = MetricsStore(db_path=str(tmp_path / "test.db"))
+        agent = _make_agent(metrics_store=store)
+
+        # Insert some data
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        store.record_batch([
+            {"timestamp": now, "component": "cpu", "metric_name": "cpu_overall",
+             "value": 42.0, "unit": "%", "severity": "ok"},
+            {"timestamp": now, "component": "cpu", "metric_name": "cpu_overall",
+             "value": 55.0, "unit": "%", "severity": "ok"},
+        ])
+
+        result = await agent._handle_device_history({"component": "cpu", "hours": 1})
+        assert result.success is True
+        assert result.data["trend"] in ("rising", "falling", "stable")
+        assert result.data["sample_count"] == 2
+
+        store.close()
+
+    @pytest.mark.asyncio
+    async def test_history_no_data(self, tmp_path):
+        store = MetricsStore(db_path=str(tmp_path / "test.db"))
+        agent = _make_agent(metrics_store=store)
+
+        result = await agent._handle_device_history({"component": "nonexistent", "hours": 1})
+        assert result.success is True
+        assert "No historical data" in result.response
+        store.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — macOS notification
+# ---------------------------------------------------------------------------
+
+class TestMacOSNotification:
+    def test_notification_non_darwin(self):
+        agent = _make_agent()
+        with patch("platform.system", return_value="Linux"):
+            # Should not raise, just no-op
+            agent._send_macos_notification("Test", "Message")
+
+    @pytest.mark.skipif(platform.system() != "Darwin", reason="macOS only")
+    def test_notification_on_darwin(self):
+        agent = _make_agent()
+        with patch("subprocess.Popen") as mock_popen:
+            agent._send_macos_notification("Test Title", "Test message")
+            mock_popen.assert_called_once()
