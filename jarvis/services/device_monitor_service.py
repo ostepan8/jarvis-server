@@ -7,8 +7,11 @@ process analysis.  Soft dependency on psutil — degrades gracefully without it.
 
 from __future__ import annotations
 
+import json
 import platform
+import re
 import shutil
+import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -51,6 +54,11 @@ class DeviceSnapshot:
     battery: Optional[Metric] = None
     thermals: List[Metric] = field(default_factory=list)
     network: List[Metric] = field(default_factory=list)
+    disk_io: List[Metric] = field(default_factory=list)
+    network_io: List[Metric] = field(default_factory=list)
+    memory_pressure: Optional[Dict[str, Any]] = None
+    gpu: Optional[Metric] = None
+    hardware_info: Optional[Dict[str, Any]] = None
     overall_severity: Severity = Severity.OK
 
     def to_dict(self) -> Dict[str, Any]:
@@ -73,6 +81,11 @@ class DeviceSnapshot:
             "battery": _metric(self.battery) if self.battery else None,
             "thermals": [_metric(m) for m in self.thermals],
             "network": [_metric(m) for m in self.network],
+            "disk_io": [_metric(m) for m in self.disk_io],
+            "network_io": [_metric(m) for m in self.network_io],
+            "memory_pressure": self.memory_pressure,
+            "gpu": _metric(self.gpu) if self.gpu else None,
+            "hardware_info": self.hardware_info,
             "overall_severity": self.overall_severity.value,
         }
 
@@ -133,6 +146,12 @@ class DeviceMonitorService:
 
     def __init__(self) -> None:
         self._psutil: Any = self._try_import_psutil()
+        self._prev_disk_io: Any = None  # Previous disk_io_counters reading
+        self._prev_disk_io_time: Optional[float] = None
+        self._prev_net_io: Any = None  # Previous net_io_counters reading
+        self._prev_net_io_time: Optional[float] = None
+        self._cached_gpu_info: Optional[Metric] = None  # Cached at startup
+        self._cached_hardware_info: Optional[Dict[str, Any]] = None  # Cached at startup
 
     @staticmethod
     def _try_import_psutil():
@@ -273,8 +292,23 @@ class DeviceMonitorService:
         except Exception:
             pass
 
+        # Disk I/O rates
+        snap.disk_io = self.get_disk_io_rates()
+
+        # Network throughput
+        snap.network_io = self.get_network_throughput()
+
+        # Memory pressure (macOS)
+        snap.memory_pressure = self.get_memory_pressure()
+
+        # GPU info (cached)
+        snap.gpu = self.get_gpu_info()
+
+        # Hardware info (cached)
+        snap.hardware_info = self.get_hardware_info()
+
         # Overall severity = worst across all metrics
-        all_metrics = snap.cpu + snap.memory + snap.disk + snap.thermals + snap.network
+        all_metrics = snap.cpu + snap.memory + snap.disk + snap.thermals + snap.network + snap.disk_io + snap.network_io
         if snap.battery:
             all_metrics.append(snap.battery)
         worst = Severity.OK
@@ -287,6 +321,251 @@ class DeviceMonitorService:
         snap.overall_severity = worst
 
         return snap
+
+    # -- macOS-specific metrics ---------------------------------------------
+
+    def get_disk_io_rates(self) -> List[Metric]:
+        """Compute disk read/write bytes per second via delta between calls.
+
+        First call returns an empty list (no prior reading to diff against).
+        """
+        psutil = self._psutil
+        if psutil is None:
+            return []
+        try:
+            counters = psutil.disk_io_counters(perdisk=False)
+            if counters is None:
+                return []
+            now = time.time()
+            prev = self._prev_disk_io
+            prev_time = self._prev_disk_io_time
+            self._prev_disk_io = counters
+            self._prev_disk_io_time = now
+            if prev is None or prev_time is None:
+                return []
+            dt = now - prev_time
+            if dt <= 0:
+                return []
+            read_bps = (counters.read_bytes - prev.read_bytes) / dt
+            write_bps = (counters.write_bytes - prev.write_bytes) / dt
+            return [
+                Metric("disk_read_bytes_sec", round(read_bps, 1), unit="B/s"),
+                Metric("disk_write_bytes_sec", round(write_bps, 1), unit="B/s"),
+            ]
+        except Exception:
+            return []
+
+    def get_network_throughput(self) -> List[Metric]:
+        """Compute network send/receive bytes per second via delta.
+
+        First call returns an empty list (no prior reading to diff against).
+        """
+        psutil = self._psutil
+        if psutil is None:
+            return []
+        try:
+            counters = psutil.net_io_counters()
+            if counters is None:
+                return []
+            now = time.time()
+            prev = self._prev_net_io
+            prev_time = self._prev_net_io_time
+            self._prev_net_io = counters
+            self._prev_net_io_time = now
+            if prev is None or prev_time is None:
+                return []
+            dt = now - prev_time
+            if dt <= 0:
+                return []
+            sent_bps = (counters.bytes_sent - prev.bytes_sent) / dt
+            recv_bps = (counters.bytes_recv - prev.bytes_recv) / dt
+            return [
+                Metric("net_bytes_sent_sec", round(sent_bps, 1), unit="B/s"),
+                Metric("net_bytes_recv_sec", round(recv_bps, 1), unit="B/s"),
+            ]
+        except Exception:
+            return []
+
+    def get_memory_pressure(self) -> Optional[Dict[str, Any]]:
+        """Parse macOS ``vm_stat`` output for memory pressure details.
+
+        Returns None on non-macOS systems or on failure.
+        """
+        if platform.system() != "Darwin":
+            return None
+        try:
+            result = subprocess.run(
+                ["vm_stat"], capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                return None
+            data: Dict[str, Any] = {}
+            for line in result.stdout.splitlines():
+                match = re.match(r"^(.+?):\s+([\d]+)\.", line)
+                if not match:
+                    continue
+                key_raw = match.group(1).strip().lower()
+                value = int(match.group(2))
+                if "pages active" in key_raw:
+                    data["pages_active"] = value
+                elif "pages inactive" in key_raw:
+                    data["pages_inactive"] = value
+                elif "pages wired" in key_raw:
+                    data["pages_wired"] = value
+                elif "pages occupied by compressor" in key_raw or "compressor" in key_raw:
+                    data["pages_compressed"] = value
+                elif "pageins" in key_raw:
+                    data["pageins"] = value
+                elif "pageouts" in key_raw:
+                    data["pageouts"] = value
+            return data if data else None
+        except Exception:
+            return None
+
+    def get_battery_health(self) -> Optional[Dict[str, Any]]:
+        """Query macOS ``ioreg`` for smart battery health data.
+
+        Returns None on non-macOS or failure.
+        """
+        if platform.system() != "Darwin":
+            return None
+        try:
+            result = subprocess.run(
+                ["ioreg", "-r", "-c", "AppleSmartBattery", "-w0"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                return None
+            data: Dict[str, Any] = {}
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if '"CycleCount"' in line:
+                    m = re.search(r"=\s*(\d+)", line)
+                    if m:
+                        data["cycle_count"] = int(m.group(1))
+                elif '"MaxCapacity"' in line:
+                    m = re.search(r"=\s*(\d+)", line)
+                    if m:
+                        data["max_capacity"] = int(m.group(1))
+                elif '"DesignCapacity"' in line:
+                    m = re.search(r"=\s*(\d+)", line)
+                    if m:
+                        data["design_capacity"] = int(m.group(1))
+                elif '"Temperature"' in line:
+                    m = re.search(r"=\s*(\d+)", line)
+                    if m:
+                        data["temperature_c"] = round(int(m.group(1)) / 100, 1)
+            return data if data else None
+        except Exception:
+            return None
+
+    def get_thermal_status(self) -> Optional[Dict[str, Any]]:
+        """Query macOS thermal level and throttle status.
+
+        Returns None on non-macOS or failure.
+        """
+        if platform.system() != "Darwin":
+            return None
+        data: Dict[str, Any] = {}
+        try:
+            result = subprocess.run(
+                ["sysctl", "machdep.xcpm.cpu_thermal_level"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                m = re.search(r":\s*(\d+)", result.stdout)
+                if m:
+                    data["thermal_level"] = int(m.group(1))
+        except Exception:
+            pass
+        try:
+            result = subprocess.run(
+                ["pmset", "-g", "thermlog"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                data["thermlog"] = result.stdout.strip()
+        except Exception:
+            pass
+        return data if data else None
+
+    def get_gpu_info(self) -> Optional[Metric]:
+        """Return GPU information from macOS ``system_profiler``.
+
+        Caches the result — only runs the subprocess once.
+        Returns None on non-macOS or failure.
+        """
+        if platform.system() != "Darwin":
+            return None
+        if self._cached_gpu_info is not None:
+            return self._cached_gpu_info
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType", "-json"],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                return None
+            info = json.loads(result.stdout)
+            displays = info.get("SPDisplaysDataType", [])
+            if not displays:
+                return None
+            gpu = displays[0]
+            details: Dict[str, Any] = {}
+            if "sppci_model" in gpu:
+                details["model"] = gpu["sppci_model"]
+            if "spdisplays_vram" in gpu:
+                details["vram"] = gpu["spdisplays_vram"]
+            if "_spdisplays_vram" in gpu:
+                details["vram"] = gpu["_spdisplays_vram"]
+            if "sppci_vendor" in gpu:
+                details["vendor"] = gpu["sppci_vendor"]
+            if "spdisplays_vendor" in gpu:
+                details["vendor"] = gpu["spdisplays_vendor"]
+            model_name = details.get("model", "Unknown GPU")
+            metric = Metric("gpu", model_name, details=details)
+            self._cached_gpu_info = metric
+            return metric
+        except Exception:
+            return None
+
+    def get_hardware_info(self) -> Optional[Dict[str, Any]]:
+        """Return hardware overview from macOS ``system_profiler``.
+
+        Caches the result — only runs the subprocess once.
+        Returns None on non-macOS or failure.
+        """
+        if platform.system() != "Darwin":
+            return None
+        if self._cached_hardware_info is not None:
+            return self._cached_hardware_info
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPHardwareDataType", "-json"],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                return None
+            info = json.loads(result.stdout)
+            hw_list = info.get("SPHardwareDataType", [])
+            if not hw_list:
+                return None
+            hw = hw_list[0]
+            data: Dict[str, Any] = {}
+            if "chip_type" in hw:
+                data["chip"] = hw["chip_type"]
+            if "number_processors" in hw:
+                data["core_count"] = hw["number_processors"]
+            if "physical_memory" in hw:
+                data["total_memory"] = hw["physical_memory"]
+            if "machine_model" in hw:
+                data["model"] = hw["machine_model"]
+            if "machine_name" in hw:
+                data["machine_name"] = hw["machine_name"]
+            self._cached_hardware_info = data if data else None
+            return self._cached_hardware_info
+        except Exception:
+            return None
 
     # -- Diagnostics (deeper) -----------------------------------------------
 
