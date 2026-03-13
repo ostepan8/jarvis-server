@@ -1,6 +1,9 @@
 # jarvis/agents/roku_agent/command_processor.py
 """
-Command processor for Roku agent - handles AI-driven command processing
+Command processor for Roku agent - handles AI-driven command processing.
+
+System prompt is built dynamically per-command so the LLM always sees
+the latest device roster from the registry.
 """
 from typing import Dict, Any, Optional
 import json
@@ -8,6 +11,7 @@ import asyncio
 
 from ...ai_clients.base import BaseAIClient
 from ...logging import JarvisLogger
+from ...services.roku_discovery import RokuDeviceRegistry
 from .function_registry import RokuFunctionRegistry
 from .tools.tools import tools
 from ..response import AgentResponse, ErrorInfo
@@ -21,16 +25,17 @@ class RokuCommandProcessor:
         ai_client: BaseAIClient,
         function_registry: RokuFunctionRegistry,
         logger: Optional[JarvisLogger] = None,
+        device_registry: Optional[RokuDeviceRegistry] = None,
     ):
         self.ai_client = ai_client
         self.function_registry = function_registry
         self.logger = logger
+        self.device_registry = device_registry
         self.tools = tools
-        self.system_prompt = self._build_system_prompt()
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt for the AI."""
-        return """
+        """Build the system prompt for the AI — rebuilt per command for fresh device state."""
+        base_prompt = """
 You are JARVIS, an advanced AI assistant for controlling Roku TV devices. You have comprehensive control over Roku devices including:
 
 DEVICE INFORMATION:
@@ -74,16 +79,16 @@ CONVERSATION STYLE:
 - Be proactive about suggesting related actions
 
 COMMAND INTERPRETATION:
-- "turn on/off" → power on/off
-- "open/launch/start [app]" → launch_app_by_name
-- "go home" → home
-- "turn it up/louder" → volume_up
-- "turn it down/quieter" → volume_down
-- "mute" → volume_mute
-- "play/pause/stop" → play/pause
-- "go back" → back
-- "what's playing" → get_active_app and get_player_info
-- "switch to HDMI [1-4]" → switch_input
+- "turn on/off" -> power on/off
+- "open/launch/start [app]" -> launch_app_by_name
+- "go home" -> home
+- "turn it up/louder" -> volume_up
+- "turn it down/quieter" -> volume_down
+- "mute" -> volume_mute
+- "play/pause/stop" -> play/pause
+- "go back" -> back
+- "what's playing" -> get_active_app and get_player_info
+- "switch to HDMI [1-4]" -> switch_input
 
 BEST PRACTICES:
 1. Confirm actions with natural language
@@ -95,19 +100,45 @@ BEST PRACTICES:
 Given a user's command, use the appropriate tools to accomplish their goal and respond in a natural, helpful way.
         """.strip()
 
+        if not self.device_registry or not self.device_registry.devices:
+            return base_prompt
+
+        device_section = "\n\nDEVICE CONTEXT:\nYou control multiple Roku devices:\n"
+        for dev in self.device_registry.get_all_devices():
+            name = dev.friendly_name or dev.device_name or dev.serial_number
+            status = "ONLINE" if dev.is_online else "OFFLINE"
+            default_marker = (
+                " (DEFAULT)"
+                if dev.serial_number == self.device_registry.default_serial
+                else ""
+            )
+            device_section += (
+                f"- {name}: {dev.model or 'Unknown model'}, {status}{default_marker}\n"
+            )
+
+        device_section += """
+DEVICE ROUTING:
+- If the user mentions a device by name (e.g., "bedroom TV", "living room"), set the "device" parameter to that name
+- If the user says "all TVs" or "everywhere", set the "device" parameter to "all"
+- If no device is mentioned, leave the "device" parameter empty to use the default
+- Use list_devices to show available devices when asked
+"""
+        return base_prompt + device_section
+
     async def process_command(self, command: str) -> Dict[str, Any]:
         """Process a natural language command using AI and tool calls."""
         if self.logger:
             self.logger.log("INFO", "=== PROCESSING ROKU COMMAND ===", command)
 
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": self._build_system_prompt()},
             {"role": "user", "content": command},
         ]
 
         actions_taken = []
         iterations = 0
         max_iterations = 5
+        message = None
 
         while iterations < max_iterations:
             if self.logger:
@@ -166,7 +197,7 @@ Given a user's command, use the appropriate tools to accomplish their goal and r
             iterations += 1
 
         final_response = (
-            message.content if hasattr(message, "content") else str(message)
+            message.content if message and hasattr(message, "content") else str(message or "")
         )
 
         if self.logger:
