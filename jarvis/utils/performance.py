@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import time
@@ -53,6 +54,16 @@ class PerfTracker:
 
     @asynccontextmanager
     async def timer(self, name: str, metadata: Optional[Dict[str, Any]] = None):
+        # Delegate to tracer span when available — produces hierarchical
+        # spans instead of flat PerfEvents.
+        tracer = _get_tracer_if_active()
+        if tracer is not None:
+            from ..logging.tracer import SpanKind
+
+            async with tracer.span(name, kind=SpanKind.INTERNAL, attributes=metadata):
+                yield
+            return
+
         if not self.enabled:
             yield
             return
@@ -98,9 +109,37 @@ def get_tracker() -> Optional[PerfTracker]:
     return _current_tracker.get()
 
 
+def _get_tracer_if_active():
+    """Return the active Tracer if tracing is enabled and a trace is in progress."""
+    try:
+        from ..logging.tracer import get_tracer
+
+        tracer = get_tracer()
+        if tracer and tracer.enabled and tracer.current_trace_id():
+            return tracer
+    except Exception:
+        pass
+    return None
+
+
 def track_async(name: str):
+    """Decorator for async functions.
+
+    When the tracer is active, delegates to ``@traced`` so the call
+    appears as a span in the trace tree.  Otherwise falls back to the
+    legacy ``PerfTracker.timer`` path.
+    """
+
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
+            tracer = _get_tracer_if_active()
+            if tracer is not None:
+                from ..logging.tracer import SpanKind
+
+                async with tracer.span(name, kind=SpanKind.INTERNAL):
+                    return await func(*args, **kwargs)
+
             tracker = get_tracker()
             if tracker and tracker.enabled:
                 async with tracker.timer(name):
