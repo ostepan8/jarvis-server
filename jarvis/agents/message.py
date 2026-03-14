@@ -18,3 +18,5 @@ class Message:
     request_id: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now())
     reply_to: Optional[str] = None  # For response tracking
+    trace_id: Optional[str] = None  # Trace context propagation
+    parent_span_id: Optional[str] = None  # Trace context propagation
