@@ -75,7 +75,7 @@ async def update_my_profile(
     db=Depends(get_auth_db),
     jarvis: JarvisSystem = Depends(get_jarvis),
 ):
-    set_user_profile(db, current_user["id"], body.dict(exclude_unset=True))
+    set_user_profile(db, current_user["id"], body.model_dump(exclude_unset=True))
     profile = get_user_profile(db, current_user["id"])
     if profile and jarvis._orchestrator:
         from jarvis.core.profile import AgentProfile
@@ -98,5 +98,5 @@ async def update_my_config(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_auth_db),
 ):
-    set_user_config(db, current_user["id"], body.dict(exclude_unset=True))
+    set_user_config(db, current_user["id"], body.model_dump(exclude_unset=True))
     return {"success": True}
