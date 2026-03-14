@@ -54,6 +54,9 @@ _SKILL_KEYWORDS: Dict[str, str] = {
     "server": "skills/system.md",
     "night": "skills/system.md",
     "incident": "skills/system.md",
+    "notification": "skills/system.md",
+    "notify": "skills/system.md",
+    "alert": "skills/system.md",
     "limitation": "limitations.md",
     "can't": "limitations.md",
     "cannot": "limitations.md",
@@ -100,6 +103,9 @@ _AGENT_KEYWORDS: Dict[str, str] = {
     "nlu": "agents/nlu.md",
     "routing": "agents/nlu.md",
     "classify": "agents/nlu.md",
+    "notification": "agents/notification.md",
+    "notify": "agents/notification.md",
+    "alert me": "agents/notification.md",
 }
 
 

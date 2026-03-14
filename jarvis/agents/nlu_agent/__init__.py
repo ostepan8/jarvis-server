@@ -1079,6 +1079,10 @@ Special cases:
 - "Cancel the morning alarm" → {{"dag": {{"cancel_schedule": []}}}}
 - "Pause the weather check" → {{"dag": {{"pause_schedule": []}}}}
 - "Resume my alarms" → {{"dag": {{"resume_schedule": []}}}}
+- "Notify me when the build is done" → {{"dag": {{"send_notification": []}}}}
+- "Send me an alert" → {{"dag": {{"send_notification": []}}}}
+- "What notifications did I get" → {{"dag": {{"list_notifications": []}}}}
+- "What did I miss" → {{"dag": {{"list_notifications": []}}}}
 
 Return ONLY the JSON."""
         return prompt

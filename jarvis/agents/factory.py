@@ -28,6 +28,7 @@ from ..services.canvas_service import CanvasService
 from ..services.todo_service import TodoService
 from ..services.health_service import HealthService
 from ..services.device_monitor_service import DeviceMonitorService
+from ..services.notification_service import NotificationService
 from ..services.markdown_memory import MarkdownMemoryService
 from ..night_agents import (
     NightAgent,
@@ -88,6 +89,9 @@ class AgentFactory:
 
         if self.config.flags.enable_server_manager:
             refs.update(self._build_server_manager(network))
+
+        if self.config.flags.enable_notifications:
+            refs.update(self._build_notifications(network))
 
         if self.config.flags.enable_capabilities:
             refs.update(self._build_capabilities(network, ai_client))
@@ -150,6 +154,8 @@ class AgentFactory:
             refs.update(self._build_device_monitor(network))
         if self.config.flags.enable_server_manager:
             refs.update(self._build_server_manager(network))
+        if self.config.flags.enable_notifications:
+            refs.update(self._build_notifications(network))
         if self.config.flags.enable_capabilities:
             refs.update(self._build_capabilities(network, ai_client))
         if self.config.flags.enable_night_mode and system is not None:
@@ -557,6 +563,25 @@ class AgentFactory:
             }
         except Exception as exc:
             self.logger.log("WARNING", "ServerManagerAgent init failed", str(exc))
+            return {}
+
+    def _build_notifications(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register NotificationAgent for user notifications."""
+        try:
+            from ..agents.notification_agent import NotificationAgent
+
+            notification_service = NotificationService(logger=self.logger)
+            notification_agent = NotificationAgent(
+                notification_service=notification_service,
+                logger=self.logger,
+            )
+            network.register_agent(notification_agent)
+            return {
+                "notification_service": notification_service,
+                "notification_agent": notification_agent,
+            }
+        except Exception as exc:
+            self.logger.log("WARNING", "NotificationAgent init failed", str(exc))
             return {}
 
     def _build_capabilities(

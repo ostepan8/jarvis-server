@@ -345,6 +345,29 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "what went wrong",
         "incident history",
     ],
+    # ----- Notifications -----
+    "send_notification": [
+        "notify me",
+        "send me a notification",
+        "alert me",
+        "send an alert",
+        "ping me",
+        "let me know",
+        "send a notification",
+        "push a notification",
+        "remind me with a notification",
+        "give me a heads up",
+    ],
+    "list_notifications": [
+        "show my notifications",
+        "what notifications did I get",
+        "any notifications",
+        "show recent alerts",
+        "what did I miss",
+        "notification history",
+        "list my notifications",
+        "recent notifications",
+    ],
 }
 
 
