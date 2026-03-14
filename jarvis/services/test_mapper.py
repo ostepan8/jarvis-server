@@ -14,6 +14,8 @@ from pathlib import Path
 class TestMapper:
     """Maps source files to test files that import them."""
 
+    __test__ = False
+
     def __init__(self, project_root: str) -> None:
         self._project_root = Path(project_root)
         self._mapping: dict[str, set[str]] | None = None  # source_path -> set of test paths
