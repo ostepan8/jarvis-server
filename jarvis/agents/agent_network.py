@@ -8,6 +8,7 @@ from enum import IntEnum
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from ..logging import JarvisLogger
+from ..logging.tracer import get_tracer
 from ..protocols import InstructionProtocol
 from ..core.method_recorder import MethodRecorder
 from .message import Message
@@ -511,6 +512,8 @@ class AgentNetwork:
                         content=message.content,  # Reference, not deep copy
                         request_id=message.request_id,
                         reply_to=message.reply_to,
+                        trace_id=message.trace_id,
+                        parent_span_id=message.parent_span_id,
                     )
                     # Create individual tasks for parallel execution
                     asyncio.create_task(self.agents[provider].receive_message(cloned))
@@ -558,6 +561,11 @@ class AgentNetwork:
                 f"request_id={request_id}, capability={capability}, from={from_agent}",
             )
 
+        # Embed trace context for cross-queue propagation
+        tracer = get_tracer()
+        trace_id = tracer.current_trace_id() if tracer else None
+        parent_span_id = tracer.current_span_id() if tracer else None
+
         # Broadcast the capability_request
         msg = Message(
             from_agent=from_agent,
@@ -569,6 +577,8 @@ class AgentNetwork:
                 "allowed_agents": list(allowed_agents) if allowed_agents else None,
             },
             request_id=request_id,
+            trace_id=trace_id,
+            parent_span_id=parent_span_id,
         )
         await self.send_message(msg)
 

@@ -11,6 +11,7 @@ from ...ai_clients import BaseAIClient
 from ...logging import JarvisLogger
 from ...utils import extract_json_from_text
 from ...utils.performance import track_async
+from ...logging.tracer import get_tracer, SpanKind, NullSpan
 
 if TYPE_CHECKING:
     from .fast_classifier import FastPathClassifier
@@ -428,41 +429,50 @@ class NLUAgent(NetworkAgent):
 
         # ---- Classification pipeline: fast-path → cache → LLM ----
         classification: Optional[Dict[str, Any]] = None
+        tracer = get_tracer()
+        span = (
+            tracer.span("nlu.classify", kind=SpanKind.AGENT, agent_name="NLUAgent")
+            if tracer
+            else NullSpan()
+        )
 
-        # Step 1: Try fast-path embedding classifier
-        if self.fast_classifier:
-            fast_result = await self.fast_classifier.classify(user_input)
-            if fast_result["confidence"] == "high":
-                cap = fast_result["capability"]
-                if cap in known_capabilities or cap == "chat":
-                    classification = {"dag": {cap: []}}
-                    self.logger.log(
-                        "INFO",
-                        f"Fast-path classification: {cap}",
-                        f"score={fast_result['score']:.3f}",
-                    )
-
-        # Step 2: Try cache
-        if classification is None:
-            cached = self._classification_cache.get(user_input)
-            if cached is not None:
-                classification = cached
-                self.logger.log("INFO", "Classification cache hit", user_input[:50])
-
-        # Step 3: LLM classification (unified — always returns DAG)
-        if classification is None:
-            hint = None
+        async with span as cs:
+            # Step 1: Try fast-path embedding classifier
             if self.fast_classifier:
                 fast_result = await self.fast_classifier.classify(user_input)
-                if fast_result.get("confidence") == "medium":
-                    hint = fast_result.get("hint_capabilities")
-            classification = await self.classify(
-                user_input, known_capabilities, context, conversation_history, hint=hint
-            )
-            # Cache non-chat classifications
-            dag = classification.get("dag", {})
-            if dag and "chat" not in dag:
-                self._classification_cache.put(user_input, classification)
+                if fast_result["confidence"] == "high":
+                    cap = fast_result["capability"]
+                    if cap in known_capabilities or cap == "chat":
+                        classification = {"dag": {cap: []}}
+                        self.logger.log(
+                            "INFO",
+                            f"Fast-path classification: {cap}",
+                            f"score={fast_result['score']:.3f}",
+                        )
+
+            # Step 2: Try cache
+            if classification is None:
+                cached = self._classification_cache.get(user_input)
+                if cached is not None:
+                    classification = cached
+                    self.logger.log("INFO", "Classification cache hit", user_input[:50])
+
+            # Step 3: LLM classification (unified — always returns DAG)
+            if classification is None:
+                hint = None
+                if self.fast_classifier:
+                    fast_result = await self.fast_classifier.classify(user_input)
+                    if fast_result.get("confidence") == "medium":
+                        hint = fast_result.get("hint_capabilities")
+                classification = await self.classify(
+                    user_input, known_capabilities, context, conversation_history, hint=hint
+                )
+                # Cache non-chat classifications
+                dag = classification.get("dag", {})
+                if dag and "chat" not in dag:
+                    self._classification_cache.put(user_input, classification)
+
+            cs.record_output(classification)
 
         # ---- Route based on classification ----
 
@@ -754,12 +764,19 @@ class NLUAgent(NetworkAgent):
             )
 
             # Multi-cap DAGs benefit from LLM synthesis for coherent prose
-            try:
-                final_response = await self._format_final_response_llm(
-                    user_input, results
-                )
-            except Exception:
-                final_response = self._build_final_response(user_input, results)
+            tracer = get_tracer()
+            build_span = (
+                tracer.span("nlu.build_response", kind=SpanKind.AGENT, agent_name="NLUAgent")
+                if tracer
+                else NullSpan()
+            )
+            async with build_span:
+                try:
+                    final_response = await self._format_final_response_llm(
+                        user_input, results
+                    )
+                except Exception:
+                    final_response = self._build_final_response(user_input, results)
 
             await self.send_capability_response(
                 to_agent=original_requester,

@@ -10,6 +10,8 @@ from ..agents.agent_network import AgentNetwork
 from ..night_agents import NightAgent, NightModeControllerAgent
 from ..ai_clients import AIClientFactory, BaseAIClient
 from ..logging import JarvisLogger
+from ..logging.trace_store import TraceStore
+from ..logging.tracer import init_tracer, get_tracer, TRACING_ENABLED, TRACE_LLM_CONTENT
 from .config import JarvisConfig
 from .method_recorder import MethodRecorder
 from ..protocols.loggers import ProtocolUsageLogger, InteractionLogger
@@ -42,6 +44,14 @@ class JarvisSystem:
         # Check environment variable for verbose mode
         verbose = getenv("JARVIS_VERBOSE", "false").lower() in ("true", "1", "yes")
         self.logger = JarvisLogger(verbose=verbose)
+
+        # Initialize tracing
+        self._trace_store = TraceStore()
+        init_tracer(
+            store=self._trace_store,
+            enabled=TRACING_ENABLED,
+            trace_llm_content=TRACE_LLM_CONTENT,
+        )
         self.network = AgentNetwork(
             self.logger,
             record_methods=record_network_methods,
@@ -343,6 +353,10 @@ class JarvisSystem:
             await self.usage_logger.close()
         if self.interaction_logger:
             await self.interaction_logger.close()
+
+        # Close trace store
+        if hasattr(self, "_trace_store"):
+            self._trace_store.close()
 
         self.logger.log("INFO", "Jarvis system shutdown complete")
         self.logger.close()

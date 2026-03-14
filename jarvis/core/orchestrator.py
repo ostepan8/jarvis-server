@@ -17,6 +17,7 @@ from .response_logger import ResponseLogger, RequestTimer
 from .profile import AgentProfile
 from .mission import MissionBrief, MissionBudget, MissionComplexity, MissionContext
 from ..utils.performance import PerfTracker, get_tracker
+from ..logging.tracer import get_tracer, SpanKind
 
 from .feedback import FeedbackCollector
 
@@ -119,17 +120,28 @@ class RequestOrchestrator:
             Dict with response and execution details
         """
         timer = RequestTimer().start()
-        
+
         # Extract and prepare metadata
         req_metadata = self._extract_metadata(metadata)
-        
+
         # Setup performance tracking if enabled
         tracker = self._setup_performance_tracking(perf_enabled)
         new_tracker = tracker is not None
-        
+
+        # Start trace
+        tracer = get_tracer()
+        request_id = str(uuid.uuid4())
+        if tracer:
+            tracer.start_trace(
+                trace_id=request_id,
+                user_input=user_input,
+                user_id=req_metadata.user_id,
+                source=req_metadata.source,
+            )
+
         # Apply user profile if available
         self._apply_user_profile(req_metadata)
-        
+
         try:
             # Check night mode first
             if self.night_mode:
@@ -177,6 +189,10 @@ class RequestOrchestrator:
             )
         
         finally:
+            # End trace
+            if tracer:
+                tracer.end_trace()
+
             # Cleanup tracking
             if new_tracker and tracker:
                 tracker.stop()
@@ -347,26 +363,35 @@ class RequestOrchestrator:
         """
         if not self.protocol_runtime:
             return None
-        
+
+        tracer = get_tracer()
+
         match_result = self.protocol_runtime.try_match(user_input)
         if not match_result:
             return None
-        
+
         protocol = match_result["protocol"]
         arguments = match_result["arguments"]
-        
+
         self.logger.log(
             "INFO",
             "Protocol matched",
             f"Command: '{user_input}' -> Protocol: '{protocol.name}', Args: {arguments}",
         )
-        
+
         try:
-            # Execute protocol with tracking
-            if tracker:
-                async with tracker.timer(
-                    "protocol_execution", metadata={"protocol": protocol.name}
-                ):
+            # Execute protocol with tracing
+            span_ctx = (
+                tracer.span(
+                    "orchestrator.protocol_match",
+                    kind=SpanKind.ORCHESTRATOR,
+                    input_data={"protocol": protocol.name, "arguments": arguments},
+                )
+                if tracer
+                else None
+            )
+            if span_ctx:
+                async with span_ctx as s:
                     response = await self.protocol_runtime.run_and_format(
                         match_result,
                         trigger_phrase=user_input,
@@ -378,6 +403,7 @@ class RequestOrchestrator:
                         },
                         allowed_agents=allowed_agents,
                     )
+                    s.record_output({"protocol": protocol.name, "success": True})
             else:
                 response = await self.protocol_runtime.run_and_format(
                     match_result,
@@ -461,16 +487,17 @@ class RequestOrchestrator:
             Response dict with results
         """
         request_id = str(uuid.uuid4())
-        
+        tracer = get_tracer()
+
         # Get conversation history
         conversation_history = self.conversation_history.get(metadata.user_id, [])
-        
+
         self.logger.log(
             "DEBUG",
             f"Retrieved conversation history for user {metadata.user_id}",
             f"{len(conversation_history)} turns",
         )
-        
+
         # Request NLU processing
         await self.network.request_capability(
             from_agent="JarvisSystem",
@@ -483,11 +510,20 @@ class RequestOrchestrator:
             request_id=request_id,
             allowed_agents=allowed_agents,
         )
-        
+
         try:
-            # Wait for NLU response
-            if tracker:
-                async with tracker.timer("nlu_routing"):
+            # Wait for NLU response with tracing
+            span_ctx = (
+                tracer.span(
+                    "orchestrator.nlu_route",
+                    kind=SpanKind.ORCHESTRATOR,
+                    input_data={"user_input": user_input[:200]},
+                )
+                if tracer
+                else None
+            )
+            if span_ctx:
+                async with span_ctx:
                     result = await self.network.wait_for_response(
                         request_id, timeout=self.response_timeout
                     )

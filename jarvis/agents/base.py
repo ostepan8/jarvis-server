@@ -12,6 +12,7 @@ from ..services.vector_memory import VectorMemoryService
 from .message import Message
 from .agent_network import AgentNetwork
 from ..logging import JarvisLogger
+from ..logging.tracer import get_tracer, SpanKind
 
 
 class NetworkAgent:
@@ -153,6 +154,11 @@ class NetworkAgent:
 
     async def receive_message(self, message: Message) -> None:
         """Handle an incoming message."""
+        # Restore trace context from message fields
+        tracer = get_tracer()
+        if tracer and message.trace_id:
+            tracer.set_context(message.trace_id, message.parent_span_id)
+
         self.logger.log(
             "DEBUG",
             f"{self.name} received",
@@ -196,6 +202,26 @@ class NetworkAgent:
                 f"{self.__class__.__name__} does not implement capability '{capability}'"
             )
 
+        tracer = get_tracer()
+        if tracer and tracer.current_trace_id():
+            async with tracer.span(
+                f"agent.{capability}",
+                kind=SpanKind.AGENT,
+                agent_name=self.name,
+                capability=capability,
+            ) as s:
+                if asyncio.iscoroutinefunction(func):
+                    result = await func(**kwargs)
+                else:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, partial(func, **kwargs))
+                s.record_output(
+                    {"type": type(result).__name__}
+                    if result is not None
+                    else None
+                )
+                return result
+
         if asyncio.iscoroutinefunction(func):
             return await func(**kwargs)
 
@@ -210,6 +236,11 @@ class NetworkAgent:
         request_id: str,
         reply_to: Optional[str] = None,
     ) -> None:
+        # Embed trace context into message for cross-queue propagation
+        tracer = get_tracer()
+        trace_id = tracer.current_trace_id() if tracer else None
+        parent_span_id = tracer.current_span_id() if tracer else None
+
         message = Message(
             from_agent=self.name,
             to_agent=to_agent,
@@ -217,6 +248,8 @@ class NetworkAgent:
             content=content,
             request_id=request_id,
             reply_to=reply_to,
+            trace_id=trace_id,
+            parent_span_id=parent_span_id,
         )
         self.logger.log(
             "DEBUG",

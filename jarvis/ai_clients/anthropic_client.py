@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 import anthropic
 
 from .base import BaseAIClient
+from ..logging.tracer import traced, SpanKind
 
 
 class AnthropicClient(BaseAIClient):
@@ -23,6 +24,7 @@ class AnthropicClient(BaseAIClient):
         self.strong_model = strong_model
         self.weak_model = weak_model
 
+    @traced("llm.chat", kind=SpanKind.LLM)
     async def _chat(
         self, messages: List[Dict[str, Any]], model: str
     ) -> Tuple[Any, Any]:
