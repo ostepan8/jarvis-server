@@ -305,18 +305,41 @@ class JarvisSystem:
 
     @staticmethod
     def _kill_port(port: int) -> None:
-        """Kill any process squatting on the given port."""
+        """Kill any process squatting on the given port. Waits until it's dead."""
         import signal
         import subprocess
+        import time
+
         try:
             result = subprocess.run(
                 ["lsof", "-ti", f"tcp:{port}"],
                 capture_output=True, text=True, timeout=5,
             )
+            pids = []
             for pid_str in result.stdout.strip().splitlines():
                 pid = int(pid_str.strip())
                 if pid != os.getpid():
-                    os.kill(pid, signal.SIGTERM)
+                    pids.append(pid)
+
+            if not pids:
+                return
+
+            # SIGKILL — no negotiation
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+            # Wait for the port to actually free up
+            for _ in range(20):
+                check = subprocess.run(
+                    ["lsof", "-ti", f"tcp:{port}"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                if not check.stdout.strip():
+                    return
+                time.sleep(0.25)
         except Exception:
             pass
 
