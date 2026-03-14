@@ -268,6 +268,9 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "show capabilities",
         "capabilities list",
         "what functions do you have",
+        "what stuff can you do",
+        "show me your abilities",
+        "what all can you do",
     ],
     "explain_capability": [
         "how does the calendar work",
@@ -285,6 +288,11 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "how does jarvis work",
         "explain how you work",
         "what are you not able to do",
+        "can you control my lights",
+        "can you check my cpu",
+        "can you manage my calendar",
+        "are you able to search the web",
+        "do you have a task manager",
     ],
     # ----- Health -----
     "system_health_check": [
@@ -345,17 +353,34 @@ class FastPathClassifier:
     async def initialize(
         self, training_phrases: Optional[Dict[str, List[str]]] = None
     ) -> None:
-        """Populate the collection with training phrases (idempotent)."""
+        """Populate the collection with training phrases.
+
+        Detects stale collections by comparing the expected phrase count
+        against what's stored.  If they differ (e.g. new capabilities were
+        added), the collection is rebuilt automatically.
+        """
         phrases = training_phrases or CAPABILITY_TRAINING_PHRASES
 
+        expected_count = sum(len(v) for v in phrases.values())
         existing = await asyncio.to_thread(self._collection.count)
-        if existing > 0:
+
+        if existing == expected_count:
             self.logger.log(
                 "INFO",
                 "FastPathClassifier already initialized",
-                f"{existing} phrases in collection",
+                f"{existing} phrases in collection (up to date)",
             )
             self._initialized = True
+            return
+
+        # Collection is stale or empty — rebuild
+        if existing > 0:
+            self.logger.log(
+                "INFO",
+                "FastPathClassifier stale",
+                f"Expected {expected_count} phrases, found {existing} — rebuilding",
+            )
+            await self.reinitialize(phrases)
             return
 
         ids: List[str] = []

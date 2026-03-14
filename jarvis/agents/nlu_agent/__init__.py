@@ -969,11 +969,15 @@ Special cases:
 
 3. **SELF-REFERENTIAL / CAPABILITY QUESTIONS (BEFORE SEARCH):**
    If the user is asking about what Jarvis/you can do, your capabilities, features,
-   how you work, or your limitations ("what can you do", "what are your capabilities",
-   "help", "what features do you have", "what can't you do", "how does X work"
-   where X is a Jarvis feature like calendar/lights/memory):
+   how you work, or your limitations. Common patterns:
+   - "what can you do", "what can u do", "what are your capabilities"
+   - "can you do X?", "can u X?", "are you able to X?" (asking about ability, not requesting action)
+   - "help", "what features do you have", "what can't you do"
+   - "how does X work" where X is a Jarvis feature (calendar, lights, memory, etc.)
    → Use "describe_capabilities" for broad questions or "explain_capability" for specific ones.
-   **CRITICAL:** Do NOT route these to "search". They are about Jarvis itself, not web lookups.
+   **CRITICAL:** Do NOT route these to "search" or "chat". They are about Jarvis itself.
+   **KEY DISTINCTION:** "Can you check my CPU?" asking about ability → "describe_capabilities" or "explain_capability".
+   "Check my CPU" requesting action → "device_status". The word "can you" at the start as a question about ability is the signal.
 
 4. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
    - General knowledge (facts, history, science, "what is", "who is", "when did")
@@ -1015,9 +1019,14 @@ Special cases:
 - "When did X come out. if in 2018 make lights blue" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "Search for X and if above Y make lights blue else red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "What can you do?" → {{"dag": {{"describe_capabilities": []}}}}
+- "What can u do" → {{"dag": {{"describe_capabilities": []}}}}
 - "What are your capabilities?" → {{"dag": {{"describe_capabilities": []}}}}
+- "Help" → {{"dag": {{"describe_capabilities": []}}}}
+- "Can you check my CPU?" → {{"dag": {{"explain_capability": []}}}}
+- "Can you also control my lights?" → {{"dag": {{"explain_capability": []}}}}
 - "How does the calendar work?" → {{"dag": {{"explain_capability": []}}}}
 - "What can't you do?" → {{"dag": {{"explain_capability": []}}}}
+- "Check my CPU" → {{"dag": {{"device_status": []}}}}
 - "Add a Spotify agent" → {{"dag": {{"implement_feature": []}}}}
 - "Fix the NLU timeout bug" → {{"dag": {{"fix_bug": []}}}}
 - "Write tests for the memory agent" → {{"dag": {{"write_tests": []}}}}
