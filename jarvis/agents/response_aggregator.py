@@ -145,7 +145,7 @@ class ResponseAggregator:
             try:
                 await self._cleanup_task
             except asyncio.CancelledError:
-                pass
+                self.logger.log("DEBUG", "Cleanup task cancelled during shutdown")
         self.logger.log("INFO", "ResponseAggregator stopped")
 
     def register_request(
