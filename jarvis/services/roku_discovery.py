@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import socket
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -114,7 +115,7 @@ async def _ssdp_search(timeout: float = 5.0) -> List[str]:
     loop = asyncio.get_running_loop()
     transport, protocol = await loop.create_datagram_endpoint(
         _SSDPProtocol,
-        family=0,  # Let the OS pick
+        family=socket.AF_INET,
     )
     try:
         transport.sendto(MSEARCH_PAYLOAD.encode(), (SSDP_ADDR, SSDP_PORT))

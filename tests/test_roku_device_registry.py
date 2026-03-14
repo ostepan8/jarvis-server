@@ -16,6 +16,7 @@ Covers:
 
 from __future__ import annotations
 
+import socket
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,7 +28,9 @@ from jarvis.services.roku_discovery import (
     RokuDeviceInfo,
     RokuDeviceRegistry,
     _SSDPProtocol,
+    _extract_ip_from_location,
     _fetch_device_info,
+    _ssdp_search,
 )
 
 
@@ -403,6 +406,81 @@ class TestSSDPProtocol:
         proto.datagram_received(data, ("10.0.0.1", 1900))
 
         assert len(proto.locations) == 1
+
+
+class TestSSDPSearchAddressFamily:
+    """Regression tests for the SSDP search address family bug.
+
+    macOS can default to AF_INET6 when family=0, but SSDP multicast
+    (239.255.255.250) is IPv4-only.  Sending to an IPv4 multicast
+    address on an IPv6 socket raises "unexpected address family."
+    """
+
+    @pytest.mark.asyncio
+    async def test_ssdp_search_uses_af_inet(self):
+        """_ssdp_search must request AF_INET to avoid IPv6 mismatch."""
+        captured_kwargs = {}
+
+        async def fake_create_datagram_endpoint(factory, **kwargs):
+            captured_kwargs.update(kwargs)
+            transport = MagicMock()
+            transport.sendto = MagicMock()
+            transport.close = MagicMock()
+            protocol = factory()
+            protocol.connection_made(transport)
+            return transport, protocol
+
+        mock_loop = MagicMock()
+        mock_loop.create_datagram_endpoint = fake_create_datagram_endpoint
+
+        with patch("asyncio.get_running_loop", return_value=mock_loop), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            await _ssdp_search(timeout=0.01)
+
+        assert captured_kwargs.get("family") == socket.AF_INET, (
+            "SSDP search must use AF_INET — IPv6 sockets cannot send to "
+            "239.255.255.250 and will raise 'unexpected address family'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ssdp_search_sends_to_multicast_address(self):
+        """The M-SEARCH packet must target the SSDP multicast address on port 1900."""
+        sent_args = []
+
+        async def fake_create_datagram_endpoint(factory, **kwargs):
+            transport = MagicMock()
+            transport.sendto = lambda data, addr: sent_args.append((data, addr))
+            transport.close = MagicMock()
+            protocol = factory()
+            protocol.connection_made(transport)
+            return transport, protocol
+
+        mock_loop = MagicMock()
+        mock_loop.create_datagram_endpoint = fake_create_datagram_endpoint
+
+        with patch("asyncio.get_running_loop", return_value=mock_loop), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            await _ssdp_search(timeout=0.01)
+
+        assert len(sent_args) == 1
+        _data, (host, port) = sent_args[0]
+        assert host == "239.255.255.250"
+        assert port == 1900
+
+
+class TestExtractIpFromLocation:
+
+    def test_standard_roku_location(self):
+        assert _extract_ip_from_location("http://192.168.1.10:8060/") == "192.168.1.10"
+
+    def test_no_trailing_slash(self):
+        assert _extract_ip_from_location("http://10.0.0.5:8060") == "10.0.0.5"
+
+    def test_with_path(self):
+        assert _extract_ip_from_location("http://172.16.0.1:8060/query/device-info") == "172.16.0.1"
+
+    def test_garbage_returns_none(self):
+        assert _extract_ip_from_location("not-a-url") is None
 
 
 class TestFetchDeviceInfo:
