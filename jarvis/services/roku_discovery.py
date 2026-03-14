@@ -15,8 +15,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import socket
 import time
+import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -137,6 +139,44 @@ def _extract_ip_from_location(location: str) -> Optional[str]:
         return None
 
 
+def _decode_xml_bytes(raw: bytes) -> str:
+    """Decode raw XML bytes, trying UTF-8 first then Latin-1.
+
+    Roku devices sometimes send device names with smart-quote characters
+    (e.g. U+2019 RIGHT SINGLE QUOTATION MARK) encoded in a charset that
+    isn't declared in the HTTP Content-Type.  ``httpx.Response.text`` may
+    guess wrong and produce replacement characters (U+FFFD).  By decoding
+    from raw bytes with an explicit fallback chain we preserve the
+    original characters.
+    """
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, ValueError):
+            continue
+    # Last resort — replace whatever can't be decoded
+    return raw.decode("utf-8", errors="replace")
+
+
+def normalize_for_match(text: str) -> str:
+    """Normalize a string for fuzzy device-name comparison.
+
+    Strips accents, replaces smart quotes with ASCII equivalents,
+    removes U+FFFD replacement characters, and lowercases.  This lets
+    ``"Owen's Roku"`` match ``"Owen\u2019s Roku"`` or ``"Owen\ufffds Roku"``.
+    """
+    # NFKD decomposes accented characters and compatibility forms
+    text = unicodedata.normalize("NFKD", text)
+    # Replace common smart quotes / curly apostrophes with ASCII
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    # Strip replacement characters
+    text = text.replace("\ufffd", "")
+    # Strip combining marks left over from NFKD
+    text = re.sub(r"[\u0300-\u036f]", "", text)
+    return text.lower()
+
+
 async def _fetch_device_info(location: str) -> Optional[RokuDeviceInfo]:
     """GET ``/query/device-info`` from a discovered Roku and parse the XML."""
     base = location.rstrip("/")
@@ -149,7 +189,8 @@ async def _fetch_device_info(location: str) -> Optional[RokuDeviceInfo]:
         return None
 
     try:
-        root = ET.fromstring(resp.text)
+        xml_text = _decode_xml_bytes(resp.content)
+        root = ET.fromstring(xml_text)
         info: Dict[str, str] = {}
         for child in root:
             info[child.tag] = child.text or ""

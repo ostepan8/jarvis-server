@@ -242,6 +242,51 @@ async def test_function_registry_mapping(single_device_registry):
 
 
 @pytest.mark.asyncio
+async def test_name_device_smart_quote_vs_ascii(single_device_registry):
+    """name_device should match 'Owen's Roku' even when the stored name has a smart quote.
+
+    Regression: Roku sends device names with U+2019 (RIGHT SINGLE QUOTATION
+    MARK), but the LLM sends ASCII apostrophe.  Without normalize_for_match
+    the substring search fails silently.
+    """
+    # Simulate a device name with a smart quote (as Roku actually sends)
+    single_device_registry.devices["TEST001"].device_name = "Owen\u2019s Roku"
+
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    # LLM sends ASCII apostrophe
+    result = await func(device="Owen's Roku", name="Bedroom TV")
+
+    assert result["success"] is True
+    assert single_device_registry.devices["TEST001"].friendly_name == "Bedroom TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_name_device_replacement_chars(single_device_registry):
+    """name_device should match even when stored name has U+FFFD replacement chars.
+
+    Regression: corrupted device names with replacement characters from bad
+    encoding couldn't be matched by the LLM's clean ASCII version.
+    """
+    single_device_registry.devices["TEST001"].device_name = "Owen\ufffd\ufffd\ufffds Roku"
+
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="Owens Roku", name="Den TV")
+
+    assert result["success"] is True
+    assert single_device_registry.devices["TEST001"].friendly_name == "Den TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
 async def test_name_device_by_device_name(single_device_registry):
     """name_device should resolve a device by its device_name, not just serial.
 

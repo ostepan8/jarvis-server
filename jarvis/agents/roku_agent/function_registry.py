@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set
 
+from ...services.roku_discovery import normalize_for_match
+
 if TYPE_CHECKING:
     from .agent import RokuAgent
 
@@ -179,19 +181,21 @@ class RokuFunctionRegistry:
         if dev:
             return dev
 
-        # Try name-based matching (exact and fuzzy) without default fallback
-        hint_lower = device.lower()
+        # Try name-based matching (exact and fuzzy) without default fallback.
+        # Uses normalize_for_match() so smart quotes, accents, and U+FFFD
+        # replacement characters don't prevent matching.
+        hint_norm = normalize_for_match(device)
         for d in self.agent.device_registry.devices.values():
-            if d.friendly_name and d.friendly_name.lower() == hint_lower:
+            if d.friendly_name and normalize_for_match(d.friendly_name) == hint_norm:
                 return d
         for d in self.agent.device_registry.devices.values():
-            if d.friendly_name and hint_lower in d.friendly_name.lower():
+            if d.friendly_name and hint_norm in normalize_for_match(d.friendly_name):
                 return d
         for d in self.agent.device_registry.devices.values():
-            if d.device_name and d.device_name.lower() == hint_lower:
+            if d.device_name and normalize_for_match(d.device_name) == hint_norm:
                 return d
         for d in self.agent.device_registry.devices.values():
-            if d.device_name and hint_lower in d.device_name.lower():
+            if d.device_name and hint_norm in normalize_for_match(d.device_name):
                 return d
 
         return None

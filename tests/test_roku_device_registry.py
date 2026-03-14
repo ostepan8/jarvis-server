@@ -28,9 +28,11 @@ from jarvis.services.roku_discovery import (
     RokuDeviceInfo,
     RokuDeviceRegistry,
     _SSDPProtocol,
+    _decode_xml_bytes,
     _extract_ip_from_location,
     _fetch_device_info,
     _ssdp_search,
+    normalize_for_match,
 )
 
 
@@ -495,7 +497,7 @@ class TestFetchDeviceInfo:
             sw_version="1.0.0",
         )
         mock_resp = MagicMock()
-        mock_resp.text = xml
+        mock_resp.content = xml.encode("utf-8")
         mock_resp.raise_for_status = MagicMock()
 
         with patch("jarvis.services.roku_discovery.httpx.AsyncClient") as MockClient:
@@ -525,3 +527,75 @@ class TestFetchDeviceInfo:
             result = await _fetch_device_info("http://192.168.1.5:8060/")
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Unicode / encoding helpers
+# ---------------------------------------------------------------------------
+
+
+class TestDecodeXmlBytes:
+
+    def test_utf8_smart_quote(self):
+        """UTF-8 encoded smart quotes should decode correctly."""
+        raw = "Owen\u2019s Roku".encode("utf-8")
+        assert _decode_xml_bytes(raw) == "Owen\u2019s Roku"
+
+    def test_latin1_fallback(self):
+        """Bytes invalid in UTF-8 but valid in Latin-1 should decode via fallback."""
+        # \x92 is RIGHT SINGLE QUOTATION MARK in Windows-1252 / displayable in Latin-1
+        raw = b"Owen\x92s Roku"
+        result = _decode_xml_bytes(raw)
+        # Latin-1 maps \x92 to U+0092 (a control character), but it shouldn't crash
+        assert "Owen" in result
+        assert "Roku" in result
+
+    def test_pure_ascii(self):
+        assert _decode_xml_bytes(b"Roku Ultra") == "Roku Ultra"
+
+
+class TestNormalizeForMatch:
+
+    def test_smart_quote_matches_ascii(self):
+        """'Owen\u2019s' and 'Owen's' should normalize to the same string."""
+        assert normalize_for_match("Owen\u2019s Roku") == normalize_for_match("Owen's Roku")
+
+    def test_replacement_chars_stripped(self):
+        """U+FFFD replacement characters should be stripped for matching."""
+        assert normalize_for_match("Owen\ufffds Roku") == normalize_for_match("Owens Roku")
+
+    def test_case_insensitive(self):
+        assert normalize_for_match("LIVING ROOM") == normalize_for_match("living room")
+
+    def test_accented_characters(self):
+        """Accented characters should normalize for matching."""
+        assert normalize_for_match("café") == normalize_for_match("cafe")
+
+
+class TestFetchDeviceInfoEncoding:
+
+    @pytest.mark.asyncio
+    async def test_smart_quote_in_device_name(self):
+        """Device names with smart quotes should be preserved, not mangled."""
+        xml = DEVICE_INFO_XML.format(
+            serial="SQ001",
+            device_name="Owen\u2019s Roku",
+            model="TestModel",
+            sw_version="1.0.0",
+        )
+        mock_resp = MagicMock()
+        mock_resp.content = xml.encode("utf-8")
+        mock_resp.raise_for_status = MagicMock()
+
+        with patch("jarvis.services.roku_discovery.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_resp)
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            result = await _fetch_device_info("http://192.168.1.5:8060/")
+
+        assert result is not None
+        assert "\ufffd" not in result.device_name
+        assert "\u2019" in result.device_name or "'" in result.device_name

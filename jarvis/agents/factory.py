@@ -428,10 +428,13 @@ class AgentFactory:
         import httpx
         import xml.etree.ElementTree as ET
 
+        from ..services.roku_discovery import _decode_xml_bytes
+
         try:
             resp = httpx.get(f"http://{ip}:8060/query/device-info", timeout=5.0)
             resp.raise_for_status()
-            root = ET.fromstring(resp.text)
+            xml_text = _decode_xml_bytes(resp.content)
+            root = ET.fromstring(xml_text)
             info: Dict[str, str] = {}
             for child in root:
                 info[child.tag] = child.text or ""
