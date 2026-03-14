@@ -237,6 +237,126 @@ async def test_function_registry_mapping(single_device_registry):
 
 
 # ---------------------------------------------------------------------------
+# name_device persistence and resolution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_name_device_by_device_name(single_device_registry):
+    """name_device should resolve a device by its device_name, not just serial.
+
+    Regression: the LLM doesn't know serial numbers, so passing a device
+    name like 'Roku Ultra' must resolve to the correct device and persist
+    the friendly name.
+    """
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="Test Roku", name="Living Room TV")
+
+    assert result["success"] is True
+    assert single_device_registry.devices["TEST001"].friendly_name == "Living Room TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_name_device_by_serial(single_device_registry):
+    """name_device should still work with a raw serial number."""
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="TEST001", name="Den TV")
+
+    assert result["success"] is True
+    assert single_device_registry.devices["TEST001"].friendly_name == "Den TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_name_device_by_friendly_name(two_device_registry):
+    """name_device should resolve by existing friendly name."""
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=two_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="Bedroom", name="Guest Room TV")
+
+    assert result["success"] is True
+    assert two_device_registry.devices["SER002"].friendly_name == "Guest Room TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_name_device_unknown_returns_error(two_device_registry):
+    """name_device with an unresolvable hint should return an error, not silently succeed.
+
+    Uses a two-device registry so the 'only one online' cascade fallback
+    doesn't mask the failure.
+    """
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=two_device_registry,
+    )
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="Nonexistent TV", name="Whatever")
+
+    assert result["success"] is False
+    assert "error" in result
+    assert "Nonexistent TV" in result["error"]
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_name_device_persists_to_disk(tmp_path, monkeypatch):
+    """Naming a device should persist through save — the whole point of this fix.
+
+    Regression: names set via chat were lost on restart because the LLM
+    fabricated serial numbers and set_friendly_name silently did nothing.
+    """
+    from jarvis.services.roku_discovery import RokuDeviceRegistry
+
+    state_file = tmp_path / "roku_devices.json"
+    monkeypatch.setattr(RokuDeviceRegistry, "STATE_FILE", state_file)
+
+    registry = RokuDeviceRegistry()
+    registry.register_manual(ip="10.0.0.1", serial="SN1", device_name="Roku Ultra")
+
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=registry,
+    )
+
+    func = agent.function_registry.get_function("name_device")
+    result = await func(device="Roku Ultra", name="Office TV")
+    assert result["success"] is True
+
+    # Reload from disk — the name must survive
+    loaded = RokuDeviceRegistry.load()
+    assert loaded.devices["SN1"].friendly_name == "Office TV"
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_set_default_device_by_name(two_device_registry):
+    """set_default_device should resolve by name, not just serial."""
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=two_device_registry,
+    )
+    func = agent.function_registry.get_function("set_default_device")
+    result = await func(device="Bedroom")
+
+    assert result["success"] is True
+    assert two_device_registry.default_serial == "SER002"
+    await agent.close()
+
+
+# ---------------------------------------------------------------------------
 # discover_devices response includes existing devices
 # ---------------------------------------------------------------------------
 

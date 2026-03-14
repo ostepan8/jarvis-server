@@ -328,20 +328,20 @@ tools = [
         "type": "function",
         "function": {
             "name": "name_device",
-            "description": "Assign a friendly name to a Roku device (e.g., 'Bedroom TV', 'Living Room')",
+            "description": "Assign a friendly name to a Roku device (e.g., 'Bedroom TV', 'Living Room'). The device can be identified by its serial number, current name, or model.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "serial": {
+                    "device": {
                         "type": "string",
-                        "description": "The serial number of the device to name",
+                        "description": "The device to name — accepts serial number, current device name, model, or any identifying string",
                     },
                     "name": {
                         "type": "string",
                         "description": "The friendly name to assign",
                     },
                 },
-                "required": ["serial", "name"],
+                "required": ["device", "name"],
             },
         },
     },
@@ -349,16 +349,16 @@ tools = [
         "type": "function",
         "function": {
             "name": "set_default_device",
-            "description": "Set a Roku device as the default for commands that don't specify a device",
+            "description": "Set a Roku device as the default for commands that don't specify a device. The device can be identified by its serial number, name, or model.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "serial": {
+                    "device": {
                         "type": "string",
-                        "description": "The serial number of the device to set as default",
+                        "description": "The device to set as default — accepts serial number, device name, model, or any identifying string",
                     },
                 },
-                "required": ["serial"],
+                "required": ["device"],
             },
         },
     },
