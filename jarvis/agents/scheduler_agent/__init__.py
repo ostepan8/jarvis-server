@@ -107,6 +107,10 @@ class SchedulerAgent(NetworkAgent):
     def set_network(self, network: AgentNetwork) -> None:
         """Start the background tick loop when the network is attached."""
         super().set_network(network)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # No event loop — caller will start later
         if self._tick_task is None or self._tick_task.done():
             self._tick_task = asyncio.create_task(self._tick_loop())
 
