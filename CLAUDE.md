@@ -273,13 +273,15 @@ Imperative mood. Lowercase. No period. Under 72 chars. "fix stuff" is not a comm
 
 **Shared files** (one pass, after merging the above):
 4. `jarvis/agents/factory.py` — register it
-5. `jarvis/agents/nlu_agent/__init__.py` — route to it
-6. `jarvis/core/config.py` — feature flag
-7. **Capabilities knowledge base** — update the librarian:
+5. `jarvis/core/config.py` — feature flag
+6. **NLU routing** — without this, nobody will ever reach your agent:
+   - `jarvis/agents/nlu_agent/fast_classifier.py` — add training phrases for EVERY capability your agent exposes (6-10 phrases each, covering natural variations). This is what allows sub-millisecond routing without an LLM call.
+   - `jarvis/agents/nlu_agent/__init__.py` — add examples in `_build_unified_prompt` for your capabilities so the LLM classifier knows how to route to them when the fast path misses.
+7. **Capabilities knowledge base** — update the librarian so Jarvis knows what it can do:
    - Add `jarvis/agents/capabilities_agent/knowledge/agents/{name}.md` with capabilities, examples, and requirements
    - Update the relevant `knowledge/skills/{domain}.md` to reference the new agent
-   - Add training phrases to `jarvis/agents/nlu_agent/fast_classifier.py` for `describe_capabilities` / `explain_capability` keyword routing
    - Add keyword entries to `_SKILL_KEYWORDS` and `_AGENT_KEYWORDS` in `jarvis/agents/capabilities_agent/__init__.py`
+   - Add training phrases for `describe_capabilities` / `explain_capability` in `fast_classifier.py` so the librarian can be asked about the new agent
 
 All agents return `AgentResponse`. No exceptions. Raw dicts break the pipeline, and the pipeline is sacred.
 

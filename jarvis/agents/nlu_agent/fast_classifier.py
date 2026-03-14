@@ -248,6 +248,7 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
     # ----- Capabilities -----
     "describe_capabilities": [
         "what can you do",
+        "what can u do",
         "what are your capabilities",
         "help me understand what you do",
         "list your features",
@@ -259,6 +260,14 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "how can you help me",
         "what services do you offer",
         "features",
+        "what things can you do",
+        "what are you able to do",
+        "help",
+        "what can jarvis do",
+        "what's available",
+        "show capabilities",
+        "capabilities list",
+        "what functions do you have",
     ],
     "explain_capability": [
         "how does the calendar work",
@@ -273,6 +282,9 @@ CAPABILITY_TRAINING_PHRASES: Dict[str, List[str]] = {
         "tell me about the scheduler",
         "what can't you do",
         "what are your limitations",
+        "how does jarvis work",
+        "explain how you work",
+        "what are you not able to do",
     ],
     # ----- Health -----
     "system_health_check": [

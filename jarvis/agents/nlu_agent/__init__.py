@@ -967,8 +967,17 @@ Special cases:
    **CRITICAL:** Even if it starts with "search for" or "find", if it contains conditional
    logic that depends on the search result, return a multi-capability DAG.
 
-3. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
-   - General knowledge (facts, history, science, "what is", "who is", "when did"):
+3. **SELF-REFERENTIAL / CAPABILITY QUESTIONS (BEFORE SEARCH):**
+   If the user is asking about what Jarvis/you can do, your capabilities, features,
+   how you work, or your limitations ("what can you do", "what are your capabilities",
+   "help", "what features do you have", "what can't you do", "how does X work"
+   where X is a Jarvis feature like calendar/lights/memory):
+   → Use "describe_capabilities" for broad questions or "explain_capability" for specific ones.
+   **CRITICAL:** Do NOT route these to "search". They are about Jarvis itself, not web lookups.
+
+4. **GENERAL KNOWLEDGE vs USER-SPECIFIC:**
+   - General knowledge (facts, history, science, "what is", "who is", "when did")
+     about the EXTERNAL WORLD (not about Jarvis):
      → ALWAYS use "search" capability (NEVER "chat", "search_facts", or "get_facts")
    - User-specific ("my favorite", "what I mentioned", "what did I say"):
      → Use "search_facts" or "get_facts"
@@ -976,17 +985,17 @@ Special cases:
      "promote memory"): → Use "browse_memories", "memory_stats",
      "consolidate_memories", or "promote_memory"
 
-4. **MULTIPLE ACTIONS:**
+5. **MULTIPLE ACTIONS:**
    Multiple distinct actions connected by "and", "also", or targeting different systems:
    → Return DAG with all capabilities. Independent ones get empty deps, dependent ones list deps.
 
-5. **SINGLE ACTION:**
+6. **SINGLE ACTION:**
    One clear capability match → {{"dag": {{"capability_name": []}}}}
 
-6. **PROTOCOL MATCH:**
+7. **PROTOCOL MATCH:**
    Matches a known protocol → {{"intent": "run_protocol", "protocol": "name"}}
 
-7. **CHAT (DEFAULT):**
+8. **CHAT (DEFAULT):**
    General conversation, greetings, chit-chat → {{"dag": {{"chat": []}}}}
 
 **User Input:** \"\"\"{user_input}\"\"\"{history_str}{context_str}{hint_str}
@@ -1005,6 +1014,10 @@ Special cases:
 - "Search for weather and if sunny make lights red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "When did X come out. if in 2018 make lights blue" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
 - "Search for X and if above Y make lights blue else red" → {{"dag": {{"search": [], "lights_color": ["search"]}}}}
+- "What can you do?" → {{"dag": {{"describe_capabilities": []}}}}
+- "What are your capabilities?" → {{"dag": {{"describe_capabilities": []}}}}
+- "How does the calendar work?" → {{"dag": {{"explain_capability": []}}}}
+- "What can't you do?" → {{"dag": {{"explain_capability": []}}}}
 - "Add a Spotify agent" → {{"dag": {{"implement_feature": []}}}}
 - "Fix the NLU timeout bug" → {{"dag": {{"fix_bug": []}}}}
 - "Write tests for the memory agent" → {{"dag": {{"write_tests": []}}}}
