@@ -5,7 +5,7 @@ Command processor for Roku agent - handles AI-driven command processing.
 System prompt is built dynamically per-command so the LLM always sees
 the latest device roster from the registry.
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import json
 import asyncio
 
@@ -20,6 +20,8 @@ from ..response import AgentResponse, ErrorInfo
 class RokuCommandProcessor:
     """Processes natural language commands using AI and executes Roku functions."""
 
+    MAX_HISTORY_TURNS = 10
+
     def __init__(
         self,
         ai_client: BaseAIClient,
@@ -32,6 +34,7 @@ class RokuCommandProcessor:
         self.logger = logger
         self.device_registry = device_registry
         self.tools = tools
+        self._history: List[Dict[str, str]] = []
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the AI — rebuilt per command for fresh device state."""
@@ -132,8 +135,14 @@ DEVICE ROUTING:
 
         messages = [
             {"role": "system", "content": self._build_system_prompt()},
-            {"role": "user", "content": command},
         ]
+
+        # Inject conversation history so the LLM has context for follow-ups
+        for turn in self._history:
+            messages.append({"role": "user", "content": turn["user"]})
+            messages.append({"role": "assistant", "content": turn["assistant"]})
+
+        messages.append({"role": "user", "content": command})
 
         actions_taken = []
         iterations = 0
@@ -199,6 +208,12 @@ DEVICE ROUTING:
         final_response = (
             message.content if message and hasattr(message, "content") else str(message or "")
         )
+
+        # Store conversation turn so follow-ups retain context
+        if final_response:
+            self._history.append({"user": command, "assistant": final_response})
+            if len(self._history) > self.MAX_HISTORY_TURNS:
+                self._history = self._history[-self.MAX_HISTORY_TURNS:]
 
         if self.logger:
             self.logger.log("INFO", "=== ROKU COMMAND COMPLETE ===")
