@@ -564,6 +564,15 @@ class TestNormalizeForMatch:
         """U+FFFD replacement characters should be stripped for matching."""
         assert normalize_for_match("Owen\ufffds Roku") == normalize_for_match("Owens Roku")
 
+    def test_replacement_chars_match_ascii_apostrophe(self):
+        """The actual bug: Roku sends U+FFFD chars where an apostrophe was.
+
+        'Owen\\ufffd\\ufffd\\ufffds Roku' (garbled encoding) must match
+        'Owen's Roku' (what the user types).  Both should converge to
+        'owens roku' after stripping FFFD and apostrophes.
+        """
+        assert normalize_for_match("Owen\ufffd\ufffd\ufffds Roku") == normalize_for_match("Owen's Roku")
+
     def test_case_insensitive(self):
         assert normalize_for_match("LIVING ROOM") == normalize_for_match("living room")
 

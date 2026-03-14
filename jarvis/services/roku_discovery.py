@@ -161,17 +161,17 @@ def _decode_xml_bytes(raw: bytes) -> str:
 def normalize_for_match(text: str) -> str:
     """Normalize a string for fuzzy device-name comparison.
 
-    Strips accents, replaces smart quotes with ASCII equivalents,
-    removes U+FFFD replacement characters, and lowercases.  This lets
-    ``"Owen's Roku"`` match ``"Owen\u2019s Roku"`` or ``"Owen\ufffds Roku"``.
+    Strips accents, removes U+FFFD replacement characters, strips
+    apostrophes and quotes, and lowercases.  This lets ``"Owen's Roku"``
+    match ``"Owen\u2019s Roku"`` or ``"Owen\ufffds Roku"``.
     """
     # NFKD decomposes accented characters and compatibility forms
     text = unicodedata.normalize("NFKD", text)
-    # Replace common smart quotes / curly apostrophes with ASCII
-    text = text.replace("\u2018", "'").replace("\u2019", "'")
-    text = text.replace("\u201c", '"').replace("\u201d", '"')
-    # Strip replacement characters
+    # Strip replacement characters (from charset mis-decoding)
     text = text.replace("\ufffd", "")
+    # Strip all apostrophes and quotes (smart and ASCII) so that
+    # "Owen's" and "Owens" (after FFFD removal) converge
+    text = re.sub(r"['\"\u2018\u2019\u201c\u201d]", "", text)
     # Strip combining marks left over from NFKD
     text = re.sub(r"[\u0300-\u036f]", "", text)
     return text.lower()
