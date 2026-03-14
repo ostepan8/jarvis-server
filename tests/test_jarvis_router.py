@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.auth import create_token, hash_password
 from server.database import init_database
 from server.dependencies import (
@@ -72,8 +73,7 @@ def _setup_app(tmp_path, agents_dict=None, process_response=None):
 
     mock_jarvis.get_agent_capabilities.side_effect = get_caps
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.jarvis_system = mock_jarvis
     server.app.state.auth_db = db
     server.app.state.user_systems = {}
@@ -126,8 +126,7 @@ class TestJarvisPostEndpoint:
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
 
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
         server.app.dependency_overrides.clear()
@@ -149,8 +148,7 @@ class TestJarvisPostEndpoint:
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
 
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
         server.app.dependency_overrides.clear()

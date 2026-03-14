@@ -67,6 +67,10 @@ class ServerManagerAgent(NetworkAgent):
     def set_network(self, network: AgentNetwork) -> None:
         """Start background monitor when network is attached."""
         super().set_network(network)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # No event loop — caller will start later
         if self._monitor_task is None or self._monitor_task.done():
             self._monitor_task = asyncio.create_task(self._monitor_loop())
 

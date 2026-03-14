@@ -4,6 +4,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 
 
 class DummyJarvis:
@@ -33,8 +34,7 @@ async def test_user_profile_endpoints(tmp_path):
     )
     db.commit()
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.auth_db = db
 
     jarvis = DummyJarvis()

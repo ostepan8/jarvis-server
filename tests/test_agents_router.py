@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.database import init_database
 
 
@@ -57,8 +58,7 @@ def _setup_app(tmp_path, agents_dict: dict | None = None):
     # Simulate the network.agents property for iteration
     mock_jarvis.network = SimpleNamespace(agents=agents_dict)
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.jarvis_system = mock_jarvis
     server.app.state.auth_db = db
 

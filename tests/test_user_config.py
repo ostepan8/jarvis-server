@@ -4,6 +4,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 
 
 class DummyJarvis:
@@ -21,8 +22,7 @@ async def test_user_config_crud(tmp_path):
     db.execute("CREATE TABLE user_configs (user_id INTEGER PRIMARY KEY, openai_api_key TEXT, anthropic_api_key TEXT, calendar_api_url TEXT, hue_bridge_ip TEXT, hue_username TEXT)")
     db.commit()
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.auth_db = db
 
     jarvis = DummyJarvis()

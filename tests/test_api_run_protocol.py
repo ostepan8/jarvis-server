@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.dependencies import get_user_allowed_agents
 from jarvis.agents.agent_network import AgentNetwork
 from jarvis.agents.base import NetworkAgent
@@ -52,8 +53,7 @@ async def test_run_protocol_endpoint(tmp_path):
         steps=[ProtocolStep(agent="dummy", function="echo", parameters={"msg": "hi"})],
     )
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/protocols/run", json={"protocol": proto.to_dict()})

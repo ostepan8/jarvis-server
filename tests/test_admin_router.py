@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.database import init_database
 from server.dependencies import get_jarvis, get_auth_db, get_fact_service
 from server.routers import admin as admin_module
@@ -36,8 +37,7 @@ def _setup_app(tmp_path, with_jarvis=True):
         return_value={"response": "admin result", "success": True}
     )
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.auth_db = db
     server.app.state.jarvis_system = mock_jarvis if with_jarvis else None
 

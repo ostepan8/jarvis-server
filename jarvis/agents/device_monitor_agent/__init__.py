@@ -71,6 +71,10 @@ class DeviceMonitorAgent(NetworkAgent):
     def set_network(self, network: AgentNetwork) -> None:
         """Override to start the background monitor when network is set."""
         super().set_network(network)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # No event loop — caller will start later
         if self._monitor_task is None or self._monitor_task.done():
             self._monitor_task = asyncio.create_task(self._monitor_loop())
 
