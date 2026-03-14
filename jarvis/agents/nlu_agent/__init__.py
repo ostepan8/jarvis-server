@@ -1001,6 +1001,9 @@ Special cases:
 
 8. **CHAT (DEFAULT):**
    General conversation, greetings, chit-chat → {{"dag": {{"chat": []}}}}
+   **CRITICAL:** "how's the cpu", "hows my ram", "cpu usage", "how much memory is being used"
+   are DEVICE STATUS queries (→ device_status), NOT greetings or chat. Only route to chat
+   when there is no hardware/system resource mentioned.
 
 **User Input:** \"\"\"{user_input}\"\"\"{history_str}{context_str}{hint_str}
 
@@ -1049,7 +1052,15 @@ Special cases:
 - "Promote that memory to long-term" → {{"dag": {{"promote_memory": []}}}}
 - "How's the machine doing?" → {{"dag": {{"device_status": []}}}}
 - "Check CPU and memory usage" → {{"dag": {{"device_status": []}}}}
+- "hows the cpu lookin" → {{"dag": {{"device_status": []}}}}
+- "hows my ram doing" → {{"dag": {{"device_status": []}}}}
+- "how much ram is being used" → {{"dag": {{"device_status": []}}}}
+- "cpu usage" → {{"dag": {{"device_status": []}}}}
+- "ram usage" → {{"dag": {{"device_status": []}}}}
+- "how's my cpu" → {{"dag": {{"device_status": []}}}}
+- "how much disk space is left" → {{"dag": {{"device_status": []}}}}
 - "What's eating all my RAM?" → {{"dag": {{"device_diagnostics": []}}}}
+- "why is my computer slow" → {{"dag": {{"device_diagnostics": []}}}}
 - "Show top processes" → {{"dag": {{"device_diagnostics": []}}}}
 - "Clean up temp files" → {{"dag": {{"device_cleanup": []}}}}
 - "Is the disk almost full?" → {{"dag": {{"device_status": []}}}}
