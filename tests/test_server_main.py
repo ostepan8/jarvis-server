@@ -8,6 +8,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.main import create_app
 from server.database import init_database
 
@@ -54,8 +55,7 @@ class TestCORSMiddleware:
         db_path = str(tmp_path / "cors_test.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 
@@ -83,8 +83,7 @@ class TestCORSMiddleware:
         db_path = str(tmp_path / "cors_test2.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 
@@ -111,8 +110,7 @@ class TestCORSMiddleware:
         db_path = str(tmp_path / "cors_test3.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 
@@ -146,8 +144,7 @@ class TestRouteRegistration:
         db_path = str(tmp_path / "routes_test.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 
@@ -179,8 +176,7 @@ class TestRouteRegistration:
         db_path = str(tmp_path / "routes_test2.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 
@@ -197,8 +193,7 @@ class TestRouteRegistration:
         db_path = str(tmp_path / "routes_test3.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
 

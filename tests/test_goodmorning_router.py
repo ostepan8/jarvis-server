@@ -9,6 +9,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.database import init_database
 from server.routers.goodmorning import _build_greeting
 
@@ -27,8 +28,7 @@ def _setup_app(tmp_path):
     mock_jarvis.logger = MagicMock()
     mock_jarvis.network = SimpleNamespace(agents={})
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.jarvis_system = mock_jarvis
     server.app.state.auth_db = db
 

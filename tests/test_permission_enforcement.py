@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import server
+from tests import disable_lifespan
 from server.dependencies import get_user_allowed_agents, get_current_user, get_auth_db
 from jarvis.protocols import Protocol, ProtocolStep
 from jarvis.protocols.executor import ProtocolExecutor
@@ -62,8 +63,7 @@ async def test_protocol_run_disallowed_agent(tmp_path):
         steps=[ProtocolStep(agent="dummy", function="echo", parameters={})],
     )
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/protocols/run", json={"protocol": proto.to_dict()})
@@ -143,8 +143,7 @@ async def test_voice_trigger_disallowed_agent(tmp_path):
     server.app.dependency_overrides[get_current_user] = override_current_user
     server.app.dependency_overrides[get_auth_db] = override_auth_db
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/jarvis/", json={"command": "do test"})

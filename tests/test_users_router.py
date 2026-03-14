@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport
 
 import server
+from tests import disable_lifespan
 from server.auth import create_token, hash_password
 from server.database import init_database
 from server.dependencies import (
@@ -43,8 +44,7 @@ def _setup_app(tmp_path):
     }
     mock_jarvis._orchestrator = None  # Avoid AgentProfile update path
 
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.jarvis_system = mock_jarvis
     server.app.state.auth_db = db
 
@@ -288,8 +288,7 @@ class TestUsersAuthRequired:
         db_path = str(tmp_path / "noauth.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
         server.app.dependency_overrides.clear()
@@ -306,8 +305,7 @@ class TestUsersAuthRequired:
         db_path = str(tmp_path / "noauth2.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
         server.app.dependency_overrides.clear()
@@ -324,8 +322,7 @@ class TestUsersAuthRequired:
         db_path = str(tmp_path / "noauth3.db")
         os.environ["AUTH_DB_PATH"] = db_path
         db = init_database()
-        server.app.router.on_startup.clear()
-        server.app.router.on_shutdown.clear()
+        disable_lifespan(server.app)
         server.app.state.auth_db = db
         server.app.state.jarvis_system = MagicMock()
         server.app.dependency_overrides.clear()

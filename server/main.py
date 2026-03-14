@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import logging
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -26,9 +30,68 @@ from server.routers.device import router as device_router
 from server.routers.self_improvement import router as self_improvement_router
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application startup and shutdown via the lifespan protocol."""
+    # -- Startup ---------------------------------------------------------------
+    level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    verbose = os.getenv("JARVIS_VERBOSE", "false").lower() in ("true", "1", "yes")
+    app.state.logger = JarvisLogger(log_level=level, verbose=verbose)
+
+    lighting_backend = os.getenv("LIGHTING_BACKEND", "phillips_hue")
+    yeelight_bulb_ips_str = os.getenv("YEELIGHT_BULB_IPS", "")
+    yeelight_bulb_ips = (
+        [ip.strip() for ip in yeelight_bulb_ips_str.split(",")]
+        if yeelight_bulb_ips_str.strip()
+        else None
+    )
+
+    config = JarvisConfig(
+        ai_provider="openai",
+        api_key=os.getenv("OPENAI_API_KEY"),
+        calendar_api_url=os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
+        response_timeout=float(os.getenv("JARVIS_RESPONSE_TIMEOUT", 15.0)),
+        hue_bridge_ip=os.getenv("PHILLIPS_HUE_BRIDGE_IP"),
+        hue_username=os.getenv("PHILLIPS_HUE_USERNAME"),
+        lighting_backend=lighting_backend,
+        yeelight_bulb_ips=yeelight_bulb_ips,
+    )
+
+    jarvis_system = JarvisSystem(config)
+    await jarvis_system.initialize()
+    app.state.jarvis_system = jarvis_system
+    app.state.user_systems = {}
+
+    # Initialize database
+    app.state.auth_db = init_database()
+
+    yield
+
+    # -- Shutdown --------------------------------------------------------------
+    try:
+        jarvis_system_ref: JarvisSystem | None = getattr(app.state, "jarvis_system", None)
+        if jarvis_system_ref:
+            try:
+                await asyncio.wait_for(jarvis_system_ref.shutdown(), timeout=5.0)
+            except asyncio.TimeoutError:
+                pass  # Continue shutdown even if jarvis hangs
+
+        logger_ref: JarvisLogger | None = getattr(app.state, "logger", None)
+        if logger_ref:
+            try:
+                logger_ref.close()
+            except Exception:
+                pass
+
+        close_database(getattr(app.state, "auth_db", None))
+    except Exception:
+        pass  # Don't let shutdown errors prevent exit
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="Jarvis API")
+    app = FastAPI(title="Jarvis API", lifespan=lifespan)
     cors_env = os.getenv("CORS_ORIGINS")
     if cors_env:
         origins = [o.strip() for o in cors_env.split(",") if o.strip()]
@@ -62,67 +125,6 @@ def create_app() -> FastAPI:
     app.include_router(self_improvement_router, prefix="/self-improvement", tags=["self-improvement"])
     app.include_router(admin_router)
 
-    # Add startup and shutdown events
-    @app.on_event("startup")
-    async def startup_event() -> None:
-        """Initialize the collaborative Jarvis system."""
-        # Already loaded at module import; idempotent if called again.
-        level_name = os.getenv("JARVIS_LOG_LEVEL", "INFO").upper()
-        level = getattr(logging, level_name, logging.INFO)
-        verbose = os.getenv("JARVIS_VERBOSE", "false").lower() in ("true", "1", "yes")
-        app.state.logger = JarvisLogger(log_level=level, verbose=verbose)
-
-        lighting_backend = os.getenv("LIGHTING_BACKEND", "phillips_hue")
-        yeelight_bulb_ips_str = os.getenv("YEELIGHT_BULB_IPS", "")
-        yeelight_bulb_ips = (
-            [ip.strip() for ip in yeelight_bulb_ips_str.split(",")]
-            if yeelight_bulb_ips_str.strip()
-            else None
-        )
-
-        config = JarvisConfig(
-            ai_provider="openai",
-            api_key=os.getenv("OPENAI_API_KEY"),
-            calendar_api_url=os.getenv("CALENDAR_API_URL", "http://localhost:8080"),
-            response_timeout=float(os.getenv("JARVIS_RESPONSE_TIMEOUT", 15.0)),
-            hue_bridge_ip=os.getenv("PHILLIPS_HUE_BRIDGE_IP"),
-            hue_username=os.getenv("PHILLIPS_HUE_USERNAME"),
-            lighting_backend=lighting_backend,
-            yeelight_bulb_ips=yeelight_bulb_ips,
-        )
-
-        jarvis_system = JarvisSystem(config)
-        await jarvis_system.initialize()
-        app.state.jarvis_system = jarvis_system
-        app.state.user_systems = {}
-
-        # Initialize database
-        app.state.auth_db = init_database()
-
-    @app.on_event("shutdown")
-    async def shutdown_event() -> None:
-        import asyncio
-        
-        try:
-            jarvis_system: JarvisSystem | None = getattr(app.state, "jarvis_system", None)
-            if jarvis_system:
-                # Add timeout to prevent hanging
-                try:
-                    await asyncio.wait_for(jarvis_system.shutdown(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    pass  # Continue shutdown even if jarvis hangs
-
-            logger: JarvisLogger | None = getattr(app.state, "logger", None)
-            if logger:
-                try:
-                    logger.close()
-                except Exception:
-                    pass
-
-            close_database(getattr(app.state, "auth_db", None))
-        except Exception:
-            pass  # Don't let shutdown errors prevent exit
-
     return app
 
 
@@ -139,15 +141,15 @@ def run():
     port = int(os.getenv("PORT", DEFAULT_PORT))
     logger = logging.getLogger("jarvis.server")
     logger.info(f"Starting Jarvis server on port {port}")
-    
+
     # Handle SIGINT (Ctrl+C) more aggressively
     def signal_handler(sig, frame):
         logger.info("Received interrupt signal, forcing exit...")
         sys.exit(0)
-    
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=5)
 
 

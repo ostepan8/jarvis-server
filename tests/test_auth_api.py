@@ -3,6 +3,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 import server
+from tests import disable_lifespan
 
 
 @pytest.mark.asyncio
@@ -12,8 +13,7 @@ async def test_signup_and_login(tmp_path):
         "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password_hash TEXT)"
     )
     db.commit()
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.auth_db = db
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -46,8 +46,7 @@ async def test_invalid_login(tmp_path):
         "INSERT INTO users (email, password_hash) VALUES ('b@test.com', ?)", (hashed,)
     )
     db.commit()
-    server.app.router.on_startup.clear()
-    server.app.router.on_shutdown.clear()
+    disable_lifespan(server.app)
     server.app.state.auth_db = db
     transport = ASGITransport(app=server.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
