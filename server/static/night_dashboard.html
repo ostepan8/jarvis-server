@@ -943,7 +943,7 @@
         const reversed = [...results].reverse();
         let html = '';
         for (const r of reversed) {
-            const disc = findDiscovery(r.task_title);
+            const disc = r.discovery || findDiscovery(r.task_title);
             const clickAttr = disc ? ' onclick=\'openTicket(' + JSON.stringify(disc).replace(/'/g, "&#39;") + ')\'' : '';
             html += '<div class="result-item"' + clickAttr + '>';
             html += resultIcon(r.success);

@@ -71,6 +71,7 @@ class ImprovementTaskResult:
     todo_id: Optional[str] = None
     pr_url: Optional[str] = None
     branch_name: Optional[str] = None
+    discovery: Optional[dict] = None
 
 
 @dataclass
@@ -182,6 +183,7 @@ class NightReport:
                     "todo_id": r.todo_id,
                     "pr_url": r.pr_url,
                     "branch_name": r.branch_name,
+                    "discovery": r.discovery,
                 }
                 for r in self.results
             ],
@@ -352,6 +354,7 @@ class SelfImprovementService:
                 "todo_id": result.todo_id,
                 "pr_url": result.pr_url,
                 "branch_name": result.branch_name,
+                "discovery": discovery.to_dict(),
             })
             state.current_task_index = i + 1
             state.save()
@@ -464,6 +467,7 @@ class SelfImprovementService:
                 "todo_id": result.todo_id,
                 "pr_url": result.pr_url,
                 "branch_name": result.branch_name,
+                "discovery": discovery.to_dict(),
             })
             state.current_task_index = i + 1
             state.save()
