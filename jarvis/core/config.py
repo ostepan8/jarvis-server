@@ -24,6 +24,7 @@ class FeatureFlags:
     enable_server_manager: bool = True
     enable_capabilities: bool = True
     enable_scheduler: bool = True
+    enable_notifications: bool = True
 
 
 @dataclass
