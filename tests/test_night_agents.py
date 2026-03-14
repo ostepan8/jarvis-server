@@ -322,7 +322,7 @@ class TestLogCleanupAgent:
 
     def test_capabilities(self):
         agent = LogCleanupAgent(db_path="/tmp/fake.db")
-        assert agent.capabilities == {"clean_logs"}
+        assert agent.capabilities == {"clean_logs", "clean_traces"}
 
     def test_description(self):
         agent = LogCleanupAgent(db_path="/tmp/fake.db")
