@@ -42,12 +42,17 @@ class NightModePrinter:
 
         sys.stdout.flush()
 
-    def print_entering(self) -> None:
+    def print_entering(self, dashboard_url: str | None = None) -> None:
         """Announce night mode activation."""
+        from jarvis.core.constants import DEFAULT_PORT
+
         timestamp = datetime.now().strftime("%H:%M:%S")
+        url = dashboard_url or f"http://localhost:{DEFAULT_PORT}/self-improvement/dashboard"
         sys.stdout.write(
             f"\n{self.PREFIX} {Fore.CYAN}{timestamp}{Style.RESET_ALL}  "
             f"Entering night mode. Stand by.\n"
+            f"{self.PREFIX}           "
+            f"{Fore.WHITE}Dashboard: \033]8;;{url}\033\\{Fore.BLUE}{url}{Style.RESET_ALL}\033]8;;\033\\\n"
         )
         sys.stdout.flush()
 

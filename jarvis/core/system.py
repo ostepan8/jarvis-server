@@ -1,6 +1,7 @@
 # jarvis/core/system.py
 
 import asyncio
+import os
 from os import getenv
 import uuid
 from typing import Any, Dict, List, Optional, Set
@@ -65,6 +66,8 @@ class JarvisSystem:
         self.night_mode: bool = False
         self.night_agents: list[NightAgent] = []
         self.night_controller: NightModeControllerAgent | None = None
+        self._night_server: asyncio.Task | None = None
+        self._night_server_shutdown: asyncio.Event | None = None
 
         # Protocol runtime and loggers
         self.protocol_runtime: ProtocolRuntime | None = None
@@ -283,6 +286,8 @@ class JarvisSystem:
         for agent in self.night_agents:
             agent.activate_capabilities()
             asyncio.create_task(agent.start_background_tasks(progress_callback=progress_callback))
+        # Spin up the dashboard server so the UI is reachable
+        await self._start_night_server()
 
     async def exit_night_mode(self) -> None:
         """Disable night mode and stop background tasks."""
@@ -292,6 +297,93 @@ class JarvisSystem:
         for agent in self.night_agents:
             agent.deactivate_capabilities()
             await agent.stop_background_tasks()
+        await self._stop_night_server()
+
+    # ------------------------------------------------------------------
+    # Embedded dashboard server for night mode
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _kill_port(port: int) -> None:
+        """Kill any process squatting on the given port."""
+        import signal
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for pid_str in result.stdout.strip().splitlines():
+                pid = int(pid_str.strip())
+                if pid != os.getpid():
+                    os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+
+    async def _start_night_server(self) -> None:
+        """Start a lightweight uvicorn server so the dashboard is reachable."""
+        if self._night_server is not None:
+            return  # Already running
+        try:
+            import warnings
+            import uvicorn
+            from .constants import DEFAULT_PORT
+
+            # Evict any stale process from a previous session
+            self._kill_port(DEFAULT_PORT)
+
+            # Suppress InsecureKeyLengthWarning from PyJWT — fires during
+            # auth router init when JWT_SECRET is short (dev/CLI context).
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                from server.main import create_app
+                app = create_app()
+            # Attach this system instance so routers can find it
+            app.state.jarvis_system = self
+
+            config = uvicorn.Config(
+                app, host="127.0.0.1", port=DEFAULT_PORT,
+                log_level="warning",
+            )
+            server = uvicorn.Server(config)
+            self._night_server_shutdown = asyncio.Event()
+
+            async def _serve() -> None:
+                await server.serve()
+                if self._night_server_shutdown:
+                    self._night_server_shutdown.set()
+
+            self._night_server = asyncio.create_task(_serve())
+            self._uvicorn_server = server
+            if self.logger:
+                self.logger.log(
+                    "INFO", "Night dashboard online",
+                    {"url": f"http://localhost:{DEFAULT_PORT}/self-improvement/dashboard"},
+                )
+        except Exception as exc:
+            if self.logger:
+                self.logger.log("WARNING", "Could not start night dashboard server", str(exc))
+            self._night_server = None
+
+    async def _stop_night_server(self) -> None:
+        """Shut down the embedded dashboard server."""
+        server = getattr(self, "_uvicorn_server", None)
+        if server is not None:
+            server.should_exit = True
+            if self._night_server_shutdown:
+                try:
+                    await asyncio.wait_for(self._night_server_shutdown.wait(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    pass
+        if self._night_server is not None:
+            self._night_server.cancel()
+            try:
+                await self._night_server
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._night_server = None
+        self._uvicorn_server = None
+        self._night_server_shutdown = None
 
     async def process_request(
         self,

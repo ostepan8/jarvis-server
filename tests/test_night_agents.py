@@ -646,6 +646,7 @@ class TestSystemNightModeIntegration:
         system.night_agents = []
         system._orchestrator = MagicMock()
         system._orchestrator.night_mode = False
+        system._start_night_server = AsyncMock()
 
         # Call the real method
         from jarvis.core.system import JarvisSystem
@@ -661,6 +662,7 @@ class TestSystemNightModeIntegration:
         system.night_agents = []
         system._orchestrator = MagicMock()
         system._orchestrator.night_mode = True
+        system._stop_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
         await JarvisSystem.exit_night_mode(system)
@@ -678,6 +680,7 @@ class TestSystemNightModeIntegration:
         system.night_mode = False
         system.night_agents = [agent]
         system._orchestrator = MagicMock()
+        system._start_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
         await JarvisSystem.enter_night_mode(system)
@@ -697,6 +700,7 @@ class TestSystemNightModeIntegration:
         system.night_mode = True
         system.night_agents = [agent]
         system._orchestrator = MagicMock()
+        system._stop_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
         await JarvisSystem.exit_night_mode(system)
@@ -715,6 +719,8 @@ class TestSystemNightModeIntegration:
         system.night_mode = False
         system.night_agents = [agent]
         system._orchestrator = MagicMock()
+        system._start_night_server = AsyncMock()
+        system._stop_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
 
@@ -738,6 +744,7 @@ class TestSystemNightModeIntegration:
         system.night_mode = False
         system.night_agents = []
         system._orchestrator = None
+        system._start_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
         await JarvisSystem.enter_night_mode(system)
@@ -749,6 +756,7 @@ class TestSystemNightModeIntegration:
         system.night_mode = True
         system.night_agents = []
         system._orchestrator = None
+        system._stop_night_server = AsyncMock()
 
         from jarvis.core.system import JarvisSystem
         await JarvisSystem.exit_night_mode(system)

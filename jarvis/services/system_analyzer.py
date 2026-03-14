@@ -39,7 +39,12 @@ class DiscoveryType(str, Enum):
 
 @dataclass
 class Discovery:
-    """A single improvement opportunity found by the analyzer."""
+    """A single improvement opportunity found by the analyzer.
+
+    Each discovery doubles as a detailed ticket with user-story format,
+    acceptance criteria, test cases, and workflow metadata so the night
+    dashboard can render it as a full work item.
+    """
 
     discovery_type: DiscoveryType
     title: str
@@ -51,6 +56,29 @@ class Discovery:
     confidence: str = "medium"
     code_context: str = ""       # 10-15 numbered lines around the finding
     function_scope: str = ""     # enclosing function/class name
+
+    # Ticket / user-story fields
+    user_story: str = ""             # "As a ..., I want ..., so that ..."
+    acceptance_criteria: list[str] = field(default_factory=list)
+    test_cases: list[str] = field(default_factory=list)
+    workflow: str = ""               # e.g. "fix-unused-import-weather-service"
+    estimated_complexity: str = ""   # trivial / small / medium / large
+    affected_agents: list[str] = field(default_factory=list)
+
+    def populate_ticket(self) -> None:
+        """Auto-generate ticket fields from existing discovery data."""
+        if not self.user_story:
+            self.user_story = _generate_user_story(self)
+        if not self.acceptance_criteria:
+            self.acceptance_criteria = _generate_acceptance_criteria(self)
+        if not self.test_cases:
+            self.test_cases = _generate_test_cases(self)
+        if not self.workflow:
+            self.workflow = _generate_workflow_name(self)
+        if not self.estimated_complexity:
+            self.estimated_complexity = _estimate_complexity(self)
+        if not self.affected_agents:
+            self.affected_agents = _extract_affected_agents(self)
 
     def to_dict(self) -> dict:
         """Serialize all fields to a plain dict (enum stored as string value)."""
@@ -65,6 +93,12 @@ class Discovery:
             "confidence": self.confidence,
             "code_context": self.code_context,
             "function_scope": self.function_scope,
+            "user_story": self.user_story,
+            "acceptance_criteria": list(self.acceptance_criteria),
+            "test_cases": list(self.test_cases),
+            "workflow": self.workflow,
+            "estimated_complexity": self.estimated_complexity,
+            "affected_agents": list(self.affected_agents),
         }
 
     @classmethod
@@ -81,7 +115,181 @@ class Discovery:
             confidence=data.get("confidence", "medium"),
             code_context=data.get("code_context", ""),
             function_scope=data.get("function_scope", ""),
+            user_story=data.get("user_story", ""),
+            acceptance_criteria=data.get("acceptance_criteria", []),
+            test_cases=data.get("test_cases", []),
+            workflow=data.get("workflow", ""),
+            estimated_complexity=data.get("estimated_complexity", ""),
+            affected_agents=data.get("affected_agents", []),
         )
+
+
+# ---------------------------------------------------------------------------
+# Ticket generation helpers
+# ---------------------------------------------------------------------------
+
+_TYPE_ROLE_MAP = {
+    DiscoveryType.TEST_FAILURE: "a developer running the test suite",
+    DiscoveryType.LOG_ERROR: "an operator monitoring production logs",
+    DiscoveryType.EXCEPTION_ANTIPATTERN: "a developer maintaining the codebase",
+    DiscoveryType.CODE_QUALITY: "a developer reviewing the codebase",
+    DiscoveryType.UNUSED_IMPORT: "a developer maintaining clean imports",
+    DiscoveryType.COMPLEXITY_HOTSPOT: "a developer reading complex code",
+    DiscoveryType.MISSING_TESTS: "a developer ensuring test coverage",
+    DiscoveryType.MANUAL_TODO: "the team tracking technical debt",
+    DiscoveryType.DEAD_CODE: "a developer removing dead code",
+    DiscoveryType.STALE_COMMENT: "a developer reading stale comments",
+    DiscoveryType.TRACE_ERROR_RATE: "an operator investigating error spikes",
+    DiscoveryType.TRACE_SLOW_AGENT: "an operator investigating latency",
+}
+
+_TYPE_GOAL_MAP = {
+    DiscoveryType.TEST_FAILURE: "the failing test to pass reliably",
+    DiscoveryType.LOG_ERROR: "the error to stop recurring in logs",
+    DiscoveryType.EXCEPTION_ANTIPATTERN: "the antipattern to be replaced with proper error handling",
+    DiscoveryType.CODE_QUALITY: "the code to meet project quality standards",
+    DiscoveryType.UNUSED_IMPORT: "unused imports to be removed",
+    DiscoveryType.COMPLEXITY_HOTSPOT: "the function to be simplified or decomposed",
+    DiscoveryType.MISSING_TESTS: "the module to have adequate test coverage",
+    DiscoveryType.MANUAL_TODO: "the TODO item to be resolved",
+    DiscoveryType.DEAD_CODE: "dead code to be removed",
+    DiscoveryType.STALE_COMMENT: "stale comments to be updated or removed",
+    DiscoveryType.TRACE_ERROR_RATE: "the error rate to return to baseline",
+    DiscoveryType.TRACE_SLOW_AGENT: "the agent latency to meet SLA thresholds",
+}
+
+_TYPE_BENEFIT_MAP = {
+    DiscoveryType.TEST_FAILURE: "CI stays green and regressions are caught early",
+    DiscoveryType.LOG_ERROR: "log noise is reduced and real issues surface faster",
+    DiscoveryType.EXCEPTION_ANTIPATTERN: "errors propagate correctly and debugging is easier",
+    DiscoveryType.CODE_QUALITY: "the codebase remains maintainable and consistent",
+    DiscoveryType.UNUSED_IMPORT: "the module's dependency surface is minimal and clear",
+    DiscoveryType.COMPLEXITY_HOTSPOT: "the code is easier to read, test, and modify",
+    DiscoveryType.MISSING_TESTS: "changes to that module are validated automatically",
+    DiscoveryType.MANUAL_TODO: "tracked technical debt is resolved",
+    DiscoveryType.DEAD_CODE: "the codebase is leaner and less confusing",
+    DiscoveryType.STALE_COMMENT: "comments accurately reflect the code",
+    DiscoveryType.TRACE_ERROR_RATE: "users experience fewer failures",
+    DiscoveryType.TRACE_SLOW_AGENT: "response times stay within acceptable bounds",
+}
+
+
+def _generate_user_story(d: Discovery) -> str:
+    role = _TYPE_ROLE_MAP.get(d.discovery_type, "a developer")
+    goal = _TYPE_GOAL_MAP.get(d.discovery_type, "this issue to be resolved")
+    benefit = _TYPE_BENEFIT_MAP.get(d.discovery_type, "the system is more reliable")
+    return f"As {role}, I want {goal}, so that {benefit}."
+
+
+def _generate_acceptance_criteria(d: Discovery) -> list[str]:
+    criteria = []
+    dt = d.discovery_type
+
+    if dt == DiscoveryType.TEST_FAILURE:
+        criteria.append("The previously failing test passes consistently.")
+        criteria.append("No other tests are broken by the fix.")
+        criteria.append("A regression test covers the root cause.")
+    elif dt == DiscoveryType.LOG_ERROR:
+        criteria.append("The error no longer appears in logs under normal operation.")
+        criteria.append("The root cause is addressed, not just the log message.")
+    elif dt == DiscoveryType.EXCEPTION_ANTIPATTERN:
+        criteria.append("Bare except or overly broad exception handlers are replaced with specific types.")
+        criteria.append("Error context is preserved in the replacement.")
+    elif dt == DiscoveryType.UNUSED_IMPORT:
+        criteria.append("The unused import is removed.")
+        criteria.append("No remaining references to the removed import exist.")
+    elif dt == DiscoveryType.COMPLEXITY_HOTSPOT:
+        criteria.append("The function's cyclomatic complexity is reduced.")
+        criteria.append("Behavior is preserved (existing tests still pass).")
+    elif dt == DiscoveryType.MISSING_TESTS:
+        criteria.append("New tests cover the primary code paths of the module.")
+        criteria.append("Edge cases and error paths are included.")
+    elif dt == DiscoveryType.CODE_QUALITY:
+        criteria.append("The quality issue identified is resolved.")
+        criteria.append("The fix follows project coding conventions.")
+    else:
+        criteria.append("The issue described is resolved.")
+        criteria.append("No regressions are introduced.")
+
+    if d.relevant_files:
+        criteria.append(f"Changes are scoped to: {', '.join(d.relevant_files[:3])}.")
+
+    return criteria
+
+
+def _generate_test_cases(d: Discovery) -> list[str]:
+    cases = []
+    dt = d.discovery_type
+
+    if dt == DiscoveryType.TEST_FAILURE:
+        cases.append(f"Run the failing test and verify it passes: pytest {d.relevant_files[0] if d.relevant_files else 'tests/'} -v")
+        cases.append("Run the full test suite to confirm no regressions: pytest -x --timeout=30 -q")
+    elif dt == DiscoveryType.UNUSED_IMPORT:
+        cases.append("Verify the import is no longer present in the file.")
+        cases.append("Run pytest on the affected module to confirm nothing breaks.")
+    elif dt == DiscoveryType.EXCEPTION_ANTIPATTERN:
+        cases.append("Trigger the error path and verify specific exceptions are caught.")
+        cases.append("Verify error context is logged or re-raised correctly.")
+    elif dt == DiscoveryType.MISSING_TESTS:
+        cases.append("Run the new test file and verify all tests pass.")
+        cases.append("Check coverage for the target module increased.")
+    else:
+        cases.append("Run affected tests: pytest -x --timeout=30 -q")
+        cases.append("Review the diff to confirm the change matches the ticket description.")
+
+    return cases
+
+
+def _generate_workflow_name(d: Discovery) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', d.title.lower()).strip('-')[:50]
+    prefix = {
+        DiscoveryType.TEST_FAILURE: "fix",
+        DiscoveryType.LOG_ERROR: "fix",
+        DiscoveryType.EXCEPTION_ANTIPATTERN: "fix",
+        DiscoveryType.CODE_QUALITY: "refactor",
+        DiscoveryType.UNUSED_IMPORT: "refactor",
+        DiscoveryType.COMPLEXITY_HOTSPOT: "refactor",
+        DiscoveryType.MISSING_TESTS: "test",
+        DiscoveryType.MANUAL_TODO: "chore",
+        DiscoveryType.DEAD_CODE: "refactor",
+        DiscoveryType.STALE_COMMENT: "chore",
+        DiscoveryType.TRACE_ERROR_RATE: "fix",
+        DiscoveryType.TRACE_SLOW_AGENT: "perf",
+    }.get(d.discovery_type, "fix")
+    return f"{prefix}-{slug}"
+
+
+def _estimate_complexity(d: Discovery) -> str:
+    file_count = len(d.relevant_files)
+    dt = d.discovery_type
+
+    if dt in (DiscoveryType.UNUSED_IMPORT, DiscoveryType.DEAD_CODE, DiscoveryType.STALE_COMMENT):
+        return "trivial"
+    if dt in (DiscoveryType.TEST_FAILURE, DiscoveryType.LOG_ERROR) and file_count <= 2:
+        return "small"
+    if dt in (DiscoveryType.COMPLEXITY_HOTSPOT, DiscoveryType.MISSING_TESTS):
+        return "medium"
+    if file_count > 5:
+        return "large"
+    return "small"
+
+
+def _extract_affected_agents(d: Discovery) -> list[str]:
+    agents = []
+    agent_pattern = re.compile(r'(\w+)_agent')
+    for f in d.relevant_files:
+        m = agent_pattern.search(f)
+        if m:
+            name = m.group(1).title() + "Agent"
+            if name not in agents:
+                agents.append(name)
+    if d.function_scope:
+        m = agent_pattern.search(d.function_scope.lower())
+        if m:
+            name = m.group(1).title() + "Agent"
+            if name not in agents:
+                agents.append(name)
+    return agents
 
 
 class SystemAnalyzer:
@@ -140,6 +348,7 @@ class SystemAnalyzer:
         for d in all_discoveries:
             if d.title not in seen_titles:
                 seen_titles.add(d.title)
+                d.populate_ticket()
                 deduplicated.append(d)
 
         return deduplicated

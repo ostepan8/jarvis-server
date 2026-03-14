@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from datetime import datetime, timedelta, UTC
 from typing import Optional
 
@@ -10,9 +11,12 @@ from passlib.context import CryptContext
 try:
     import jwt
 
-    # Test if jwt.encode exists
-    test_payload = {"test": "test"}
-    jwt.encode(test_payload, "secret", algorithm="HS256")
+    # Test if jwt.encode exists — suppress the InsecureKeyLengthWarning
+    # since this is just a capability check, not real cryptography.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        test_payload = {"test": "test"}
+        jwt.encode(test_payload, "secret", algorithm="HS256")
 except (ImportError, AttributeError):
     try:
         # Try alternative import
