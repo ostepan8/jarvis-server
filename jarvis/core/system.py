@@ -138,6 +138,12 @@ class JarvisSystem:
                     "Fast-path classifier init failed (will use LLM fallback)",
                     str(exc),
                 )
+        else:
+            self.logger.log(
+                "WARNING",
+                "Fast-path classifier not available",
+                "VectorMemoryService may have failed to initialize",
+            )
 
         await self._start_network()
 

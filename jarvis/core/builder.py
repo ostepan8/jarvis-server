@@ -32,6 +32,9 @@ class BuilderOptions:
     with_night_agents: bool = True
     with_self_improvement: bool = True
     with_scheduler: bool = True
+    with_device_monitor: bool = True
+    with_server_manager: bool = True
+    with_capabilities: bool = True
 
 
 class JarvisBuilder:
@@ -114,6 +117,18 @@ class JarvisBuilder:
 
     def scheduler(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_scheduler = enabled
+        return self
+
+    def device_monitor(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_device_monitor = enabled
+        return self
+
+    def server_manager(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_server_manager = enabled
+        return self
+
+    def capabilities(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_capabilities = enabled
         return self
 
     # ------- Convenience creators --------
@@ -211,6 +226,13 @@ class JarvisBuilder:
             refs.update(factory._build_todo(jarvis.network, ai_client))
         if self._opts.with_scheduler and jarvis.config.flags.enable_scheduler:
             refs.update(factory._build_scheduler(jarvis.network, ai_client))
+
+        if self._opts.with_device_monitor and jarvis.config.flags.enable_device_monitor:
+            refs.update(factory._build_device_monitor(jarvis.network))
+        if self._opts.with_server_manager and jarvis.config.flags.enable_server_manager:
+            refs.update(factory._build_server_manager(jarvis.network))
+        if self._opts.with_capabilities and jarvis.config.flags.enable_capabilities:
+            refs.update(factory._build_capabilities(jarvis.network, ai_client))
 
         if self._opts.with_software:
             # Placeholder for future implementation

@@ -449,6 +449,18 @@ class NLUAgent(NetworkAgent):
                             f"Fast-path classification: {cap}",
                             f"score={fast_result['score']:.3f}",
                         )
+                    else:
+                        self.logger.log(
+                            "WARNING",
+                            f"Fast classifier matched '{cap}' but no agent provides it — falling through to LLM",
+                            f"score={fast_result['score']:.3f}, known={known_capabilities}",
+                        )
+                elif fast_result["confidence"] != "low":
+                    self.logger.log(
+                        "INFO",
+                        f"Fast classifier: {fast_result['confidence']} confidence for '{fast_result.get('capability')}'",
+                        f"score={fast_result.get('score', 0):.3f}",
+                    )
 
             # Step 2: Try cache
             if classification is None:
