@@ -103,13 +103,26 @@ def _check_availability(jarvis: JarvisSystem, slug: str) -> bool:
     return False
 
 
-async def enter_mode_by_slug(jarvis: JarvisSystem, slug: str) -> bool:
-    """Enter a mode directly by slug. Returns True if mode was found and entered."""
+async def enter_mode_by_slug(
+    jarvis: JarvisSystem, slug: str, target_device: str | None = None
+) -> bool:
+    """Enter a mode directly by slug. Returns True if mode was found and entered.
+
+    ``target_device`` is an optional friendly-name hint forwarded to the mode
+    so it can resolve a specific device on entry (e.g. "bedroom", "living room").
+    """
     mode_cls = mode_registry.get(slug)
     if mode_cls is None:
         return False
 
-    mode = mode_cls(jarvis)
+    import inspect
+
+    sig = inspect.signature(mode_cls.__init__)
+    if "target_device" in sig.parameters:
+        mode = mode_cls(jarvis, target_device=target_device)
+    else:
+        mode = mode_cls(jarvis)
+
     if not _check_availability(jarvis, slug):
         console.print(
             f"\n  [red]{mode.name} is not available.[/red]"

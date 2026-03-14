@@ -109,6 +109,51 @@ async def _display_result(result: dict, output: OutputHandler) -> None:
             )
 
 
+import re as _re
+
+# Patterns that start an SSH-into-TV session.
+# Capture group 1 is the optional device name (e.g. "bedroom", "living room").
+_SSH_PATTERNS: list[_re.Pattern[str]] = [
+    _re.compile(
+        r"^(?:ssh|connect)\s+(?:into\s+|to\s+)?(?:my\s+|the\s+)?"
+        r"(?:(.+?)\s+)?(?:tv|roku)$"
+    ),
+    # "ssh bedroom" / "connect to bedroom" (no trailing tv/roku)
+    _re.compile(
+        r"^(?:ssh|connect)\s+(?:into\s+|to\s+)?(?:my\s+|the\s+)?(.+)$"
+    ),
+]
+
+# Phrases that are definitely SSH triggers but carry no device name
+_SSH_EXACT: set[str] = {
+    "ssh", "ssh tv", "ssh roku", "ssh into my tv", "ssh into roku",
+    "ssh into my roku", "ssh into the tv",
+    "connect to my tv", "connect to roku", "connect to my roku",
+}
+
+
+def _parse_ssh_trigger(cmd: str) -> str | None:
+    """Return a device-name hint if *cmd* is an SSH trigger, else ``None``.
+
+    Returns ``""`` (empty string) for generic triggers with no device target,
+    or the extracted device name (e.g. ``"bedroom"``, ``"living room"``).
+    Returns ``None`` when *cmd* is not an SSH trigger at all.
+    """
+    if cmd in _SSH_EXACT:
+        return ""
+
+    for pat in _SSH_PATTERNS:
+        m = pat.match(cmd)
+        if m:
+            device = (m.group(1) or "").strip()
+            # Filter out noise words that aren't device names
+            if device in ("my", "the", "into", "to", ""):
+                return ""
+            return device
+
+    return None
+
+
 async def demo(
     input_handler: InputHandler | None = ConsoleInput(),
     output_handler: OutputHandler | None = ConsoleOutput(),
@@ -244,14 +289,14 @@ async def demo(
                 print("  exit            - Quit Jarvis\n")
                 continue
 
-            # Natural language mode triggers
-            _ssh_triggers = [
-                "ssh into my tv", "ssh roku", "ssh into roku",
-                "ssh into my roku", "ssh into the tv", "ssh tv",
-                "connect to my tv", "connect to roku",
-            ]
-            if cmd in _ssh_triggers:
-                await enter_mode_by_slug(jarvis, "roku")
+            # Natural language mode triggers — with optional device targeting
+            # "ssh into my tv"          → default device
+            # "ssh into bedroom tv"     → target "bedroom"
+            # "ssh living room roku"    → target "living room"
+            # "connect to bedroom"      → target "bedroom"
+            _ssh_match = _parse_ssh_trigger(cmd)
+            if _ssh_match is not None:
+                await enter_mode_by_slug(jarvis, "roku", target_device=_ssh_match or None)
                 continue
 
             logger.log("DEBUG", "Processing user request", {"command": user_command})

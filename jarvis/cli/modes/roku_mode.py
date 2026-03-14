@@ -15,10 +15,13 @@ if TYPE_CHECKING:
 class RokuMode(BaseMode):
     """SSH-style direct control mode for Roku TV."""
 
-    def __init__(self, jarvis: JarvisSystem) -> None:
+    def __init__(
+        self, jarvis: JarvisSystem, target_device: Optional[str] = None
+    ) -> None:
         self._jarvis = jarvis
         self._roku_service: Optional[RokuService] = None
         self._active_serial: Optional[str] = None
+        self._target_device = target_device
 
     @property
     def name(self) -> str:
@@ -111,10 +114,19 @@ class RokuMode(BaseMode):
                 "Is Roku enabled in /config?"
             )
 
-        # Set active serial to default device
+        # Resolve target device if specified, otherwise fall back to default
         if hasattr(agent, "device_registry"):
             registry = agent.device_registry  # type: ignore[attr-defined]
-            if registry.default_serial:
+            if self._target_device:
+                resolved = registry.resolve_device(name_hint=self._target_device)
+                if resolved:
+                    self._active_serial = resolved.serial_number
+                else:
+                    raise ConnectionError(
+                        f"No device matching '{self._target_device}'. "
+                        "Try 'i' for device info or run device discovery."
+                    )
+            elif registry.default_serial:
                 self._active_serial = registry.default_serial
             else:
                 online = registry.get_online_devices()
