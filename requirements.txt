@@ -2,8 +2,8 @@ python-dotenv
 httpx
 openai>=1.0.0
 anthropic
-chromadb==0.3.29
-fastapi
+chromadb>=0.4.0
+fastapi>=0.100.0
 uvicorn
 tzlocal
 motor
@@ -20,5 +20,5 @@ vosk
 passlib[bcrypt]
 PyJWT
 cryptography
-pydantic
+pydantic>=2.7.1
 rich

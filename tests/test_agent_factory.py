@@ -173,21 +173,25 @@ class TestAgentFactoryBuildRoku:
     def test_build_roku_skips_when_no_ip(
         self, mock_vector_memory, network, ai_client, logger
     ):
-        """Test roku agent is skipped when no IP address configured."""
-        config = JarvisConfig(
-            flags=FeatureFlags(
-                                enable_lights=False,
-                enable_canvas=False,
-                enable_night_mode=False,
-                enable_roku=True,
-            ),
-            roku_ip_address=None,
-            google_search_api_key=None,
-            google_search_engine_id=None,
-        )
-        factory = AgentFactory(config, logger)
-        refs = factory.build_all(network, ai_client)
-        assert "roku_agent" not in refs
+        """Test roku agent is skipped when no IP or persisted devices."""
+        from jarvis.services.roku_discovery import RokuDeviceRegistry
+
+        empty_registry = RokuDeviceRegistry()
+        with patch.object(RokuDeviceRegistry, "load", return_value=empty_registry):
+            config = JarvisConfig(
+                flags=FeatureFlags(
+                    enable_lights=False,
+                    enable_canvas=False,
+                    enable_night_mode=False,
+                    enable_roku=True,
+                ),
+                roku_ip_address=None,
+                google_search_api_key=None,
+                google_search_engine_id=None,
+            )
+            factory = AgentFactory(config, logger)
+            refs = factory.build_all(network, ai_client)
+            assert "roku_agent" not in refs
 
 
 class TestAgentFactoryBuildLights:
