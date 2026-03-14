@@ -1,6 +1,6 @@
 # Jarvis Self-Improvement API Reference
 
-Base URL: `http://localhost:8000/self-improvement`
+Base URL: `http://localhost:52718/self-improvement`
 
 ## Endpoints
 

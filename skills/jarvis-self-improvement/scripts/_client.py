@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 
 
-BASE_URL = os.environ.get("JARVIS_API_URL", "http://localhost:8000/self-improvement")
+BASE_URL = os.environ.get("JARVIS_API_URL", "http://localhost:52718/self-improvement")
 
 
 def request(method: str, path: str, data: dict | None = None, timeout: int = 30) -> dict:

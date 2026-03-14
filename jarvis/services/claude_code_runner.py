@@ -512,7 +512,7 @@ class ClaudeCodeRunner:
             "4. Commit with format: type(scope): imperative description\n"
             "5. Do NOT push -- merge happens externally\n"
             "\n"
-            "SELF-IMPROVEMENT API (if Jarvis server is running on localhost:8000):\n"
+            "SELF-IMPROVEMENT API (if Jarvis server is running on localhost:52718):\n"
             "- POST /self-improvement/tests/run — run pytest: {\"test_files\": [...]}\n"
             "- GET /self-improvement/tests/{run_id} — poll for results\n"
             "- GET /self-improvement/context/{file_path} — read a project file\n"

@@ -26,7 +26,7 @@ Communicate with a running Jarvis server to discover issues, run tests, submit t
 ## Configuration
 
 Set `JARVIS_API_URL` environment variable to override the default base URL.
-Default: `http://localhost:8000/self-improvement`
+Default: `http://localhost:52718/self-improvement`
 
 ## Usage
 

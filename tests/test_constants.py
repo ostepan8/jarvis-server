@@ -12,7 +12,7 @@ class TestDefaultConstants:
         assert isinstance(DEFAULT_PORT, int)
 
     def test_default_port_value(self):
-        assert DEFAULT_PORT == 8000
+        assert DEFAULT_PORT == 52718
 
     def test_log_db_path_is_string(self):
         assert isinstance(LOG_DB_PATH, str)

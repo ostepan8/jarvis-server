@@ -95,7 +95,7 @@ Decompose immediately. Launch concurrently. Make changes additive — append, do
 | `ai_clients/` | CAUTION — shared by agents |
 
 **Radioactive files** (never touch in parallel):
-`jarvis/core/system.py`, `jarvis/agents/factory.py`, `jarvis/core/config.py`, `jarvis/agents/nlu_agent/__init__.py`
+`jarvis/core/system.py`, `jarvis/agents/factory.py`, `jarvis/core/builder.py`, `jarvis/core/config.py`, `jarvis/agents/nlu_agent/__init__.py`
 
 **Radioactive file protocol:** These files are edited in a dedicated sequential pass *after* all parallel worktrees have merged their isolated work. The parent agent handles registration (factory entries, config flags, NLU routes) on `main` directly or in a final dedicated worktree — never inside parallel subagent worktrees.
 
@@ -272,8 +272,10 @@ Imperative mood. Lowercase. No period. Under 72 chars. "fix stuff" is not a comm
 3. `tests/test_{name}_agent.py` — the proof it works
 
 **Shared files** (one pass, after merging the above):
-4. `jarvis/agents/factory.py` — register it
-5. `jarvis/core/config.py` — feature flag
+4. **Registration — BOTH factory AND builder** (skip either and the agent silently does not exist):
+   - `jarvis/agents/factory.py` — add a `_build_{name}()` method and call it from `build_all()` / `build_all_async()`
+   - `jarvis/core/builder.py` — add `with_{name}: bool = True` to `BuilderOptions`, a fluent toggle method, and a guarded call to `factory._build_{name}()` in the `build()` method. **This is the code path `python main.py` uses.** If you only update the factory, the agent will never be constructed at runtime.
+5. `jarvis/core/config.py` — feature flag (`enable_{name}: bool = True` in `FeatureFlags`)
 6. **NLU routing** — without this, nobody will ever reach your agent:
    - `jarvis/agents/nlu_agent/fast_classifier.py` — add training phrases for EVERY capability your agent exposes (6-10 phrases each, covering natural variations). This is what allows sub-millisecond routing without an LLM call.
    - `jarvis/agents/nlu_agent/__init__.py` — add examples in `_build_unified_prompt` for your capabilities so the LLM classifier knows how to route to them when the fast path misses.

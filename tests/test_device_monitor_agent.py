@@ -20,6 +20,21 @@ from jarvis.services.metrics_store import MetricsStore
 
 
 # ---------------------------------------------------------------------------
+# Suppress native macOS notifications during tests
+# ---------------------------------------------------------------------------
+
+# Keep a reference to the real method before any patching.
+_real_send_macos_notification = DeviceMonitorAgent._send_macos_notification
+
+
+@pytest.fixture(autouse=True)
+def _no_macos_notifications():
+    """Prevent osascript notifications from firing during tests."""
+    with patch.object(DeviceMonitorAgent, "_send_macos_notification"):
+        yield
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -736,15 +751,16 @@ class TestDeviceHistory:
 # ---------------------------------------------------------------------------
 
 class TestMacOSNotification:
+    """Test the real _send_macos_notification logic (bypassing the autouse mock)."""
+
     def test_notification_non_darwin(self):
         agent = _make_agent()
         with patch("platform.system", return_value="Linux"):
-            # Should not raise, just no-op
-            agent._send_macos_notification("Test", "Message")
+            _real_send_macos_notification(agent, "Test", "Message")  # should no-op
 
     @pytest.mark.skipif(platform.system() != "Darwin", reason="macOS only")
     def test_notification_on_darwin(self):
         agent = _make_agent()
         with patch("subprocess.Popen") as mock_popen:
-            agent._send_macos_notification("Test Title", "Test message")
+            _real_send_macos_notification(agent, "Test Title", "Test message")
             mock_popen.assert_called_once()

@@ -168,11 +168,11 @@ Ensure these are set before launching the server.
 ## Example Curl Session
 ```bash
 # Sign up
-curl -X POST http://localhost:8000/auth/signup -d '{"email": "a@b.com", "password": "pass"}' -H 'Content-Type: application/json'
+curl -X POST http://localhost:52718/auth/signup -d '{"email": "a@b.com", "password": "pass"}' -H 'Content-Type: application/json'
 # -> {"token": "..."}
 
 # Use the token
-curl -X POST http://localhost:8000/jarvis \
+curl -X POST http://localhost:52718/jarvis \
      -H 'Authorization: Bearer <token>' \
      -H 'X-Timezone: America/Los_Angeles' \
      -d '{"command": "list my meetings"}' -H 'Content-Type: application/json'

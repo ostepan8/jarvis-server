@@ -1,15 +1,20 @@
-"""Embedding-based fast-path classifier for NLU routing.
+"""Embedding-based classifier for NLU routing (currently in training mode).
+
+The fast classifier is not used for live routing — the LLM handles all
+classification decisions. Instead, every LLM classification is fed back
+to auto-train the embedding index. Over time, this builds a corpus of
+real conversational data that can eventually replace the LLM for common
+single-capability queries.
 
 Uses the existing VectorMemoryService infrastructure (ChromaDB + OpenAI
-embeddings) to classify user inputs without an LLM call. At startup,
-populates a ChromaDB collection with example phrases for each capability.
-At request time, embeds the input, finds nearest capability, and returns
-it if confidence exceeds the threshold.
+embeddings). Seed phrases provide baseline coverage; auto-trained phrases
+from LLM classifications provide real-world signal.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Any, Dict, List, Optional
 
 from ...services.vector_memory import VectorMemoryService
@@ -380,36 +385,54 @@ class FastPathClassifier:
     async def initialize(
         self, training_phrases: Optional[Dict[str, List[str]]] = None
     ) -> None:
-        """Populate the collection with training phrases.
+        """Populate the collection with seed training phrases.
 
-        Detects stale collections by comparing the expected phrase count
-        against what's stored.  If they differ (e.g. new capabilities were
-        added), the collection is rebuilt automatically.
+        Detects stale seed data by querying phrases with source=seed.
+        Auto-trained phrases (source=auto) are excluded from staleness
+        checks — they accumulate naturally from LLM classifications and
+        are rebuilt from real traffic if the collection is reset.
         """
         phrases = training_phrases or CAPABILITY_TRAINING_PHRASES
+        expected_seed_count = sum(len(v) for v in phrases.values())
+        existing_total = await asyncio.to_thread(self._collection.count)
 
-        expected_count = sum(len(v) for v in phrases.values())
-        existing = await asyncio.to_thread(self._collection.count)
+        if existing_total == 0:
+            # Empty collection — fresh build
+            await self._add_seed_phrases(phrases)
+            return
 
-        if existing == expected_count:
+        # Count seed phrases specifically (auto-trained ones don't count)
+        try:
+            seed_items = await asyncio.to_thread(
+                self._collection.get, where={"source": "seed"},
+            )
+            seed_count = len(seed_items["ids"]) if seed_items and seed_items.get("ids") else 0
+        except Exception:
+            # Old collection without source field — treat as stale
+            seed_count = 0
+
+        if seed_count == expected_seed_count:
+            auto_count = existing_total - seed_count
             self.logger.log(
                 "INFO",
                 "FastPathClassifier already initialized",
-                f"{existing} phrases in collection (up to date)",
+                f"{seed_count} seed + {auto_count} auto-trained phrases",
             )
             self._initialized = True
             return
 
-        # Collection is stale or empty — rebuild
-        if existing > 0:
-            self.logger.log(
-                "INFO",
-                "FastPathClassifier stale",
-                f"Expected {expected_count} phrases, found {existing} — rebuilding",
-            )
-            await self.reinitialize(phrases)
-            return
+        # Seed data is stale — full rebuild (auto-trained data re-accumulates)
+        self.logger.log(
+            "INFO",
+            "FastPathClassifier stale",
+            f"Expected {expected_seed_count} seed phrases, found {seed_count} — rebuilding",
+        )
+        await self.reinitialize(phrases)
 
+    async def _add_seed_phrases(
+        self, phrases: Dict[str, List[str]]
+    ) -> None:
+        """Add seed training phrases to the collection."""
         ids: List[str] = []
         documents: List[str] = []
         metadatas: List[Dict[str, str]] = []
@@ -417,7 +440,7 @@ class FastPathClassifier:
             for i, phrase in enumerate(phrase_list):
                 ids.append(f"{capability}_{i}")
                 documents.append(phrase)
-                metadatas.append({"capability": capability})
+                metadatas.append({"capability": capability, "source": "seed"})
 
         await asyncio.to_thread(
             self._collection.add,
@@ -429,7 +452,7 @@ class FastPathClassifier:
         self.logger.log(
             "INFO",
             "FastPathClassifier initialized",
-            f"Added {len(ids)} phrases for {len(phrases)} capabilities",
+            f"Added {len(ids)} seed phrases for {len(phrases)} capabilities",
         )
 
     async def classify(self, user_input: str) -> Dict[str, Any]:
@@ -512,10 +535,56 @@ class FastPathClassifier:
                 "score": top_score,
             }
 
+    async def auto_train(self, user_input: str, capability: str) -> None:
+        """Record an LLM classification as a training example.
+
+        Called after every single-capability LLM classification to
+        gradually build up real-world signal. Chat classifications
+        are skipped — chat is the fallback bucket and training on it
+        would dilute the signal for actual capabilities.
+        """
+        if not self._initialized or capability == "chat":
+            return
+
+        # Deterministic ID from input prevents duplicates
+        input_hash = hashlib.md5(
+            user_input.lower().strip().encode()
+        ).hexdigest()[:12]
+        doc_id = f"auto_{capability}_{input_hash}"
+
+        try:
+            existing = await asyncio.to_thread(
+                self._collection.get, ids=[doc_id],
+            )
+            if existing and existing.get("ids"):
+                return
+
+            await asyncio.to_thread(
+                self._collection.add,
+                ids=[doc_id],
+                documents=[user_input],
+                metadatas=[{"capability": capability, "source": "auto"}],
+            )
+            self.logger.log(
+                "INFO",
+                "FastPathClassifier auto-trained",
+                f"'{user_input[:50]}' -> {capability}",
+            )
+        except Exception as e:
+            self.logger.log(
+                "WARNING",
+                "FastPathClassifier auto-train failed",
+                str(e),
+            )
+
     async def reinitialize(
         self, training_phrases: Optional[Dict[str, List[str]]] = None
     ) -> None:
-        """Force re-initialization (deletes and recreates collection)."""
+        """Force re-initialization (deletes and recreates collection).
+
+        This wipes auto-trained phrases too — they re-accumulate from
+        real traffic, so the loss is temporary.
+        """
         await asyncio.to_thread(
             self._vector_service.client.delete_collection, "capability_router"
         )

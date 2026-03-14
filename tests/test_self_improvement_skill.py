@@ -44,7 +44,7 @@ class TestClientBaseURL:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("JARVIS_API_URL", None)
             client = _fresh_client()
-            assert client.BASE_URL == "http://localhost:8000/self-improvement"
+            assert client.BASE_URL == "http://localhost:52718/self-improvement"
 
     def test_custom_base_url(self):
         with patch.dict(os.environ, {"JARVIS_API_URL": "http://custom:9000/api"}):
@@ -117,7 +117,7 @@ class TestClientErrorHandling:
     def test_http_error_exits(self):
         client = _fresh_client()
         error = urllib.error.HTTPError(
-            "http://localhost:8000/self-improvement/status",
+            "http://localhost:52718/self-improvement/status",
             500, "Internal Server Error", None, None,
         )
 

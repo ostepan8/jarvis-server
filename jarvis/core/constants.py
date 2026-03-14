@@ -3,7 +3,7 @@
 from enum import Enum
 
 # Default network configuration
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 52718
 
 # Default SQLite database for logs
 LOG_DB_PATH = "jarvis_logs.db"
