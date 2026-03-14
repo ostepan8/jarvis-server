@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 # Import for timezone detection
 try:
@@ -71,7 +71,8 @@ class ExecutionMetadata(BaseModel):
     execution_result: Optional[Union[str, Dict[str, Any]]] = None
     latency_ms: Optional[float] = None
 
-    @validator("execution_result", pre=True)
+    @field_validator("execution_result", mode="before")
+    @classmethod
     def normalize_execution_result(cls, v):
         """Normalize execution_result to always be a dict."""
         if v is None:
@@ -99,10 +100,11 @@ class ProtocolLogEntry(BaseModel):
     device: Optional[str] = None
     location: Optional[str] = None
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @field_serializer("timestamp_utc")
+    def serialize_timestamp(self, v: datetime) -> str:
+        return v.isoformat()
 
 
 # Logger implementation
@@ -247,7 +249,7 @@ class ProtocolUsageLogger:
             latency_ms=latency_ms,
             metadata=metadata,
         )
-        return await self.log_usage(log_entry.dict())
+        return await self.log_usage(log_entry.model_dump())
 
     async def get_recent_logs(
         self,
@@ -332,7 +334,7 @@ def generate_protocol_log(
         metadata=exec_metadata,
     )
 
-    return log_entry.dict()
+    return log_entry.model_dump()
 
 
 # Interaction Logging Models
@@ -357,10 +359,11 @@ class InteractionLogEntry(BaseModel):
     location: Optional[str] = None
     source: Optional[str] = None
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @field_serializer("timestamp_utc")
+    def serialize_timestamp(self, v: datetime) -> str:
+        return v.isoformat()
 
 
 @dataclass
@@ -470,7 +473,7 @@ class InteractionLogger:
                 source=source,
             )
 
-            result = await self._collection.insert_one(log_entry.dict())
+            result = await self._collection.insert_one(log_entry.model_dump())
             self._logger.debug(
                 f"Logged interaction: user_id={user_id}, intent={intent} (ID: {result.inserted_id})"
             )
