@@ -224,7 +224,7 @@ Request → RequestOrchestrator → Protocol Match (fast) / NLU Route (fallback)
 | `HealthAgent` | `system_health_check`, `health_report`, `incident_list` — Jarvis internals |
 | `TodoAgent` | Task management |
 | `CapabilitiesAgent` | `describe_capabilities`, `explain_capability` — the capabilities librarian, progressive disclosure knowledge base |
-| Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent` (in `jarvis/night_agents/`) |
+| Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent`, `TraceAnalysisNightAgent` (in `jarvis/night_agents/`) |
 
 ---
 
@@ -321,6 +321,7 @@ pip install -r requirements.txt    # Fallback
 python -m server.main              # FastAPI on :8000 (PORT env to change)
 python main.py                     # Interactive demo
 python -m jarvis.logging.log_viewer # Log viewer CLI
+python -m jarvis.logging.trace_cli  # Trace inspector CLI (see Observability below)
 ```
 
 ### Testing
@@ -345,9 +346,59 @@ GitHub Actions (`.github/workflows/tests.yml`) runs `pytest --timeout=30 -v` on 
 ## Environment
 
 **Required:** `OPENAI_API_KEY`, `JWT_SECRET`
-**Optional:** `ANTHROPIC_API_KEY`, `WEATHER_API_KEY`, `ROKU_IP_ADDRESS`, `PHILLIPS_HUE_BRIDGE_IP`, `PHILLIPS_HUE_USERNAME`, `LIGHTING_BACKEND`, `YEELIGHT_BULB_IPS`, `GOOGLE_SEARCH_API_KEY`, `MONGO_URI`, `CALENDAR_API_URL`, `JARVIS_VERBOSE`
+**Optional:** `ANTHROPIC_API_KEY`, `WEATHER_API_KEY`, `ROKU_IP_ADDRESS`, `PHILLIPS_HUE_BRIDGE_IP`, `PHILLIPS_HUE_USERNAME`, `LIGHTING_BACKEND`, `YEELIGHT_BULB_IPS`, `GOOGLE_SEARCH_API_KEY`, `MONGO_URI`, `CALENDAR_API_URL`, `JARVIS_VERBOSE`, `JARVIS_TRACING`, `JARVIS_TRACE_LLM_CONTENT`
 
 See `.env.example` for the full list with descriptions.
+
+---
+
+## Observability — Request Tracing
+
+Every request produces a **trace** (tree of **spans**) stored in `jarvis_traces.db`. This is the primary debugging tool for understanding what happened between a user request and the final response.
+
+### When to Use Traces
+
+- **Debugging a failed request** — find the trace, render the tree, read the error span
+- **Performance investigation** — identify slow agents, expensive LLM calls, bottlenecks
+- **Understanding request flow** — see exactly which agents ran, in what order, with what inputs/outputs
+- **Verifying new agent wiring** — confirm your agent appears in traces after integration
+
+### The `/project:trace` Slash Command
+
+Use `/project:trace` to load the trace analysis context. This injects the full CLI reference, data model, and diagnostic patterns into the conversation. Use it:
+
+- **Proactively** when debugging any request-level issue — load it before investigating
+- **With arguments** for direct CLI passthrough: `/project:trace last --tree`, `/project:trace list --since 1h --status ERROR`
+- **Without arguments** to get prompted for what to investigate
+
+Do NOT load it for code-only tasks (refactoring, adding features) where request tracing is irrelevant.
+
+### Quick Reference (Without Loading the Slash Command)
+
+```bash
+python -m jarvis.logging.trace_cli last --tree    # Most recent request as ASCII tree
+python -m jarvis.logging.trace_cli list --since 1h --status ERROR  # Recent failures
+python -m jarvis.logging.trace_cli tree <trace_id>  # Visualize a specific request
+python -m jarvis.logging.trace_cli spans --agent CalendarAgent --limit 20  # Agent-level search
+```
+
+### Key Concepts
+
+- **Trace** = one user request lifecycle (has `trace_id`, `user_input`, `duration_ms`, `status`)
+- **Span** = one operation within that request (spans form a parent-child tree)
+- **SpanKinds**: `ORCHESTRATOR`, `AGENT`, `LLM`, `SERVICE`, `NETWORK`, `INTERNAL`
+- **Env vars**: `JARVIS_TRACING` (default: `true`), `JARVIS_TRACE_LLM_CONTENT` (default: `false` — captures full LLM prompts/responses when enabled)
+
+### Key Files
+
+| Path | What It Does |
+|------|-------------|
+| `jarvis/logging/tracer.py` | Core tracing engine — `Tracer`, `Span`, `@traced` decorator |
+| `jarvis/logging/trace_store.py` | SQLite persistence (WAL mode, thread-safe) |
+| `jarvis/logging/trace_query.py` | Query layer — nested JSON trees, ASCII rendering |
+| `jarvis/logging/trace_cli.py` | CLI tool (`python -m jarvis.logging.trace_cli`) |
+| `jarvis/services/trace_analysis_service.py` | Analytics — percentiles, agent performance, error trends |
+| `jarvis/night_agents/trace_analysis_agent.py` | Night agent that periodically analyzes traces |
 
 ---
 
