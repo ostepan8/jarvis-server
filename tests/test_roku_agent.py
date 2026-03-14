@@ -1,4 +1,4 @@
-"""Tests for RokuAgent multi-device refactor.
+"""Tests for RokuAgent multi-device refactor and conversation history.
 
 Covers:
 - Initialization with device registry (single and multi-device)
@@ -10,6 +10,7 @@ Covers:
 - Function registry mappings
 - Capability request handling
 - Power operations through service
+- Command processor conversation history (follow-up context)
 """
 
 from typing import Optional
@@ -19,6 +20,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from jarvis.agents.roku_agent import RokuAgent
+from jarvis.agents.roku_agent.command_processor import RokuCommandProcessor
 from jarvis.agents.message import Message
 from jarvis.ai_clients.base import BaseAIClient
 from jarvis.services.roku_discovery import RokuDeviceInfo, RokuDeviceRegistry
@@ -457,3 +459,133 @@ async def test_close_cleans_all_services(two_device_registry):
     svc1.close.assert_awaited_once()
     svc2.close.assert_awaited_once()
     assert len(agent._services) == 0
+
+
+# ---------------------------------------------------------------------------
+# Command processor conversation history
+# ---------------------------------------------------------------------------
+
+
+class HistoryCapturingAIClient(BaseAIClient):
+    """AI client that records every messages list it receives."""
+
+    def __init__(self):
+        self.calls: list = []
+        self.response_text = "Dummy response"
+
+    async def strong_chat(self, messages, tools=None):
+        self.calls.append([dict(m) for m in messages])
+        msg = type("Msg", (), {"content": self.response_text, "model_dump": lambda self: {"role": "assistant", "content": self.content}})()
+        return msg, None
+
+    async def weak_chat(self, messages, tools=None):
+        return await self.strong_chat(messages, tools)
+
+
+class TestCommandProcessorConversationHistory:
+    """Regression tests for conversation follow-up context.
+
+    The bug: RokuCommandProcessor.process_command() built a fresh
+    message list every call, so follow-ups like "yes" after
+    "discover devices" had zero context.
+    """
+
+    def _make_processor(self, ai_client=None):
+        ai = ai_client or HistoryCapturingAIClient()
+        registry = _make_registry(_make_device())
+        func_registry = MagicMock()
+        return RokuCommandProcessor(
+            ai_client=ai,
+            function_registry=func_registry,
+            device_registry=registry,
+        )
+
+    @pytest.mark.asyncio
+    async def test_history_empty_on_init(self):
+        """A fresh processor starts with no history."""
+        proc = self._make_processor()
+        assert proc._history == []
+
+    @pytest.mark.asyncio
+    async def test_history_stored_after_command(self):
+        """After a command, the user/assistant turn is stored in history."""
+        ai = HistoryCapturingAIClient()
+        ai.response_text = "Found 1 new device. Want to see a list?"
+        proc = self._make_processor(ai)
+
+        await proc.process_command("discover devices")
+
+        assert len(proc._history) == 1
+        assert proc._history[0]["user"] == "discover devices"
+        assert proc._history[0]["assistant"] == "Found 1 new device. Want to see a list?"
+
+    @pytest.mark.asyncio
+    async def test_followup_includes_history(self):
+        """A follow-up command should include prior turns in the messages sent to the LLM."""
+        ai = HistoryCapturingAIClient()
+        ai.response_text = "Found 1 new device. Want to see a list?"
+        proc = self._make_processor(ai)
+
+        await proc.process_command("discover devices")
+
+        # Second call — the follow-up
+        ai.response_text = "Here are your devices: Living Room Roku"
+        await proc.process_command("yes")
+
+        # The second call's messages should contain the prior turn
+        second_call_messages = ai.calls[1]
+
+        # messages[0] = system prompt
+        assert second_call_messages[0]["role"] == "system"
+        # messages[1] = prior user turn
+        assert second_call_messages[1]["role"] == "user"
+        assert second_call_messages[1]["content"] == "discover devices"
+        # messages[2] = prior assistant turn
+        assert second_call_messages[2]["role"] == "assistant"
+        assert "Found 1 new device" in second_call_messages[2]["content"]
+        # messages[3] = current user turn ("yes")
+        assert second_call_messages[3]["role"] == "user"
+        assert second_call_messages[3]["content"] == "yes"
+
+    @pytest.mark.asyncio
+    async def test_history_capped_at_max(self):
+        """History should not grow beyond MAX_HISTORY_TURNS."""
+        ai = HistoryCapturingAIClient()
+        ai.response_text = "ok"
+        proc = self._make_processor(ai)
+        proc.MAX_HISTORY_TURNS = 3
+
+        for i in range(5):
+            await proc.process_command(f"command {i}")
+
+        assert len(proc._history) == 3
+        # Should keep the last 3 turns
+        assert proc._history[0]["user"] == "command 2"
+        assert proc._history[1]["user"] == "command 3"
+        assert proc._history[2]["user"] == "command 4"
+
+    @pytest.mark.asyncio
+    async def test_multi_turn_conversation_flow(self):
+        """Simulate a realistic multi-turn flow: discover -> yes -> name it."""
+        ai = HistoryCapturingAIClient()
+        proc = self._make_processor(ai)
+
+        # Turn 1: discover
+        ai.response_text = "Found 1 new Roku device. Would you like to see the list?"
+        await proc.process_command("discover devices")
+
+        # Turn 2: affirmative follow-up
+        ai.response_text = "Here's your device: Roku Ultra at 192.168.1.100"
+        await proc.process_command("yes")
+
+        # Turn 3: another follow-up referencing prior context
+        ai.response_text = "Done. Named it 'Living Room TV'."
+        await proc.process_command("name it Living Room TV")
+
+        assert len(proc._history) == 3
+
+        # Third call should have all prior turns
+        third_call_messages = ai.calls[2]
+        # system + 2 prior user/assistant pairs + current user = 1+4+1 = 6
+        assert len(third_call_messages) == 6
+        assert third_call_messages[5]["content"] == "name it Living Room TV"
