@@ -252,8 +252,12 @@ class AgentNetwork:
                         self._metrics["dropped_messages"] += 1
                     except asyncio.QueueEmpty:
                         break
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.log(
+                    "WARNING",
+                    "Backpressure drain failed",
+                    f"{type(exc).__name__}: {exc}",
+                )
 
         # Reset circuit breaker if queue has space
         if queue_size < self._backpressure_threshold:
@@ -275,15 +279,18 @@ class AgentNetwork:
                     try:
                         self._low_priority_queue.get_nowait()
                     except asyncio.QueueEmpty:
-                        pass
+                        self.logger.log(
+                            "DEBUG",
+                            "No low-priority messages to discard for high-priority room",
+                        )
                     await target_queue.put(message)
-                except Exception:
+                except Exception as exc:
                     # Last resort: log and drop
                     self._metrics["dropped_messages"] += 1
                     self.logger.log(
                         "ERROR",
                         "Failed to enqueue high-priority message",
-                        f"Message dropped: {message.message_type}",
+                        f"Message dropped: {message.message_type}, {type(exc).__name__}: {exc}",
                     )
             else:
                 self._metrics["dropped_messages"] += 1
@@ -315,7 +322,7 @@ class AgentNetwork:
             try:
                 await self._cleanup_task
             except asyncio.CancelledError:
-                pass
+                self.logger.log("DEBUG", "Cleanup task cancelled during shutdown")
         await self.response_aggregator.stop()
         self.logger.log("INFO", "Network stopped")
 
@@ -340,24 +347,21 @@ class AgentNetwork:
         return self.method_recorder.get_protocol()
 
     async def _get_next_message(self) -> Optional[Message]:
-        """Get next message from priority queues (high -> normal -> low)."""
-        # Check high priority first
-        try:
-            return self._high_priority_queue.get_nowait()
-        except asyncio.QueueEmpty:
-            pass
+        """Get next message from priority queues (high -> normal -> low).
 
-        # Then normal priority
-        try:
-            return self._normal_priority_queue.get_nowait()
-        except asyncio.QueueEmpty:
-            pass
-
-        # Finally low priority
-        try:
-            return self._low_priority_queue.get_nowait()
-        except asyncio.QueueEmpty:
-            return None
+        QueueEmpty is expected flow control here — each catch falls through
+        to the next priority level.
+        """
+        for queue in (
+            self._high_priority_queue,
+            self._normal_priority_queue,
+            self._low_priority_queue,
+        ):
+            try:
+                return queue.get_nowait()
+            except asyncio.QueueEmpty:
+                continue
+        return None
 
     async def _process_messages(self, worker_id: int = 0) -> None:
         """Internal loop: dispatch messages, broadcast requests, fulfill responses."""
