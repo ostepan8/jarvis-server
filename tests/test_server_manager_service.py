@@ -315,6 +315,7 @@ class TestHealthChecks:
 
         with patch("asyncio.open_connection") as mock_conn:
             mock_writer = AsyncMock()
+            mock_writer.close = MagicMock()
             mock_conn.return_value = (AsyncMock(), mock_writer)
 
             result = await service.check_health("tcp-only")
