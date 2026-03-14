@@ -179,10 +179,28 @@ class RokuFunctionRegistry:
     async def _discover_devices(self) -> Dict[str, Any]:
         """Trigger SSDP discovery for new Roku devices."""
         newly = await self.agent.discover_devices()
+        all_devices = self.agent.device_registry.get_all_devices()
+        online = self.agent.device_registry.get_online_devices()
+        device_list = [
+            {
+                "name": d.friendly_name or d.device_name or d.serial_number,
+                "ip": d.ip_address,
+                "model": d.model,
+                "online": d.is_online,
+            }
+            for d in all_devices
+        ]
         return {
             "success": True,
-            "discovered": len(newly),
-            "message": f"Found {len(newly)} new device(s)",
+            "new_discovered": len(newly),
+            "total_devices": len(all_devices),
+            "online_devices": len(online),
+            "devices": device_list,
+            "message": (
+                f"Found {len(newly)} new device(s). "
+                f"{len(all_devices)} total device(s) registered, "
+                f"{len(online)} online."
+            ),
         }
 
     # ------------------------------------------------------------------

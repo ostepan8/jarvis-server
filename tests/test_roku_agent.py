@@ -237,6 +237,38 @@ async def test_function_registry_mapping(single_device_registry):
 
 
 # ---------------------------------------------------------------------------
+# discover_devices response includes existing devices
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_discover_devices_reports_existing(single_device_registry):
+    """discover_devices should report total/online device counts, not just new ones.
+
+    Regression: when no *new* devices were found, the response said
+    "Found 0 new device(s)" with no mention of the device already registered,
+    leading the LLM to tell the user nothing was found.
+    """
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+    )
+    # Mock discover to return no new devices (device already registered)
+    agent.device_registry.discover = AsyncMock(return_value=[])
+
+    func = agent.function_registry.get_function("discover_devices")
+    result = await func()
+
+    assert result["success"] is True
+    assert result["new_discovered"] == 0
+    assert result["total_devices"] == 1
+    assert result["online_devices"] == 1
+    assert len(result["devices"]) == 1
+    assert result["devices"][0]["name"] == "Test Roku"
+    await agent.close()
+
+
+# ---------------------------------------------------------------------------
 # execute_on_device routing
 # ---------------------------------------------------------------------------
 
