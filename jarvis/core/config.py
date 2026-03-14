@@ -25,6 +25,7 @@ class FeatureFlags:
     enable_capabilities: bool = True
     enable_scheduler: bool = True
     enable_notifications: bool = True
+    enable_coding: bool = True
 
 
 @dataclass

@@ -64,6 +64,7 @@ class TestBuilderOptions:
             with_device_monitor=False,
             with_server_manager=False,
             with_capabilities=False,
+            with_coding=False,
         )
         for field_name in BuilderOptions.__dataclass_fields__:
             assert getattr(opts, field_name) is False

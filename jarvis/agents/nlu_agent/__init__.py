@@ -1029,6 +1029,12 @@ Special cases:
 - "Write tests for the memory agent" → {{"dag": {{"write_tests": []}}}}
 - "How does the protocol system work?" → {{"dag": {{"explain_code": []}}}}
 - "Refactor the agent factory" → {{"dag": {{"refactor_code": []}}}}
+- "Run the tests" → {{"dag": {{"run_code": []}}}}
+- "Edit the config file" → {{"dag": {{"edit_file": []}}}}
+- "Read the server.py file" → {{"dag": {{"read_file": []}}}}
+- "Create a new module" → {{"dag": {{"create_file": []}}}}
+- "List the files in the agents directory" → {{"dag": {{"list_files": []}}}}
+- "Run this command and fix any errors" → {{"dag": {{"run_code": [], "fix_bug": ["run_code"]}}}}
 - "Add a task to fix the login page" → {{"dag": {{"create_task": []}}}}
 - "Show my tasks" → {{"dag": {{"list_tasks": []}}}}
 - "Mark task abc123 as done" → {{"dag": {{"complete_task": []}}}}

@@ -35,6 +35,7 @@ class BuilderOptions:
     with_device_monitor: bool = True
     with_server_manager: bool = True
     with_capabilities: bool = True
+    with_coding: bool = True
 
 
 class JarvisBuilder:
@@ -129,6 +130,10 @@ class JarvisBuilder:
 
     def capabilities(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_capabilities = enabled
+        return self
+
+    def coding(self, enabled: bool = True) -> "JarvisBuilder":
+        self._opts.with_coding = enabled
         return self
 
     # ------- Convenience creators --------
@@ -234,6 +239,8 @@ class JarvisBuilder:
         if self._opts.with_capabilities and jarvis.config.flags.enable_capabilities:
             refs.update(factory._build_capabilities(jarvis.network, ai_client))
 
+        if self._opts.with_coding and jarvis.config.flags.enable_coding:
+            refs.update(factory._build_coding(jarvis.network))
         if self._opts.with_software:
             # Placeholder for future implementation
             pass

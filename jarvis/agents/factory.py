@@ -93,6 +93,9 @@ class AgentFactory:
         if self.config.flags.enable_notifications:
             refs.update(self._build_notifications(network))
 
+        if self.config.flags.enable_coding:
+            refs.update(self._build_coding(network))
+
         if self.config.flags.enable_capabilities:
             refs.update(self._build_capabilities(network, ai_client))
 
@@ -156,6 +159,8 @@ class AgentFactory:
             refs.update(self._build_server_manager(network))
         if self.config.flags.enable_notifications:
             refs.update(self._build_notifications(network))
+        if self.config.flags.enable_coding:
+            refs.update(self._build_coding(network))
         if self.config.flags.enable_capabilities:
             refs.update(self._build_capabilities(network, ai_client))
         if self.config.flags.enable_night_mode and system is not None:
@@ -597,6 +602,23 @@ class AgentFactory:
             return {"capabilities_agent": capabilities_agent}
         except Exception as exc:
             self.logger.log("WARNING", "CapabilitiesAgent init failed", str(exc))
+            return {}
+
+    def _build_coding(self, network: AgentNetwork) -> Dict[str, Any]:
+        """Build and register CodingAgent for code and file operations."""
+        try:
+            from pathlib import Path
+            from ..agents.coding_agent import CodingAgent
+
+            project_root = str(Path(__file__).parent.parent.parent)
+            coding_agent = CodingAgent(
+                project_root=project_root,
+                logger=self.logger,
+            )
+            network.register_agent(coding_agent)
+            return {"coding_agent": coding_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "CodingAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(
