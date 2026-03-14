@@ -20,7 +20,7 @@ class RokuService:
         device_ip: str,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        timeout: float = 5.0,
+        timeout: float = 10.0,
     ):
         """
         Initialize the Roku service.
