@@ -32,9 +32,11 @@ from .claude_code_runner import ClaudeCodeRunner
 PRIORITY_ORDER: Dict[DiscoveryType, int] = {
     DiscoveryType.TEST_FAILURE: 0,
     DiscoveryType.EXCEPTION_ANTIPATTERN: 1,
+    DiscoveryType.TRACE_ERROR_RATE: 1,
     DiscoveryType.LOG_ERROR: 2,
     DiscoveryType.UNUSED_IMPORT: 3,
     DiscoveryType.MANUAL_TODO: 4,
+    DiscoveryType.TRACE_SLOW_AGENT: 4,
     DiscoveryType.MISSING_TESTS: 5,
     DiscoveryType.COMPLEXITY_HOTSPOT: 6,
     DiscoveryType.CODE_QUALITY: 7,

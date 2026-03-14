@@ -33,6 +33,8 @@ class DiscoveryType(str, Enum):
     MISSING_TESTS = "missing_tests"
     DEAD_CODE = "dead_code"
     STALE_COMMENT = "stale_comment"
+    TRACE_ERROR_RATE = "trace_error_rate"
+    TRACE_SLOW_AGENT = "trace_slow_agent"
 
 
 @dataclass
@@ -91,11 +93,13 @@ class SystemAnalyzer:
         log_db_path: str,
         todo_service: Optional[TodoService] = None,
         logger: Optional[JarvisLogger] = None,
+        trace_db_path: str = "jarvis_traces.db",
     ) -> None:
         self.project_root = project_root
         self.log_db_path = log_db_path
         self.todo_service = todo_service
         self.logger = logger or JarvisLogger()
+        self.trace_db_path = trace_db_path
 
     # ------------------------------------------------------------------
     # Public API
@@ -116,6 +120,7 @@ class SystemAnalyzer:
             ("missing_tests", self.analyze_missing_tests),
             ("dead_code", self.analyze_dead_code),
             ("code_quality", self.analyze_code_quality),
+            ("traces", self.analyze_traces),
         ]
 
         for name, analyzer in analyzers:
@@ -785,4 +790,106 @@ class SystemAnalyzer:
                         )
                     )
 
+        return discoveries
+
+    # ------------------------------------------------------------------
+    # Trace analysis
+    # ------------------------------------------------------------------
+
+    async def analyze_traces(self, lookback_hours: int = 24) -> list[Discovery]:
+        """Scan trace DB for agents/capabilities with high error rates or slow performance."""
+        return await asyncio.to_thread(self._analyze_traces_sync, lookback_hours)
+
+    def _analyze_traces_sync(self, lookback_hours: int) -> list[Discovery]:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        ).isoformat()
+
+        try:
+            conn = sqlite3.connect(self.trace_db_path)
+            conn.row_factory = sqlite3.Row
+        except Exception:
+            return []
+
+        discoveries: list[Discovery] = []
+
+        # --- High error rate agents ---
+        try:
+            rows = conn.execute(
+                """
+                SELECT agent_name,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN status = 'ERROR' THEN 1 ELSE 0 END) AS errors
+                FROM spans
+                WHERE agent_name IS NOT NULL
+                  AND start_time >= ?
+                GROUP BY agent_name
+                HAVING total >= 5
+                """,
+                (cutoff,),
+            ).fetchall()
+
+            for row in rows:
+                agent_name = row["agent_name"]
+                total = row["total"]
+                errors = row["errors"]
+                error_rate = errors / total if total else 0
+
+                if error_rate > 0.20:
+                    priority = "high" if error_rate > 0.50 else "medium"
+                    discoveries.append(
+                        Discovery(
+                            discovery_type=DiscoveryType.TRACE_ERROR_RATE,
+                            title=f"High error rate for {agent_name}: {error_rate:.0%}",
+                            description=(
+                                f"Agent '{agent_name}' has an error rate of {error_rate:.0%} "
+                                f"({errors}/{total} spans) in the last {lookback_hours}h."
+                            ),
+                            priority=priority,
+                            relevant_files=[],
+                            source_detail=f"errors={errors}, total={total}",
+                        )
+                    )
+        except Exception:
+            pass
+
+        # --- Slow agents ---
+        try:
+            rows = conn.execute(
+                """
+                SELECT agent_name,
+                       AVG(duration_ms) AS avg_duration,
+                       COUNT(*) AS total
+                FROM spans
+                WHERE agent_name IS NOT NULL
+                  AND duration_ms IS NOT NULL
+                  AND start_time >= ?
+                GROUP BY agent_name
+                HAVING total >= 3 AND avg_duration > 5000
+                """,
+                (cutoff,),
+            ).fetchall()
+
+            for row in rows:
+                agent_name = row["agent_name"]
+                avg_duration = row["avg_duration"]
+                total = row["total"]
+
+                discoveries.append(
+                    Discovery(
+                        discovery_type=DiscoveryType.TRACE_SLOW_AGENT,
+                        title=f"Slow agent: {agent_name} (avg {avg_duration:.0f}ms)",
+                        description=(
+                            f"Agent '{agent_name}' averages {avg_duration:.0f}ms "
+                            f"across {total} spans in the last {lookback_hours}h."
+                        ),
+                        priority="medium",
+                        relevant_files=[],
+                        source_detail=f"avg_duration_ms={avg_duration:.0f}, total={total}",
+                    )
+                )
+        except Exception:
+            pass
+
+        conn.close()
         return discoveries
