@@ -166,15 +166,67 @@ class RokuFunctionRegistry:
             )
         return {"success": True, "devices": device_list, "count": len(device_list)}
 
-    async def _name_device(self, serial: str, name: str) -> Dict[str, Any]:
-        """Assign a friendly name to a device."""
-        self.agent.device_registry.set_friendly_name(serial, name)
-        return {"success": True, "message": f"Device {serial} named '{name}'"}
+    def _resolve_device_hint(self, device: str) -> Optional[Any]:
+        """Resolve a device hint (serial, friendly name, or device name) to a device.
 
-    async def _set_default_device(self, serial: str) -> Dict[str, Any]:
-        """Set a device as the default."""
-        self.agent.device_registry.set_default(serial)
-        return {"success": True, "message": f"Device {serial} set as default"}
+        Unlike resolve_device(), this does NOT fall back to default/last-used
+        when the hint doesn't match.  For explicit operations like naming or
+        setting default, silently targeting the wrong device is worse than
+        returning None.
+        """
+        # Try exact serial first
+        dev = self.agent.device_registry.get_device_by_serial(device)
+        if dev:
+            return dev
+
+        # Try name-based matching (exact and fuzzy) without default fallback
+        hint_lower = device.lower()
+        for d in self.agent.device_registry.devices.values():
+            if d.friendly_name and d.friendly_name.lower() == hint_lower:
+                return d
+        for d in self.agent.device_registry.devices.values():
+            if d.friendly_name and hint_lower in d.friendly_name.lower():
+                return d
+        for d in self.agent.device_registry.devices.values():
+            if d.device_name and d.device_name.lower() == hint_lower:
+                return d
+        for d in self.agent.device_registry.devices.values():
+            if d.device_name and hint_lower in d.device_name.lower():
+                return d
+
+        return None
+
+    async def _name_device(self, device: str, name: str) -> Dict[str, Any]:
+        """Assign a friendly name to a device, resolved by serial, name, or model."""
+        dev = self._resolve_device_hint(device)
+        if not dev:
+            all_devices = self.agent.device_registry.get_all_devices()
+            available = [
+                f"{d.friendly_name or d.device_name or d.serial_number} (serial: {d.serial_number})"
+                for d in all_devices
+            ]
+            return {
+                "success": False,
+                "error": f"No device matched '{device}'. Available: {', '.join(available)}",
+            }
+        self.agent.device_registry.set_friendly_name(dev.serial_number, name)
+        return {
+            "success": True,
+            "message": f"Device '{dev.device_name or dev.serial_number}' named '{name}'",
+            "serial": dev.serial_number,
+        }
+
+    async def _set_default_device(self, device: str) -> Dict[str, Any]:
+        """Set a device as the default, resolved by serial, name, or model."""
+        dev = self._resolve_device_hint(device)
+        if not dev:
+            return {"success": False, "error": f"No device matched '{device}'"}
+        self.agent.device_registry.set_default(dev.serial_number)
+        return {
+            "success": True,
+            "message": f"Device '{dev.friendly_name or dev.device_name}' set as default",
+            "serial": dev.serial_number,
+        }
 
     async def _discover_devices(self) -> Dict[str, Any]:
         """Trigger SSDP discovery for new Roku devices."""
