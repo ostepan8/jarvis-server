@@ -982,7 +982,10 @@
         html += '<thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Tags</th><th>Created</th></tr></thead>';
         html += '<tbody>';
         for (const item of items) {
-            html += '<tr>';
+            // Use embedded discovery data for ticket panel, or fall back to the discovery cache
+            const disc = item.discovery || findDiscovery(item.title);
+            const clickAttr = disc ? ' onclick=\'openTicket(' + JSON.stringify(disc).replace(/'/g, "&#39;") + ')\'' : '';
+            html += '<tr' + clickAttr + '>';
             html += '<td class="backlog-id">' + escapeHtml((item.id || '').slice(0, 8)) + '</td>';
             html += '<td>' + escapeHtml(item.title || '\u2014') + '</td>';
             html += '<td>' + priorityPill(item.priority) + '</td>';

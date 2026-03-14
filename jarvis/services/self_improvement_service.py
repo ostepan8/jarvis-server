@@ -565,16 +565,24 @@ class SelfImprovementService:
             return set()
 
     def _push_to_backlog(self, discovery: Discovery, error_message: str) -> None:
-        """Create a todo item for a failed night-agent task."""
+        """Create a todo item for a failed night-agent task.
+
+        Embeds the full discovery dict as a JSON block in the description
+        so the dashboard can render a complete ticket panel for backlog items.
+        """
         if not self._todo_service:
             return
         try:
+            discovery_data = discovery.to_dict()
+            discovery_data["error_message"] = error_message
+            description = (
+                f"{discovery.description}\n\n"
+                f"Night agent error: {error_message}\n\n"
+                f"<!--DISCOVERY_JSON\n{json.dumps(discovery_data, indent=2)}\nDISCOVERY_JSON-->"
+            )
             self._todo_service.create(
                 title=discovery.title,
-                description=(
-                    f"{discovery.description}\n\n"
-                    f"Night agent error: {error_message}"
-                ),
+                description=description,
                 priority=discovery.priority,
                 tags=[self.BACKLOG_TAG, discovery.discovery_type.value],
             )

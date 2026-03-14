@@ -9,7 +9,9 @@ except this one actually accomplishes something.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 import uuid
 from typing import Dict, List, Optional
 
@@ -306,17 +308,29 @@ async def get_live_state(request: Request):
         if report:
             latest_report = report.to_dict()
 
-    # Backlog items from TodoService
+    # Backlog items from TodoService — enrich with embedded discovery data
     backlog = []
     if jarvis_system:
         todo_svc = getattr(jarvis_system, "_agent_refs", {}).get("todo_service")
         if todo_svc:
             try:
                 items = todo_svc.list(tag="night-agent-backlog")
-                backlog = [
-                    item.to_dict() for item in items
-                    if item.status.value != "done"
-                ]
+                for item in items:
+                    if item.status.value == "done":
+                        continue
+                    entry = item.to_dict()
+                    # Extract embedded discovery JSON if present
+                    m = re.search(
+                        r"<!--DISCOVERY_JSON\n(.+?)\nDISCOVERY_JSON-->",
+                        item.description,
+                        re.DOTALL,
+                    )
+                    if m:
+                        try:
+                            entry["discovery"] = json.loads(m.group(1))
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    backlog.append(entry)
             except Exception:
                 pass
 

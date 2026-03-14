@@ -123,6 +123,9 @@ class ClaudeCodeRunner:
                 f"{worktree_path} on branch {branch_name}",
             )
 
+        # Clean up stale branch/worktree from a previous failed run
+        await self._cleanup_stale_worktree(worktree_path, branch_name)
+
         result = await self._run_subprocess(
             ["git", "worktree", "add", worktree_path, "-b", branch_name],
             cwd=self.project_root,
@@ -140,6 +143,30 @@ class ClaudeCodeRunner:
             )
 
         return worktree_path, branch_name
+
+    async def _cleanup_stale_worktree(
+        self, worktree_path: str, branch_name: str
+    ) -> None:
+        """Remove a leftover worktree and branch so a fresh one can be created."""
+        # Remove the worktree directory if it exists
+        if Path(worktree_path).exists():
+            await self._run_subprocess(
+                ["git", "worktree", "remove", "--force", worktree_path],
+                cwd=self.project_root,
+                timeout=15,
+            )
+        # Prune any stale worktree bookkeeping
+        await self._run_subprocess(
+            ["git", "worktree", "prune"],
+            cwd=self.project_root,
+            timeout=10,
+        )
+        # Delete the branch if it still exists
+        await self._run_subprocess(
+            ["git", "branch", "-D", branch_name],
+            cwd=self.project_root,
+            timeout=10,
+        )
 
     async def execute_task(
         self,
