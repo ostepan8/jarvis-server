@@ -17,6 +17,7 @@ from ..agents.search_agent import SearchAgent
 from ..agents.canvas import CanvasAgent
 from ..agents.roku_agent import RokuAgent
 from ..agents.todo_agent import TodoAgent
+from ..agents.capabilities_agent import CapabilitiesAgent
 from ..agents.scheduler_agent import SchedulerAgent
 from ..services.scheduler_service import SchedulerService
 from ..services.vector_memory import VectorMemoryService
@@ -87,6 +88,9 @@ class AgentFactory:
         if self.config.flags.enable_server_manager:
             refs.update(self._build_server_manager(network))
 
+        if self.config.flags.enable_capabilities:
+            refs.update(self._build_capabilities(network, ai_client))
+
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -145,6 +149,8 @@ class AgentFactory:
             refs.update(self._build_device_monitor(network))
         if self.config.flags.enable_server_manager:
             refs.update(self._build_server_manager(network))
+        if self.config.flags.enable_capabilities:
+            refs.update(self._build_capabilities(network, ai_client))
         if self.config.flags.enable_night_mode and system is not None:
             refs.update(self._build_night_agents(network, system))
 
@@ -550,6 +556,21 @@ class AgentFactory:
             }
         except Exception as exc:
             self.logger.log("WARNING", "ServerManagerAgent init failed", str(exc))
+            return {}
+
+    def _build_capabilities(
+        self, network: AgentNetwork, ai_client: BaseAIClient
+    ) -> Dict[str, Any]:
+        """Build and register CapabilitiesAgent."""
+        try:
+            capabilities_agent = CapabilitiesAgent(
+                ai_client=ai_client,
+                logger=self.logger,
+            )
+            network.register_agent(capabilities_agent)
+            return {"capabilities_agent": capabilities_agent}
+        except Exception as exc:
+            self.logger.log("WARNING", "CapabilitiesAgent init failed", str(exc))
             return {}
 
     def _build_night_agents(

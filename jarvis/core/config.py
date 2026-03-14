@@ -22,6 +22,7 @@ class FeatureFlags:
     enable_self_improvement: bool = True
     enable_feedback: bool = True
     enable_server_manager: bool = True
+    enable_capabilities: bool = True
     enable_scheduler: bool = True
 
 

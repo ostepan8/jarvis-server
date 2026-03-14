@@ -223,6 +223,7 @@ Request → RequestOrchestrator → Protocol Match (fast) / NLU Route (fallback)
 | `DeviceMonitorAgent` | `device_status`, `device_diagnostics`, `device_cleanup`, `device_history` — host hardware watchdog with background monitoring, alerts, and trend analysis |
 | `HealthAgent` | `system_health_check`, `health_report`, `incident_list` — Jarvis internals |
 | `TodoAgent` | Task management |
+| `CapabilitiesAgent` | `describe_capabilities`, `explain_capability` — the capabilities librarian, progressive disclosure knowledge base |
 | Night Agents | Background processing during idle — `LogCleanupAgent`, `SelfImprovementAgent` (in `jarvis/night_agents/`) |
 
 ---
@@ -274,6 +275,11 @@ Imperative mood. Lowercase. No period. Under 72 chars. "fix stuff" is not a comm
 4. `jarvis/agents/factory.py` — register it
 5. `jarvis/agents/nlu_agent/__init__.py` — route to it
 6. `jarvis/core/config.py` — feature flag
+7. **Capabilities knowledge base** — update the librarian:
+   - Add `jarvis/agents/capabilities_agent/knowledge/agents/{name}.md` with capabilities, examples, and requirements
+   - Update the relevant `knowledge/skills/{domain}.md` to reference the new agent
+   - Add training phrases to `jarvis/agents/nlu_agent/fast_classifier.py` for `describe_capabilities` / `explain_capability` keyword routing
+   - Add keyword entries to `_SKILL_KEYWORDS` and `_AGENT_KEYWORDS` in `jarvis/agents/capabilities_agent/__init__.py`
 
 All agents return `AgentResponse`. No exceptions. Raw dicts break the pipeline, and the pipeline is sacred.
 
