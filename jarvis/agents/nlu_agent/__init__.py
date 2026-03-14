@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
 import json
@@ -427,7 +428,10 @@ class NLUAgent(NetworkAgent):
 
         known_capabilities = list(self.network.capability_registry.keys())
 
-        # ---- Classification pipeline: fast-path → cache → LLM ----
+        # ---- Classification pipeline: cache → LLM (with auto-training) ----
+        # The fast classifier is in training mode only — it observes LLM
+        # decisions but does not participate in routing. Once it accumulates
+        # enough real-world signal, it can be promoted to active duty.
         classification: Optional[Dict[str, Any]] = None
         tracer = get_tracer()
         span = (
@@ -437,40 +441,30 @@ class NLUAgent(NetworkAgent):
         )
 
         async with span as cs:
-            # Step 1: Try fast-path embedding classifier
-            if self.fast_classifier:
-                fast_result = await self.fast_classifier.classify(user_input)
-                if fast_result["confidence"] == "high":
-                    cap = fast_result["capability"]
-                    if cap in known_capabilities or cap == "chat":
-                        classification = {"dag": {cap: []}}
-                        self.logger.log(
-                            "INFO",
-                            f"Fast-path classification: {cap}",
-                            f"score={fast_result['score']:.3f}",
-                        )
+            # Step 1: Try cache
+            cached = self._classification_cache.get(user_input)
+            if cached is not None:
+                classification = cached
+                self.logger.log("INFO", "Classification cache hit", user_input[:50])
 
-            # Step 2: Try cache
+            # Step 2: LLM classification (primary path)
             if classification is None:
-                cached = self._classification_cache.get(user_input)
-                if cached is not None:
-                    classification = cached
-                    self.logger.log("INFO", "Classification cache hit", user_input[:50])
-
-            # Step 3: LLM classification (unified — always returns DAG)
-            if classification is None:
-                hint = None
-                if self.fast_classifier:
-                    fast_result = await self.fast_classifier.classify(user_input)
-                    if fast_result.get("confidence") == "medium":
-                        hint = fast_result.get("hint_capabilities")
                 classification = await self.classify(
-                    user_input, known_capabilities, context, conversation_history, hint=hint
+                    user_input, known_capabilities, context, conversation_history
                 )
                 # Cache non-chat classifications
                 dag = classification.get("dag", {})
                 if dag and "chat" not in dag:
                     self._classification_cache.put(user_input, classification)
+
+                # Auto-train the fast classifier from LLM decisions.
+                # Only single-capability inputs — multi-cap decomposition
+                # requires LLM reasoning and would confuse the embeddings.
+                if self.fast_classifier and dag and len(dag) == 1:
+                    cap = next(iter(dag))
+                    asyncio.create_task(
+                        self.fast_classifier.auto_train(user_input, cap)
+                    )
 
             cs.record_output(classification)
 
