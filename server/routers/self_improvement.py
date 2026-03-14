@@ -262,7 +262,10 @@ async def get_dashboard():
         os.path.dirname(__file__), "..", "static", "night_dashboard.html"
     )
     if os.path.exists(dashboard_path):
-        return FileResponse(dashboard_path)
+        return FileResponse(
+            dashboard_path,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     raise HTTPException(
         status_code=404,
         detail="Dashboard HTML not found. Someone misplaced the blueprints.",
