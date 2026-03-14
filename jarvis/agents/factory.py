@@ -34,6 +34,7 @@ from ..night_agents import (
     NightModeControllerAgent,
     LogCleanupAgent,
     SelfImprovementAgent,
+    TraceAnalysisNightAgent,
 )
 
 if TYPE_CHECKING:
@@ -583,6 +584,10 @@ class AgentFactory:
         cleanup_agent = LogCleanupAgent(logger=self.logger)
         network.register_night_agent(cleanup_agent)
         night_agents.append(cleanup_agent)
+
+        trace_agent = TraceAnalysisNightAgent(logger=self.logger)
+        network.register_night_agent(trace_agent)
+        night_agents.append(trace_agent)
 
         return {
             "night_controller": controller,
