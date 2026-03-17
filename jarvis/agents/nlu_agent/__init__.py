@@ -1079,6 +1079,11 @@ Special cases:
 - "Cancel the morning alarm" → {{"dag": {{"cancel_schedule": []}}}}
 - "Pause the weather check" → {{"dag": {{"pause_schedule": []}}}}
 - "Resume my alarms" → {{"dag": {{"resume_schedule": []}}}}
+- "Change my morning routine to include Spotify on the TV" → {{"dag": {{"configure_wake_routine": []}}}}
+- "Add music to my morning routine" → {{"dag": {{"configure_wake_routine": []}}}}
+- "What's my morning routine?" → {{"dag": {{"get_wake_routine": []}}}}
+- "What happens when I wake up?" → {{"dag": {{"get_wake_routine": []}}}}
+- "Remove the lights from my wake up routine" → {{"dag": {{"configure_wake_routine": []}}}}
 - "Notify me when the build is done" → {{"dag": {{"send_notification": []}}}}
 - "Send me an alert" → {{"dag": {{"send_notification": []}}}}
 - "What notifications did I get" → {{"dag": {{"list_notifications": []}}}}

@@ -11,7 +11,7 @@ from httpx import ASGITransport
 import server
 from tests import disable_lifespan
 from server.database import init_database
-from server.routers.goodmorning import _build_greeting
+from server.routers.goodmorning import _build_greeting, _get_wake_routine_text
 
 
 # ---------------------------------------------------------------------------
@@ -180,3 +180,33 @@ class TestBuildGreeting:
         """Invalid wake_time should not crash, just skip time display."""
         greeting = _build_greeting({"wake_time": "not-a-date"})
         assert "Good morning" in greeting
+
+
+# ---------------------------------------------------------------------------
+# Tests for _get_wake_routine_text
+# ---------------------------------------------------------------------------
+
+class TestGetWakeRoutineText:
+    """Unit tests for the _get_wake_routine_text helper."""
+
+    def test_returns_default_when_no_scheduler_service(self):
+        mock_jarvis = MagicMock()
+        mock_jarvis._agent_refs = {}
+        routine = _get_wake_routine_text(mock_jarvis)
+        assert "lights" in routine.lower()
+
+    def test_returns_default_when_no_agent_refs(self):
+        mock_jarvis = MagicMock(spec=[])
+        routine = _get_wake_routine_text(mock_jarvis)
+        assert "lights" in routine.lower()
+
+    def test_returns_stored_routine(self, tmp_path):
+        from jarvis.services.scheduler_service import SchedulerService
+
+        svc = SchedulerService(db_path=str(tmp_path / "test.db"))
+        svc.set_wake_routine("Play jazz and dim the lights.")
+        mock_jarvis = MagicMock()
+        mock_jarvis._agent_refs = {"scheduler_service": svc}
+        routine = _get_wake_routine_text(mock_jarvis)
+        assert routine == "Play jazz and dim the lights."
+        svc.close()
