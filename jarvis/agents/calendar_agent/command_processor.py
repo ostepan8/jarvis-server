@@ -4,6 +4,7 @@ import json
 from ...ai_clients import BaseAIClient
 from ...services.calendar_service import CalendarService
 from ...logging import JarvisLogger
+from ...utils import safe_json_dumps
 from .prompt import get_calendar_system_prompt
 from .function_registry import CalendarFunctionRegistry
 from ..response import AgentResponse, ErrorInfo
@@ -27,19 +28,6 @@ class CalendarCommandProcessor:
         self.logger = logger
         self.system_prompt = get_calendar_system_prompt()
 
-    def _safe_json_dumps(self, obj):
-        """Safely serialize an object to JSON, handling non-serializable types"""
-        try:
-            return json.dumps(obj)
-        except (TypeError, ValueError) as e:
-            # Handle non-serializable objects
-            if hasattr(obj, "__dict__"):
-                return json.dumps(obj.__dict__)
-            elif hasattr(obj, "__name__"):
-                return f"<{obj.__class__.__name__}: {obj.__name__}>"
-            else:
-                return f"<{type(obj).__name__}: {str(obj)}>"
-
     async def execute_function(
         self, function_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -51,7 +39,7 @@ class CalendarCommandProcessor:
         try:
             if self.logger:
                 self.logger.log(
-                    "INFO", f"Calling {function_name}", self._safe_json_dumps(arguments)
+                    "INFO", f"Calling {function_name}", safe_json_dumps(arguments)
                 )
 
             # Handle special case for working_hours parameter
@@ -68,7 +56,7 @@ class CalendarCommandProcessor:
             result = await func(**arguments)
             if self.logger:
                 self.logger.log(
-                    "INFO", f"Result {function_name}", self._safe_json_dumps(result)
+                    "INFO", f"Result {function_name}", safe_json_dumps(result)
                 )
             return result
 
@@ -80,7 +68,7 @@ class CalendarCommandProcessor:
             }
             if self.logger:
                 self.logger.log(
-                    "ERROR", f"Error {function_name}", self._safe_json_dumps(error)
+                    "ERROR", f"Error {function_name}", safe_json_dumps(error)
                 )
             return error
 

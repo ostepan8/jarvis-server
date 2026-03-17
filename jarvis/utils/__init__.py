@@ -2,6 +2,7 @@ from fastapi import Request
 from tzlocal import get_localzone_name
 import json
 import re
+from typing import Any  # noqa: F401 – used by safe_json_dumps
 
 
 def detect_timezone(request: Request) -> str:
@@ -12,6 +13,25 @@ def detect_timezone(request: Request) -> str:
     2. The server's local timezone.
     """
     return request.headers.get("X-Timezone") or get_localzone_name()
+
+
+def safe_json_dumps(obj: Any) -> str:
+    """Safely serialize *obj* to a JSON string.
+
+    Falls back to ``str(obj)`` when the object is not natively
+    JSON-serialisable, trying ``obj.__dict__`` as an intermediate step.
+    """
+    try:
+        return json.dumps(obj)
+    except (TypeError, ValueError):
+        if hasattr(obj, "__dict__"):
+            try:
+                return json.dumps(obj.__dict__)
+            except (TypeError, ValueError):
+                return str(obj)
+        if hasattr(obj, "__name__"):
+            return f"<{obj.__class__.__name__}: {obj.__name__}>"
+        return f"<{type(obj).__name__}: {str(obj)}>"
 
 
 def extract_json_from_text(text: str):

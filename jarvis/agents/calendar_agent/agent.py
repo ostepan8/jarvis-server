@@ -1,6 +1,5 @@
 # jarvis/agents/calendar_agent/agent.py
 from typing import Any, Dict, Set
-import json
 import asyncio
 import functools
 from datetime import datetime, timezone
@@ -11,6 +10,7 @@ from ...core.mission import MissionBrief
 from ...services.calendar_service import CalendarService
 from ...ai_clients import BaseAIClient
 from ...logging import JarvisLogger
+from ...utils import safe_json_dumps
 from .function_registry import CalendarFunctionRegistry
 from .command_processor import CalendarCommandProcessor
 
@@ -74,22 +74,6 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, functools.partial(func, **kwargs))
 
-    def _safe_json_dumps(self, obj):
-        """Safely serialize an object to JSON, handling non-serializable types"""
-        try:
-            return json.dumps(obj)
-        except (TypeError, ValueError) as e:
-            # Handle non-serializable objects
-            if hasattr(obj, "__dict__"):
-                try:
-                    return json.dumps(obj.__dict__)
-                except:
-                    return str(obj)
-            elif hasattr(obj, "__name__"):
-                return f"<{obj.__class__.__name__}: {obj.__name__}>"
-            else:
-                return f"<{type(obj).__name__}: {str(obj)}>"
-
     async def _handle_capability_request(self, message: Message) -> None:
         """Handle incoming capability requests"""
         capability = message.content.get("capability")
@@ -111,7 +95,7 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
 
         if self.logger:
             self.logger.log(
-                "INFO", f"Handling {capability}", self._safe_json_dumps(data)
+                "INFO", f"Handling {capability}", safe_json_dumps(data)
             )
 
         # Track active request details so follow-up responses can be managed
@@ -217,7 +201,7 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
             self.logger.log(
                 "INFO",
                 "Capability response received",
-                self._safe_json_dumps(
+                safe_json_dumps(
                     {"request_id": request_id, "data": message.content}
                 ),
             )
@@ -244,33 +228,6 @@ class CollaborativeCalendarAgent(NetworkAgent, CollaborationMixin):
 
             # Send the error message
             await self.send_message(to_agent, "error", error_content, request_id)
-
-        except Exception as e:
-            # If we can't send the error, just log it
-            if self.logger:
-                self.logger.log("ERROR", f"Failed to send error to {to_agent}", str(e))
-
-    async def _safe_send_error(
-        self, to_agent: str, error_msg: str, request_id: str
-    ) -> None:
-        """Safely send an error message without risking serialization issues"""
-        try:
-            # Convert error message to string to avoid serialization issues
-            safe_error_msg = str(error_msg)
-            if self.logger:
-                self.logger.log("ERROR", f"Sending error to {to_agent}", safe_error_msg)
-
-            # Create a simple error response
-            error_response = {
-                "error": safe_error_msg,
-                "request_id": request_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            # Send the error response
-            await self.send_capability_response(
-                to_agent, error_response, request_id, None
-            )
 
         except Exception as e:
             # If we can't send the error, just log it
