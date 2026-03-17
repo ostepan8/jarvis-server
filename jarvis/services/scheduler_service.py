@@ -117,6 +117,18 @@ CREATE TABLE IF NOT EXISTS schedules (
 );
 """
 
+_CREATE_WAKE_ROUTINE_TABLE = """
+CREATE TABLE IF NOT EXISTS wake_routine (
+    id           INTEGER PRIMARY KEY DEFAULT 1,
+    routine_text TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+"""
+
+_DEFAULT_WAKE_ROUTINE = (
+    "Turn on the lights and tell me about my first calendar event today."
+)
+
 
 def _compute_next_cron_run(cron_expression: str, tz_name: str) -> str:
     """Compute the next cron run time and return as ISO-8601 UTC string."""
@@ -142,6 +154,7 @@ class SchedulerService:
         self._conn = sqlite3.connect(str(self._db_path))
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(_CREATE_TABLE)
+        self._conn.execute(_CREATE_WAKE_ROUTINE_TABLE)
         self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -358,6 +371,30 @@ class SchedulerService:
         self._conn.commit()
         self.logger.log("INFO", "Schedule fired", f"{item.id}: {item.name}")
         return self.get(item.id)
+
+    # ------------------------------------------------------------------
+    # Wake routine
+    # ------------------------------------------------------------------
+
+    def get_wake_routine(self) -> str:
+        """Return the current wake routine text, or the default if none set."""
+        row = self._conn.execute(
+            "SELECT routine_text FROM wake_routine WHERE id = 1"
+        ).fetchone()
+        return row["routine_text"] if row else _DEFAULT_WAKE_ROUTINE
+
+    def set_wake_routine(self, routine_text: str) -> str:
+        """Store a new wake routine text. Returns the saved text."""
+        now = datetime.now(tz=_UTC).isoformat()
+        self._conn.execute(
+            """INSERT INTO wake_routine (id, routine_text, updated_at)
+               VALUES (1, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET routine_text = ?, updated_at = ?""",
+            (routine_text, now, routine_text, now),
+        )
+        self._conn.commit()
+        self.logger.log("INFO", "Wake routine updated", routine_text[:80])
+        return routine_text
 
     # ------------------------------------------------------------------
     # Lifecycle

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json as _json
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -56,10 +55,16 @@ async def _handle_goodmorning(request: Request, jarvis_system: JarvisSystem):
 # Wake routine
 # ---------------------------
 async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None:
-    """Run morning wake routine: exit night mode, turn on lights, speak greeting."""
+    """Run morning wake routine by feeding the stored routine text through the orchestrator.
+
+    The routine text is a natural language instruction stored in the scheduler
+    DB (e.g. "Turn on the lights, open Spotify on the TV, and tell me about
+    my first meeting."). The orchestrator routes each part to the appropriate
+    agents — no hardcoded steps needed.
+    """
     logger = jarvis.logger
     try:
-        # 1) Exit night mode if a wake protocol exists
+        # 1) Exit night mode if active
         try:
             runtime = getattr(jarvis, "protocol_runtime", None)
             if runtime is not None and runtime.registry is not None:
@@ -69,34 +74,58 @@ async def _run_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None
         except Exception as exc:
             logger.log("ERROR", "[goodmorning] Failed to run wake_up protocol", {"error": str(exc)})
 
-        # 2) Turn on the lights via protocol if lights agent is available
-        try:
-            agents = getattr(jarvis.network, "agents", {}) or {}
-            # Check for LightingAgent or its backward-compatible alias
-            lights_agent_available = "LightingAgent" in agents or "PhillipsHueAgent" in agents
-            if lights_agent_available:
-                runtime = getattr(jarvis, "protocol_runtime", None)
-                if runtime is not None and runtime.registry is not None:
-                    lights_proto = runtime.registry.get("lights_on")
-                    if lights_proto is not None:
-                        await runtime.executor.run_protocol(lights_proto, arguments={})
-                    else:
-                        logger.log("WARNING", "[goodmorning] 'lights_on' protocol not found")
-                else:
-                    logger.log("WARNING", "[goodmorning] Protocol runtime not initialized")
-            else:
-                logger.log("DEBUG", "[goodmorning] Skipping lights_on: LightingAgent not active")
-        except Exception as exc:
-            logger.log("ERROR", "[goodmorning] Failed to run lights_on protocol", {"error": str(exc)})
+        # 2) Read the stored wake routine and feed it through the orchestrator
+        orchestrator = getattr(jarvis, "_orchestrator", None)
+        routine_text = _get_wake_routine_text(jarvis)
+        tz_name = data.get("timezone", "UTC")
 
-        # 3) Build a short greeting from scheduler context
+        logger.log("INFO", "[goodmorning] Executing wake routine", routine_text)
+
+        if orchestrator is not None:
+            await orchestrator.process_request(
+                user_input=routine_text,
+                tz_name=tz_name,
+                metadata={"source": "goodmorning"},
+            )
+        else:
+            logger.log("WARNING", "[goodmorning] No orchestrator available, falling back to legacy")
+            await _run_legacy_wake_sequence(jarvis, data)
+            return
+
+        # 3) Speak a short greeting via TTS
         greeting = _build_greeting(data)
-
-        # 4) Speak via TTS (prefer ElevenLabs; fall back to OpenAI on any failure)
         await _speak_tts(greeting, logger)
 
     except Exception as exc:
         logger.log("ERROR", "[goodmorning] Wake sequence error", {"error": str(exc)})
+
+
+def _get_wake_routine_text(jarvis: JarvisSystem) -> str:
+    """Read the wake routine from the scheduler service, or return default."""
+    refs = getattr(jarvis, "_agent_refs", {}) or {}
+    scheduler_svc = refs.get("scheduler_service")
+    if scheduler_svc is not None:
+        return scheduler_svc.get_wake_routine()
+    return "Turn on the lights and tell me about my first calendar event today."
+
+
+async def _run_legacy_wake_sequence(jarvis: JarvisSystem, data: Dict[str, Any]) -> None:
+    """Fallback: hardcoded wake steps for when the orchestrator is unavailable."""
+    logger = jarvis.logger
+    try:
+        agents = getattr(jarvis.network, "agents", {}) or {}
+        lights_agent_available = "LightingAgent" in agents or "PhillipsHueAgent" in agents
+        if lights_agent_available:
+            runtime = getattr(jarvis, "protocol_runtime", None)
+            if runtime is not None and runtime.registry is not None:
+                lights_proto = runtime.registry.get("lights_on")
+                if lights_proto is not None:
+                    await runtime.executor.run_protocol(lights_proto, arguments={})
+    except Exception as exc:
+        logger.log("ERROR", "[goodmorning] Legacy lights_on failed", {"error": str(exc)})
+
+    greeting = _build_greeting(data)
+    await _speak_tts(greeting, logger)
 
 
 def _build_greeting(data: Dict[str, Any]) -> str:

@@ -429,14 +429,15 @@ class TestSchedulerAgentProperties:
     def test_capabilities(self, tmp_path):
         agent, _ = TestSchedulerAgentOperations()._make_agent(tmp_path)
         caps = agent.capabilities
-        assert len(caps) >= 5
-        # The five expected capabilities
+        assert len(caps) >= 7
         expected = {
             "schedule_task",
             "list_schedules",
             "cancel_schedule",
             "pause_schedule",
             "resume_schedule",
+            "configure_wake_routine",
+            "get_wake_routine",
         }
         assert expected == caps
 
@@ -486,3 +487,100 @@ class TestSchedulerTickLoop:
             tz_name="UTC",
             metadata={"source": "scheduler", "schedule_id": item.id},
         )
+
+
+# =====================================================================
+# Wake routine — service tests
+# =====================================================================
+
+
+class TestWakeRoutineService:
+    """Test wake routine storage in SchedulerService."""
+
+    def test_get_default_routine(self, tmp_path):
+        svc = _make_service(str(tmp_path))
+        routine = svc.get_wake_routine()
+        assert "lights" in routine.lower()
+        assert len(routine) > 10
+
+    def test_set_and_get_routine(self, tmp_path):
+        svc = _make_service(str(tmp_path))
+        new_text = "Turn on the lights, open Spotify on the TV, and give me the weather."
+        svc.set_wake_routine(new_text)
+        assert svc.get_wake_routine() == new_text
+
+    def test_set_routine_overwrites(self, tmp_path):
+        svc = _make_service(str(tmp_path))
+        svc.set_wake_routine("First version.")
+        svc.set_wake_routine("Second version.")
+        assert svc.get_wake_routine() == "Second version."
+
+    def test_routine_persists_across_instances(self, tmp_path):
+        db_path = str(tmp_path / "persist_test.db")
+        svc1 = SchedulerService(db_path=db_path)
+        svc1.set_wake_routine("Persistent routine.")
+        svc1.close()
+        svc2 = SchedulerService(db_path=db_path)
+        assert svc2.get_wake_routine() == "Persistent routine."
+        svc2.close()
+
+
+# =====================================================================
+# Wake routine — agent tests
+# =====================================================================
+
+
+class TestWakeRoutineAgent:
+    """Test the SchedulerAgent wake routine capabilities."""
+
+    def _make_agent(self, tmp_path, ai_response='{"routine_text": "New routine."}'):
+        svc = _make_service(str(tmp_path))
+        client = FakeAIClient(ai_response)
+        return SchedulerAgent(ai_client=client, scheduler_service=svc, logger=None), svc
+
+    def test_get_wake_routine_returns_default(self, tmp_path):
+        agent, svc = self._make_agent(tmp_path)
+        result = agent._get_wake_routine()
+        assert result.success is True
+        assert "routine" in result.response.lower()
+        assert result.data["routine_text"] == svc.get_wake_routine()
+
+    def test_get_wake_routine_returns_custom(self, tmp_path):
+        agent, svc = self._make_agent(tmp_path)
+        svc.set_wake_routine("Custom morning.")
+        result = agent._get_wake_routine()
+        assert result.success is True
+        assert "Custom morning." in result.response
+
+    @pytest.mark.asyncio
+    async def test_configure_wake_routine(self, tmp_path):
+        new_routine = "Turn on lights, open YouTube on the TV."
+        ai_resp = f'{{"routine_text": "{new_routine}"}}'
+        agent, svc = self._make_agent(tmp_path, ai_response=ai_resp)
+        result = await agent._configure_wake_routine("add youtube to my morning")
+        assert result.success is True
+        assert new_routine in result.response
+        assert svc.get_wake_routine() == new_routine
+
+    @pytest.mark.asyncio
+    async def test_configure_wake_routine_returns_previous(self, tmp_path):
+        agent, svc = self._make_agent(
+            tmp_path,
+            ai_response='{"routine_text": "Updated."}',
+        )
+        svc.set_wake_routine("Original.")
+        result = await agent._configure_wake_routine("change it")
+        assert result.data["previous"] == "Original."
+        assert result.data["routine_text"] == "Updated."
+
+    @pytest.mark.asyncio
+    async def test_configure_wake_routine_bad_json(self, tmp_path):
+        agent, svc = self._make_agent(tmp_path, ai_response="not json")
+        result = await agent._configure_wake_routine("do something")
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_configure_wake_routine_empty_text(self, tmp_path):
+        agent, svc = self._make_agent(tmp_path, ai_response='{"routine_text": ""}')
+        result = await agent._configure_wake_routine("clear it")
+        assert result.success is False

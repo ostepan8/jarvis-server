@@ -6,6 +6,8 @@ Capabilities:
     cancel_schedule — remove a schedule permanently
     pause_schedule  — disable a schedule without deleting it
     resume_schedule — re-enable a paused schedule
+    configure_wake_routine — update what happens at morning wake-up
+    get_wake_routine — retrieve the current wake-up routine
 
 Two input modes:
     1. Natural language (user-facing): AI parses free-text into a JSON
@@ -53,6 +55,33 @@ Rules:
 - Return ONLY the JSON, no prose.
 """
 
+_WAKE_ROUTINE_PROMPT = """\
+You are JARVIS's wake routine configuration assistant. The user wants to
+change what happens when they wake up in the morning.
+
+The current wake routine is:
+"{current_routine}"
+
+The user said: "{user_request}"
+
+Your job: produce the NEW complete wake routine text — a single natural
+language instruction describing everything that should happen at wake-up.
+
+Rules:
+- The routine text should read like a command to JARVIS: "Turn on the lights,
+  open Spotify on the TV, and tell me about my first meeting."
+- If the user says "add X", append X to the existing routine.
+- If the user says "remove X" or "skip X" or "no X", remove that part.
+- If the user says "change X to Y", swap them.
+- If the user says "set my routine to ...", replace entirely.
+- Keep it concise — one or two sentences.
+- The routine can reference any Jarvis capability: lights, TV/Roku, calendar,
+  weather, search, notifications, etc.
+
+Return ONLY a JSON object:
+{{"routine_text": "the complete new routine text"}}
+"""
+
 
 class SchedulerAgent(NetworkAgent):
     """Manages scheduled tasks via natural language or structured input."""
@@ -82,8 +111,9 @@ class SchedulerAgent(NetworkAgent):
     @property
     def description(self) -> str:
         return (
-            "Manages scheduled tasks — create one-shot, cron, or interval "
-            "schedules that fire requests through the orchestrator automatically"
+            "Manages scheduled tasks and wake-up routine — create one-shot, "
+            "cron, or interval schedules, and configure what happens at morning "
+            "wake-up (lights, TV, music, greeting)"
         )
 
     @property
@@ -94,6 +124,8 @@ class SchedulerAgent(NetworkAgent):
             "cancel_schedule",
             "pause_schedule",
             "resume_schedule",
+            "configure_wake_routine",
+            "get_wake_routine",
         }
 
     # -- Orchestrator binding ------------------------------------------------
@@ -136,13 +168,20 @@ class SchedulerAgent(NetworkAgent):
         self.logger.log("INFO", f"SchedulerAgent handling: {capability}", str(data)[:200])
 
         try:
-            # Structured input bypasses AI parsing entirely
-            structured = data.get("structured") if isinstance(data, dict) else None
-            if isinstance(structured, dict):
-                result = self._execute_op(structured)
+            # Wake routine capabilities have their own paths
+            if capability == "configure_wake_routine":
+                prompt = data.get("prompt", "") if isinstance(data, dict) else ""
+                result = await self._configure_wake_routine(prompt)
+            elif capability == "get_wake_routine":
+                result = self._get_wake_routine()
             else:
-                prompt = data.get("prompt", "")
-                result = await self._process(prompt)
+                # Structured input bypasses AI parsing entirely
+                structured = data.get("structured") if isinstance(data, dict) else None
+                if isinstance(structured, dict):
+                    result = self._execute_op(structured)
+                else:
+                    prompt = data.get("prompt", "")
+                    result = await self._process(prompt)
 
             await self.send_capability_response(
                 message.from_agent,
@@ -343,6 +382,71 @@ class SchedulerAgent(NetworkAgent):
             response=f"Resumed schedule [{item.id}] \"{item.name}\". Back in business.",
             actions=[{"type": "schedule_resumed", "details": item.to_dict()}],
             data=item.to_dict(),
+            metadata={"agent": "scheduler"},
+        )
+
+    # -- Wake routine handlers -----------------------------------------------
+
+    def _get_wake_routine(self) -> AgentResponse:
+        """Return the current wake-up routine text."""
+        routine = self.scheduler_service.get_wake_routine()
+        return AgentResponse.success_response(
+            response=f"Your current morning routine: \"{routine}\"",
+            data={"routine_text": routine},
+            metadata={"agent": "scheduler"},
+        )
+
+    async def _configure_wake_routine(self, user_request: str) -> AgentResponse:
+        """Use LLM to interpret the user's change and update the routine."""
+        current = self.scheduler_service.get_wake_routine()
+
+        prompt = _WAKE_ROUTINE_PROMPT.format(
+            current_routine=current,
+            user_request=user_request,
+        )
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_request},
+        ]
+        response = await self.ai_client.weak_chat(messages, [])
+        raw = response[0].content.strip()
+
+        # Strip markdown fences
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1])
+
+        try:
+            parsed = json.loads(raw)
+            new_routine = parsed.get("routine_text", "")
+        except (json.JSONDecodeError, AttributeError):
+            return AgentResponse.error_response(
+                response=(
+                    "I understood what you wanted but tripped over my own "
+                    "shoelaces formatting it. Try rephrasing."
+                ),
+                error=ErrorInfo(
+                    message="Failed to parse wake routine LLM output",
+                    error_type="ParseError",
+                ),
+            )
+
+        if not new_routine:
+            return AgentResponse.error_response(
+                response="The resulting routine was empty. That seems unintentional.",
+                error=ErrorInfo(
+                    message="Empty routine text",
+                    error_type="ValidationError",
+                ),
+            )
+
+        self.scheduler_service.set_wake_routine(new_routine)
+        return AgentResponse.success_response(
+            response=(
+                f"Morning routine updated. New routine: \"{new_routine}\""
+            ),
+            actions=[{"type": "wake_routine_updated", "details": {"routine_text": new_routine}}],
+            data={"routine_text": new_routine, "previous": current},
             metadata={"agent": "scheduler"},
         )
 
