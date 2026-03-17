@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -45,14 +46,25 @@ def db_path(trace_db):
 
 @pytest.fixture
 def populated_db(trace_db, db_path):
-    """Populate the DB with realistic test data and return the path."""
+    """Populate the DB with realistic test data and return the path.
+
+    Timestamps are relative to *now* so they always fall within the
+    48-hour lookback window used by the tests.
+    """
+    _utc = timezone.utc
+    base = datetime.now(_utc) - timedelta(hours=2)
+
+    def _ts(hour_offset: int, ms_offset: int = 0) -> str:
+        dt = base + timedelta(hours=hour_offset, milliseconds=ms_offset)
+        return dt.isoformat()
+
     # Trace 1: fast, OK
     trace_db.save_trace(
         Trace(
             trace_id="t-fast-1",
             user_input="turn on lights",
-            start_time="2026-03-14T01:00:00+00:00",
-            end_time="2026-03-14T01:00:00.100+00:00",
+            start_time=_ts(0),
+            end_time=_ts(0, 100),
             duration_ms=100.0,
             status="OK",
         )
@@ -65,8 +77,8 @@ def populated_db(trace_db, db_path):
             kind=SpanKind.AGENT.value,
             agent_name="LightingAgent",
             capability="toggle_lights",
-            start_time="2026-03-14T01:00:00+00:00",
-            end_time="2026-03-14T01:00:00.080+00:00",
+            start_time=_ts(0),
+            end_time=_ts(0, 80),
             duration_ms=80.0,
             status="OK",
         )
@@ -77,8 +89,8 @@ def populated_db(trace_db, db_path):
         Trace(
             trace_id="t-med-1",
             user_input="what is the weather",
-            start_time="2026-03-14T02:00:00+00:00",
-            end_time="2026-03-14T02:00:00.500+00:00",
+            start_time=_ts(1),
+            end_time=_ts(1, 500),
             duration_ms=500.0,
             status="OK",
         )
@@ -91,8 +103,8 @@ def populated_db(trace_db, db_path):
             kind=SpanKind.AGENT.value,
             agent_name="WeatherAgent",
             capability="get_weather",
-            start_time="2026-03-14T02:00:00+00:00",
-            end_time="2026-03-14T02:00:00.400+00:00",
+            start_time=_ts(1),
+            end_time=_ts(1, 400),
             duration_ms=400.0,
             status="OK",
         )
@@ -104,8 +116,8 @@ def populated_db(trace_db, db_path):
             name="llm.classify",
             kind=SpanKind.LLM.value,
             agent_name="NLUAgent",
-            start_time="2026-03-14T02:00:00+00:00",
-            end_time="2026-03-14T02:00:00.050+00:00",
+            start_time=_ts(1),
+            end_time=_ts(1, 50),
             duration_ms=50.0,
             status="OK",
         )
@@ -116,8 +128,8 @@ def populated_db(trace_db, db_path):
         Trace(
             trace_id="t-slow-1",
             user_input="search for python tutorials",
-            start_time="2026-03-14T03:00:00+00:00",
-            end_time="2026-03-14T03:00:02+00:00",
+            start_time=_ts(2),
+            end_time=_ts(2, 2000),
             duration_ms=2000.0,
             status="OK",
         )
@@ -130,8 +142,8 @@ def populated_db(trace_db, db_path):
             kind=SpanKind.AGENT.value,
             agent_name="SearchAgent",
             capability="search",
-            start_time="2026-03-14T03:00:00+00:00",
-            end_time="2026-03-14T03:00:01.800+00:00",
+            start_time=_ts(2),
+            end_time=_ts(2, 1800),
             duration_ms=1800.0,
             status="OK",
         )
@@ -142,8 +154,8 @@ def populated_db(trace_db, db_path):
         Trace(
             trace_id="t-err-1",
             user_input="create meeting tomorrow",
-            start_time="2026-03-14T04:00:00+00:00",
-            end_time="2026-03-14T04:00:01+00:00",
+            start_time=_ts(3),
+            end_time=_ts(3, 1000),
             duration_ms=1000.0,
             status="ERROR",
         )
@@ -156,8 +168,8 @@ def populated_db(trace_db, db_path):
             kind=SpanKind.AGENT.value,
             agent_name="CalendarAgent",
             capability="create_event",
-            start_time="2026-03-14T04:00:00+00:00",
-            end_time="2026-03-14T04:00:00.900+00:00",
+            start_time=_ts(3),
+            end_time=_ts(3, 900),
             duration_ms=900.0,
             status="ERROR",
             error="CalendarAPIError: upstream timeout",
@@ -169,8 +181,8 @@ def populated_db(trace_db, db_path):
         Trace(
             trace_id="t-err-2",
             user_input="play netflix",
-            start_time="2026-03-14T05:00:00+00:00",
-            end_time="2026-03-14T05:00:00.300+00:00",
+            start_time=_ts(4),
+            end_time=_ts(4, 300),
             duration_ms=300.0,
             status="ERROR",
         )
@@ -183,8 +195,8 @@ def populated_db(trace_db, db_path):
             kind=SpanKind.AGENT.value,
             agent_name="RokuAgent",
             capability="play_app",
-            start_time="2026-03-14T05:00:00+00:00",
-            end_time="2026-03-14T05:00:00.250+00:00",
+            start_time=_ts(4),
+            end_time=_ts(4, 250),
             duration_ms=250.0,
             status="ERROR",
             error="ConnectionError: device unreachable",
