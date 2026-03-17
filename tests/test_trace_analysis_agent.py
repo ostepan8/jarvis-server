@@ -99,10 +99,10 @@ def populated_db(trace_db, db_path):
         Span(
             span_id="s-med-1a",
             trace_id="t-med-1",
-            name="agent.get_weather",
+            name="agent.search",
             kind=SpanKind.AGENT.value,
-            agent_name="WeatherAgent",
-            capability="get_weather",
+            agent_name="SearchAgent",
+            capability="search",
             start_time=_ts(1),
             end_time=_ts(1, 400),
             duration_ms=400.0,
@@ -297,7 +297,7 @@ class TestTraceAnalysisService:
 
         agent_names = {a.agent_name for a in report.agent_performance}
         assert "LightingAgent" in agent_names
-        assert "WeatherAgent" in agent_names
+        assert "SearchAgent" in agent_names
         assert "CalendarAgent" in agent_names
         assert "RokuAgent" in agent_names
 
@@ -321,7 +321,6 @@ class TestTraceAnalysisService:
 
         cap_names = {c.capability for c in report.capability_stats}
         assert "toggle_lights" in cap_names
-        assert "get_weather" in cap_names
         assert "search" in cap_names
         assert "create_event" in cap_names
         assert "play_app" in cap_names
@@ -329,8 +328,8 @@ class TestTraceAnalysisService:
         search = next(
             c for c in report.capability_stats if c.capability == "search"
         )
-        assert search.call_count == 1
-        assert search.avg_duration_ms == 1800.0
+        assert search.call_count == 2
+        assert search.avg_duration_ms == 1100.0
 
     @pytest.mark.asyncio
     async def test_empty_database(self, db_path):
