@@ -379,6 +379,16 @@ class TestResponseAggregator:
         assert "r1" not in agg._trackers
 
     @pytest.mark.asyncio
+    async def test_stop_logs_cancelled_cleanup_task(self):
+        agg = self._make_aggregator()
+        await agg.start()
+        assert agg._cleanup_task is not None
+        with patch.object(agg.logger, "log") as mock_log:
+            await agg.stop()
+            # Verify the cancellation was logged, not silently swallowed
+            mock_log.assert_any_call("DEBUG", "Cleanup task cancelled during shutdown")
+
+    @pytest.mark.asyncio
     async def test_register_request_custom_strategy(self):
         agg = self._make_aggregator()
         fut = agg.register_request(
