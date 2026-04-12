@@ -85,8 +85,8 @@ Search individual spans across all traces.
 | Option | Description | Example |
 |--------|-------------|---------|
 | `--trace-id` | Filter spans within a specific trace | `--trace-id abc123` |
-| `--agent` | Filter by agent name | `--agent WeatherAgent` |
-| `--capability` | Filter by capability | `--capability get_weather` |
+| `--agent` | Filter by agent name | `--agent CalendarAgent` |
+| `--capability` | Filter by capability | `--capability search` |
 | `--kind` | Filter by span kind (see below) | `--kind llm` |
 | `--status` | Filter by status: `OK` or `ERROR` | `--status ERROR` |
 | `--limit` | Max results (default: 50) | `--limit 100` |

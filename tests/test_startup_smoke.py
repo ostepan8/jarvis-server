@@ -120,7 +120,7 @@ class TestBuilderBuildSmoke:
     ):
         """builder.build() should return a fully-initialized JarvisSystem."""
         builder = JarvisBuilder(minimal_config)
-        builder.weather(False).lights(False).roku(False).night_agents(False)
+        builder.lights(False).roku(False).night_agents(False)
         jarvis = await builder.build()
         try:
             assert jarvis is not None
@@ -138,7 +138,7 @@ class TestBuilderBuildSmoke:
         """Builder with everything disabled should still produce a valid system."""
         builder = JarvisBuilder(minimal_config)
         builder.memory(False).nlu(False).calendar(False).chat(False)
-        builder.search(False).weather(False).protocols(False)
+        builder.search(False).protocols(False)
         builder.lights(False).roku(False).night_agents(False)
         jarvis = await builder.build()
         try:
@@ -153,7 +153,7 @@ class TestBuilderBuildSmoke:
     ):
         """_setup_protocol_system must be called and set protocol_runtime."""
         builder = JarvisBuilder(minimal_config)
-        builder.weather(False).lights(False).roku(False).night_agents(False)
+        builder.lights(False).roku(False).night_agents(False)
         jarvis = await builder.build()
         try:
             assert jarvis.protocol_runtime is not None

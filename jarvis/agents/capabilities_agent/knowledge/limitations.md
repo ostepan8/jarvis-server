@@ -34,7 +34,7 @@
 ### Real-Time
 - Cannot stream live data (stock tickers, sports scores)
 - Cannot maintain persistent WebSocket connections to external services
-- Weather data comes via web search, not a dedicated weather API (unless configured)
+- Weather data comes via web search, not a dedicated weather API
 
 ## What Might Not Work (Conditional)
 

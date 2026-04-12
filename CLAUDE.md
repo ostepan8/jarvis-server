@@ -213,7 +213,6 @@ Request → RequestOrchestrator → Protocol Match (fast) / NLU Route (fallback)
 | `NLUAgent` | `intent_matching` — the sorting hat |
 | `ChatAgent` | `chat` — conversational AI, fact storage |
 | `CalendarAgent` | `create_event`, `list_events`, `delete_event`, `modify_event` |
-| `WeatherAgent` | `get_weather`, `get_forecast` |
 | `MemoryAgent` | `store_fact`, `retrieve_facts` — vector + structured |
 | `LightingAgent` | `set_color`, `set_brightness`, `toggle_lights`, `list_lights` |
 | `RokuAgent` | `play_app`, `navigate`, `type`, `press_button`, `get_status` |
@@ -350,7 +349,7 @@ GitHub Actions (`.github/workflows/tests.yml`) runs `pytest --timeout=30 -v` on 
 ## Environment
 
 **Required:** `OPENAI_API_KEY`, `JWT_SECRET`
-**Optional:** `ANTHROPIC_API_KEY`, `WEATHER_API_KEY`, `ROKU_IP_ADDRESS`, `PHILLIPS_HUE_BRIDGE_IP`, `PHILLIPS_HUE_USERNAME`, `LIGHTING_BACKEND`, `YEELIGHT_BULB_IPS`, `GOOGLE_SEARCH_API_KEY`, `MONGO_URI`, `CALENDAR_API_URL`, `JARVIS_VERBOSE`, `JARVIS_TRACING`, `JARVIS_TRACE_LLM_CONTENT`
+**Optional:** `ANTHROPIC_API_KEY`, `ROKU_IP_ADDRESS`, `PHILLIPS_HUE_BRIDGE_IP`, `PHILLIPS_HUE_USERNAME`, `LIGHTING_BACKEND`, `YEELIGHT_BULB_IPS`, `GOOGLE_SEARCH_API_KEY`, `MONGO_URI`, `CALENDAR_API_URL`, `JARVIS_VERBOSE`, `JARVIS_TRACING`, `JARVIS_TRACE_LLM_CONTENT`
 
 See `.env.example` for the full list with descriptions.
 

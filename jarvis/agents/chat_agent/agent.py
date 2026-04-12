@@ -254,8 +254,9 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
                     {"type": "conversation"},
                     user_id=user_id,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                if self.logger:
+                    self.logger.log("WARNING", "Failed to store conversation memory", str(e))
 
             # Automatically extract and store facts from the conversation
             if user_id is not None and user_input:
@@ -271,8 +272,9 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
                         )
                         # Don't wait for this - run it asynchronously
                         # Facts will be stored by MemoryAgent
-                except Exception:
-                    pass  # Don't fail the chat if fact extraction fails
+                except Exception as e:
+                    if self.logger:
+                        self.logger.log("WARNING", "Failed to extract facts from conversation", str(e))
 
             # Check if any actions resulted in errors
             has_errors = any("error" in action.get("result", {}) for action in actions)
@@ -334,8 +336,9 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
                         "source": "explicit",
                     },
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                if self.logger:
+                    self.logger.log("WARNING", "Failed to store structured fact via network", str(e))
 
         return "fact stored"
 
@@ -368,7 +371,8 @@ class ChatAgent(NetworkAgent, CollaborationMixin):
                         "source": "explicit",
                     },
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                if self.logger:
+                    self.logger.log("WARNING", "Failed to store profile fact via network", str(e))
 
         return f"updated {field}"

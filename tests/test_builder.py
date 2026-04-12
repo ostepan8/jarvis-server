@@ -50,7 +50,6 @@ class TestBuilderOptions:
             with_calendar=False,
             with_chat=False,
             with_search=False,
-            with_weather=False,
             with_protocols=False,
             with_lights=False,
             with_roku=False,

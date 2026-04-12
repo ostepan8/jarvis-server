@@ -138,7 +138,7 @@ Update the user's allowed/disallowed agents.
 
 Body format:
 ```json
-{ "allowed": ["WeatherAgent"], "disallowed": ["LightsAgent"] }
+{ "allowed": ["SearchAgent"], "disallowed": ["LightsAgent"] }
 ```
 
 Response:
@@ -159,7 +159,6 @@ Include the token in the `Authorization` header for all protected endpoints. Pro
 The server relies on several environment variables:
 - `OPENAI_API_KEY` – used by default AI clients.
 - `CALENDAR_API_URL` – URL of the calendar backend (defaults to `http://localhost:8080`).
-- `WEATHER_API_KEY` – required by the `WeatherAgent`.
 - `JWT_SECRET` – secret key for signing tokens.
 - `AUTH_DB_PATH` – path of the SQLite auth database (defaults to `auth.db`).
 

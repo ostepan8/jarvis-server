@@ -78,21 +78,6 @@ class HealthService:
         api_url = url or os.getenv("CALENDAR_API_URL", "http://localhost:8080")
         return await self.probe_http_service("CalendarAPI", f"{api_url}/health")
 
-    async def probe_weather_api(self) -> ProbeResult:
-        """Probe the Weather API."""
-        ProbeResult, ComponentStatus = _models()
-        api_key = os.getenv("WEATHER_API_KEY", "")
-        if not api_key:
-            return ProbeResult(
-                component="WeatherAPI",
-                component_type="service",
-                status=ComponentStatus.UNKNOWN,
-                message="No API key configured",
-            )
-        return await self.probe_http_service(
-            "WeatherAPI", "https://api.weatherapi.com/v1/current.json?key=" + api_key + "&q=Chicago"
-        )
-
     async def probe_sqlite(self, db_path: str = "") -> ProbeResult:
         """Check if SQLite database file exists and is accessible."""
         ProbeResult, ComponentStatus = _models()
