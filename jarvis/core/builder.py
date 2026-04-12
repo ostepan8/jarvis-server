@@ -22,7 +22,6 @@ class BuilderOptions:
     with_chat: bool = True
     with_search: bool = True
     with_protocols: bool = True
-    with_weather: bool = True
     with_lights: bool = True
     with_roku: bool = True
     with_software: bool = False  # was commented out in your code
@@ -77,10 +76,6 @@ class JarvisBuilder:
 
     def search(self, enabled: bool = True) -> "JarvisBuilder":
         self._opts.with_search = enabled
-        return self
-
-    def weather(self, enabled: bool = True) -> "JarvisBuilder":
-        self._opts.with_weather = enabled
         return self
 
     def lights(self, enabled: bool = True) -> "JarvisBuilder":
