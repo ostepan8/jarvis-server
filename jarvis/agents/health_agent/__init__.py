@@ -119,8 +119,8 @@ class HealthAgent(NetworkAgent):
                     last_report_time = now
                     try:
                         self.report_writer.cleanup_old_reports()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.log("WARNING", "Failed to clean up old reports", str(exc))
 
             except asyncio.CancelledError:
                 break
@@ -156,8 +156,8 @@ class HealthAgent(NetworkAgent):
                 server_agent = self.network.agents["ServerManagerAgent"]
                 server_probes = await server_agent.get_health_probes()
                 service_statuses.extend(server_probes)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.log("WARNING", "Failed to probe ServerManagerAgent", str(exc))
 
         # Network metrics
         network_metrics = None
@@ -242,8 +242,8 @@ class HealthAgent(NetworkAgent):
                 self._incidents.append(incident)
                 try:
                     self.report_writer.write_incident_report(incident)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.log("WARNING", "Failed to write incident report", str(exc))
                 await self._broadcast_health_alert(
                     result.component, old_status, new_status, result.message
                 )
@@ -259,8 +259,8 @@ class HealthAgent(NetworkAgent):
                         inc.actions_taken.append("Auto-resolved: component returned to healthy")
                         try:
                             self.report_writer.update_incident_report(inc)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            self.logger.log("WARNING", "Failed to update incident report", str(exc))
                 await self._broadcast_health_alert(
                     result.component, old_status, new_status, "Recovered"
                 )
@@ -296,8 +296,8 @@ class HealthAgent(NetworkAgent):
                         request_id="",
                     )
                     await agent.receive_message(alert_msg)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.log("DEBUG", f"Failed to deliver health alert to {agent_name}", str(exc))
 
     # ------------------------------------------------------------------
     # Error tracking (intercepts error messages passively)
