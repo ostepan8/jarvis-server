@@ -786,3 +786,60 @@ class TestCommandProcessorConversationHistory:
         # system + 2 prior user/assistant pairs + current user = 1+4+1 = 6
         assert len(third_call_messages) == 6
         assert third_call_messages[5]["content"] == "name it Living Room TV"
+
+
+# ---------------------------------------------------------------------------
+# Exception logging (antipattern fixes)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rediscovery_failure_is_logged(single_device_registry):
+    """When rediscovery raises, the exception is logged rather than silently swallowed."""
+    logger = MagicMock()
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=single_device_registry,
+        logger=logger,
+    )
+    svc = agent._services["TEST001"]
+    svc.home = AsyncMock(side_effect=ConnectionError("gone"))
+
+    single_device_registry.discover = AsyncMock(
+        side_effect=OSError("network unreachable")
+    )
+
+    result = await agent.execute_on_device("TEST001", "home")
+    assert result["success"] is False
+
+    log_calls = [c for c in logger.log.call_args_list if c[0][0] == "WARN"]
+    rediscovery_logs = [c for c in log_calls if "Rediscovery failed" in str(c)]
+    assert len(rediscovery_logs) == 1
+    assert "network unreachable" in str(rediscovery_logs[0])
+    await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_close_failure_is_logged(two_device_registry):
+    """When a service close() raises, the exception is logged rather than silently swallowed."""
+    logger = MagicMock()
+    agent = RokuAgent(
+        ai_client=DummyAIClient(),
+        device_registry=two_device_registry,
+        logger=logger,
+    )
+    agent.get_service("SER001")
+    agent.get_service("SER002")
+
+    agent._services["SER001"].close = AsyncMock(side_effect=RuntimeError("boom"))
+    agent._services["SER002"].close = AsyncMock()
+
+    await agent.close()
+
+    log_calls = [c for c in logger.log.call_args_list if c[0][0] == "WARN"]
+    close_logs = [c for c in log_calls if "Failed to close service" in str(c)]
+    assert len(close_logs) == 1
+    assert "boom" in str(close_logs[0])
+    assert "SER001" in str(close_logs[0])
+    # SER002 should still have been closed despite SER001 failing
+    agent._services = {}  # already cleared by close()
