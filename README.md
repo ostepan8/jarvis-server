@@ -35,7 +35,6 @@ See `env.example` for a complete example configuration file.
 - `OPENAI_API_KEY` – API key for OpenAI based clients
 - `ANTHROPIC_API_KEY` – key for Anthropic clients (optional)
 - `CALENDAR_API_URL` – base URL of the calendar API (defaults to `http://localhost:8080`)
-- `WEATHER_API_KEY` – API key for OpenWeatherMap used by `WeatherAgent`
 - `CONFIG_SECRET` – 32-byte base64 key used to encrypt user configuration
 - `JWT_SECRET` – secret key for signing authentication tokens (required)
 - `LIGHTING_BACKEND` – Lighting backend to use: `"phillips_hue"` or `"yeelight"` (default: `"phillips_hue"`)

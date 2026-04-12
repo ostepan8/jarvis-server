@@ -176,12 +176,12 @@ class TestTraceStore:
                 trace_id="t-agent-filter",
                 name="op",
                 kind="agent",
-                agent_name="WeatherAgent",
+                agent_name="SearchAgent",
                 start_time="2024-01-01T00:00:00",
             )
         )
 
-        results = trace_db.list_traces(agent="WeatherAgent")
+        results = trace_db.list_traces(agent="SearchAgent")
         assert len(results) == 1
         assert results[0]["trace_id"] == "t-agent-filter"
 

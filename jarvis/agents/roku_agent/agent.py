@@ -162,8 +162,12 @@ class RokuAgent(NetworkAgent):
 
             try:
                 await self.device_registry.discover(timeout=3.0)
-            except Exception:
-                pass
+            except Exception as disc_exc:
+                if self.logger:
+                    self.logger.log(
+                        "WARN",
+                        f"Rediscovery failed for {serial}: {disc_exc}",
+                    )
 
             # Re-resolve — the IP may have changed
             dev = self.device_registry.get_device_by_serial(serial)
@@ -216,11 +220,15 @@ class RokuAgent(NetworkAgent):
 
     async def close(self) -> None:
         """Clean up ALL service connections."""
-        for service in self._services.values():
+        for serial, service in self._services.items():
             try:
                 await service.close()
-            except Exception:
-                pass
+            except Exception as close_exc:
+                if self.logger:
+                    self.logger.log(
+                        "WARN",
+                        f"Failed to close service for {serial}: {close_exc}",
+                    )
         self._services.clear()
 
     @property

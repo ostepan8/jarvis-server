@@ -109,7 +109,7 @@ class TestCleanTraces:
                 ],
                 spans=[
                     ("s1", "t-old-1", "CalendarAgent", old, "OK", 100.0),
-                    ("s2", "t-old-2", "WeatherAgent", old, "ERROR", 200.0),
+                    ("s2", "t-old-2", "SearchAgent", old, "ERROR", 200.0),
                     ("s3", "t-recent", "ChatAgent", recent, "OK", 50.0),
                 ],
             )
@@ -177,7 +177,7 @@ class TestCleanTraces:
                 ],
                 spans=[
                     ("s1", "t1", "CalendarAgent", recent, "OK", 100.0),
-                    ("s2", "t2", "WeatherAgent", recent, "OK", 200.0),
+                    ("s2", "t2", "SearchAgent", recent, "OK", 200.0),
                 ],
             )
 
