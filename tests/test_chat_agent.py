@@ -536,3 +536,112 @@ class TestChatAgentEdgeCases:
         result = await agent._process_chat("loop forever")
         # Should stop after 5 iterations (the while loop limit)
         assert call_count <= 6  # 5 iterations + 1 initial call
+
+
+# ---------------------------------------------------------------------------
+# Tests: exception logging (previously swallowed silently)
+# ---------------------------------------------------------------------------
+
+class TestExceptionLogging:
+    """Verify that previously-swallowed exceptions are now logged."""
+
+    @pytest.mark.asyncio
+    async def test_store_memory_failure_logs_warning(self):
+        """When store_memory raises, the chat still succeeds and a warning is logged."""
+        agent = ChatAgent(ai_client=DummyAIClient("reply"))
+        logger = MagicMock()
+        agent.logger = logger
+
+        async def failing_store(*args, **kwargs):
+            raise RuntimeError("memory backend down")
+
+        agent.store_memory = failing_store
+
+        result = await agent._process_chat("hello")
+        assert result["success"] is True
+        logger.log.assert_any_call("WARNING", "Failed to store conversation memory", "memory backend down")
+
+    @pytest.mark.asyncio
+    async def test_fact_extraction_failure_logs_warning(self):
+        """When request_capability for extract_facts raises, a warning is logged."""
+        agent = ChatAgent(ai_client=DummyAIClient("reply"))
+        logger = MagicMock()
+        agent.logger = logger
+        agent.current_user_id = 42
+
+        async def ok_store(*args, **kwargs):
+            return None
+
+        agent.store_memory = ok_store
+
+        network = MagicMock()
+        agent.network = network
+
+        async def failing_request(*args, **kwargs):
+            raise ConnectionError("network unavailable")
+
+        agent.request_capability = failing_request
+
+        result = await agent._process_chat("hello")
+        assert result["success"] is True
+        logger.log.assert_any_call("WARNING", "Failed to extract facts from conversation", "network unavailable")
+
+    @pytest.mark.asyncio
+    async def test_store_fact_network_failure_logs_warning(self):
+        """When request_capability in _store_fact raises, a warning is logged."""
+        agent = ChatAgent(ai_client=DummyAIClient())
+        logger = MagicMock()
+        agent.logger = logger
+        agent.current_user_id = 1
+        agent.network = MagicMock()
+
+        async def ok_store(*args, **kwargs):
+            return None
+
+        agent.store_memory = ok_store
+
+        async def failing_request(*args, **kwargs):
+            raise ConnectionError("network down")
+
+        agent.request_capability = failing_request
+
+        result = await agent._store_fact("I like cats")
+        assert result == "fact stored"
+        logger.log.assert_any_call("WARNING", "Failed to store structured fact via network", "network down")
+
+    @pytest.mark.asyncio
+    async def test_update_profile_network_failure_logs_warning(self):
+        """When request_capability in _update_profile raises, a warning is logged."""
+        agent = ChatAgent(ai_client=DummyAIClient())
+        logger = MagicMock()
+        agent.logger = logger
+        agent.current_user_id = 1
+        agent.network = MagicMock()
+
+        async def ok_store(*args, **kwargs):
+            return None
+
+        agent.store_memory = ok_store
+
+        async def failing_request(*args, **kwargs):
+            raise ConnectionError("network down")
+
+        agent.request_capability = failing_request
+
+        result = await agent._update_profile("name", "Alice")
+        assert result == "updated name"
+        logger.log.assert_any_call("WARNING", "Failed to store profile fact via network", "network down")
+
+    @pytest.mark.asyncio
+    async def test_no_logger_does_not_raise(self):
+        """When logger is None, swallowed exceptions still don't crash."""
+        agent = ChatAgent(ai_client=DummyAIClient("reply"))
+        agent.logger = None
+
+        async def failing_store(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        agent.store_memory = failing_store
+
+        result = await agent._process_chat("hello")
+        assert result["success"] is True
