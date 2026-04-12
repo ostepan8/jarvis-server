@@ -556,7 +556,7 @@ class TestCalendarAgentCapabilityResponse:
     async def test_unknown_request_id_is_ignored(self):
         agent = _make_agent()
         msg = Message(
-            from_agent="WeatherAgent",
+            from_agent="SearchAgent",
             to_agent="CalendarAgent",
             message_type="capability_response",
             content={"data": "sunny"},
@@ -575,7 +575,7 @@ class TestCalendarAgentCapabilityResponse:
             "responses": [],
         }
         msg = Message(
-            from_agent="WeatherAgent",
+            from_agent="SearchAgent",
             to_agent="CalendarAgent",
             message_type="capability_response",
             content={"forecast": "rain"},
@@ -583,7 +583,7 @@ class TestCalendarAgentCapabilityResponse:
         )
         await agent._handle_capability_response(msg)
         assert len(agent.active_tasks["req-1"]["responses"]) == 1
-        assert agent.active_tasks["req-1"]["responses"][0]["from_agent"] == "WeatherAgent"
+        assert agent.active_tasks["req-1"]["responses"][0]["from_agent"] == "SearchAgent"
 
 
 # ===========================================================================
@@ -643,14 +643,14 @@ class TestCalendarAgentLeadSupport:
         agent = _make_agent()
         # Minimal MissionBrief mock
         brief = MagicMock()
-        brief.user_input = "Schedule a meeting and check the weather"
+        brief.user_input = "Schedule a meeting and search for restaurants"
         brief.available_capabilities = {
             "CalendarAgent": ["add_event"],
-            "WeatherAgent": ["get_weather"],
+            "SearchAgent": ["search"],
         }
         prompt = agent._build_lead_system_prompt(brief)
         assert "scheduling" in prompt.lower()
-        assert "WeatherAgent" in prompt
+        assert "SearchAgent" in prompt
 
 
 # ===========================================================================

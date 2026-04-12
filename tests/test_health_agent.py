@@ -339,6 +339,100 @@ class TestDependencyGraph:
         assert cal.status == ComponentStatus.UNHEALTHY
 
 
+class TestExceptionLogging:
+    """Verify swallowed exceptions now log properly."""
+
+    @pytest.mark.asyncio
+    async def test_server_manager_probe_failure_logs_warning(self, tmp_path):
+        network = _make_mock_network(["ServerManagerAgent"])
+        server_agent = network.agents["ServerManagerAgent"]
+        server_agent.get_health_probes = AsyncMock(side_effect=RuntimeError("probe boom"))
+
+        agent = _make_health_agent(str(tmp_path), network)
+        with patch.object(agent.logger, "log") as mock_log:
+            snapshot = await agent._build_snapshot()
+            warning_calls = [
+                c for c in mock_log.call_args_list
+                if c[0][0] == "WARNING" and "ServerManagerAgent" in c[0][1]
+            ]
+            assert len(warning_calls) == 1
+            assert "probe boom" in warning_calls[0][0][2]
+
+        assert isinstance(snapshot, SystemHealthSnapshot)
+
+    @pytest.mark.asyncio
+    async def test_write_incident_report_failure_logs_warning(self, tmp_path):
+        network = _make_mock_network(["AgentA"])
+        agent = _make_health_agent(str(tmp_path), network)
+        agent._component_statuses["Comp"] = ComponentStatus.HEALTHY
+
+        with patch.object(agent.report_writer, "write_incident_report", side_effect=OSError("disk full")):
+            with patch.object(agent.logger, "log") as mock_log:
+                snapshot = SystemHealthSnapshot(
+                    agent_statuses=[
+                        ProbeResult("Comp", "agent", ComponentStatus.UNHEALTHY, message="Down")
+                    ],
+                )
+                await agent._process_transitions(snapshot)
+
+                warning_calls = [
+                    c for c in mock_log.call_args_list
+                    if c[0][0] == "WARNING" and "incident report" in c[0][1]
+                ]
+                assert len(warning_calls) == 1
+                assert "disk full" in warning_calls[0][0][2]
+
+        assert len(agent._incidents) == 1
+
+    @pytest.mark.asyncio
+    async def test_update_incident_report_failure_logs_warning(self, tmp_path):
+        network = _make_mock_network(["AgentA"])
+        agent = _make_health_agent(str(tmp_path), network)
+        agent._component_statuses["Comp"] = ComponentStatus.UNHEALTHY
+        agent._incidents.append(
+            IncidentRecord(component="Comp", severity=IncidentSeverity.ERROR, title="Comp down")
+        )
+
+        with patch.object(agent.report_writer, "update_incident_report", side_effect=OSError("no space")):
+            with patch.object(agent.logger, "log") as mock_log:
+                snapshot = SystemHealthSnapshot(
+                    agent_statuses=[
+                        ProbeResult("Comp", "agent", ComponentStatus.HEALTHY, message="Recovered")
+                    ],
+                )
+                await agent._process_transitions(snapshot)
+
+                warning_calls = [
+                    c for c in mock_log.call_args_list
+                    if c[0][0] == "WARNING" and "update incident" in c[0][1]
+                ]
+                assert len(warning_calls) == 1
+                assert "no space" in warning_calls[0][0][2]
+
+        assert not agent._incidents[0].is_active
+
+    @pytest.mark.asyncio
+    async def test_broadcast_delivery_failure_logs_debug(self, tmp_path):
+        network = _make_mock_network(["AgentA", "AgentB"])
+        network.agents["AgentA"].receive_message = AsyncMock(side_effect=RuntimeError("refused"))
+        agent = _make_health_agent(str(tmp_path), network)
+
+        with patch.object(agent.logger, "log") as mock_log:
+            await agent._broadcast_health_alert(
+                "Comp", ComponentStatus.HEALTHY, ComponentStatus.UNHEALTHY, "details"
+            )
+
+            debug_calls = [
+                c for c in mock_log.call_args_list
+                if c[0][0] == "DEBUG" and "AgentA" in c[0][1]
+            ]
+            assert len(debug_calls) == 1
+            assert "refused" in debug_calls[0][0][2]
+
+        # AgentB should still have been called despite AgentA's failure
+        assert network.agents["AgentB"].receive_message.called
+
+
 class TestOverallStatus:
     """Test overall status computation."""
 

@@ -23,7 +23,6 @@ STATIC_DEPENDENCIES: Dict[str, List[str]] = {
 
 SERVICE_TYPES: Dict[str, str] = {
     "CalendarService": "service",
-    "WeatherAPI": "external_api",
     "ChromaDB": "service",
     "VectorMemoryService": "service",
     "GoogleSearchAPI": "external_api",
